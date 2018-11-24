@@ -1,0 +1,6 @@
+[package]
+name = "domscript"
+version = "0.1.0"
+authors = ["Brandon Dail <brandondail@fb.com>"]
+
+[dependencies]
