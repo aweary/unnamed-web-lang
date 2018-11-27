@@ -17,4 +17,5 @@ pub enum Token {
     RParen,
     SemiColon,
     String(String),
+    Number(i64),
 }

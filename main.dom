@@ -1,0 +1,16 @@
+// Line comment!
+component Button(label: string) {
+  // Heres a line comment
+  // Heres a line comment
+  // Heres a line comment
+  <button class="btn">{label}</button>
+}
+// Another line comment
+component InputButtonGroup(children: List<Button>) {
+  <div class="btn-group">
+    This is a button group.
+    {children}
+    <div class="btn-group-footer">Footer</div>
+    <input onChange={onChange} value={1} />
+  </div>
+}

@@ -34,8 +34,9 @@ impl LexBuffer {
 
     // Peek the next n characters in the buff without eating them
     fn peek(&mut self) -> Option<char> {
-        if self.index < self.stop_index {
-            char_at(&self.src, self.index)
+        // Ensure there is a next character
+        if self.index < self.stop_index - 1 {
+            char_at(&self.src, self.index + 1)
         } else {
             None
         }
@@ -71,12 +72,15 @@ impl Lexer {
     }
 
     pub fn peek(&mut self) -> Option<char> {
-        // TODO
-        None
+        self.buff.peek()
     }
 
     fn eat(&mut self) {
         self.buff.eat();
+    }
+
+    fn read_line_comment(&mut self) {
+        self.buff.read_until(|ch| ch.is_newline());
     }
 
     pub fn next_token(&mut self) -> Option<Token> {
@@ -88,15 +92,16 @@ impl Lexer {
                         let word = self.read_ident();
                         Some(self.token_from_word(word))
                     }
-                    // ch if ch == '\n' => {
-                    //     println!("WHITESPACE");
-                    //     None
-                    // },
+                    ch if ch == '\n' => {
+                        self.eat();
+                        return self.next_token();
+                    }
                     // Whitespace, skipt it and recursively call next_token
                     ch if ch.is_whitespace() => {
                         self.eat();
                         return self.next_token();
                     }
+                    '0'...'9' => Some(Token::Number(self.read_numeric_literal())),
                     // Start of a string literal
                     '"' => Some(Token::String(self.read_string_literal())),
                     // Single-character tokens
@@ -104,51 +109,57 @@ impl Lexer {
                     '=' => {
                         self.eat();
                         Some(Token::Assign)
-                    },
+                    }
                     '(' => {
                         self.eat();
                         Some(Token::LParen)
-                    },
+                    }
                     ')' => {
                         self.eat();
                         Some(Token::RParen)
-                    },
+                    }
                     '{' => {
                         self.eat();
                         Some(Token::LCurlyBracket)
-                    },
+                    }
                     '}' => {
                         self.eat();
                         Some(Token::RCurlyBracket)
-                    },
+                    }
                     ':' => {
                         self.eat();
                         Some(Token::Colon)
-                    },
+                    }
                     '<' => {
                         self.eat();
                         Some(Token::LCaret)
-                    },
+                    }
                     '>' => {
                         self.eat();
                         Some(Token::RCaret)
-                    },
-                    '/' => {
-                        self.eat();
-                        Some(Token::ForwardSlash)
+                    }
+                    '/' => match self.peek() {
+                        Some('/') => {
+                            self.read_line_comment();
+                            self.next_token()
+                        }
+                        _ => {
+                            self.eat();
+                            Some(Token::ForwardSlash)
+                        }
                     },
                     ',' => {
                         self.eat();
                         Some(Token::Comma)
-                    },
+                    }
                     ';' => {
                         self.eat();
                         Some(Token::SemiColon)
-                    },
+                    }
                     '!' => {
                         self.eat();
                         Some(Token::Exclaim)
-                    },
+                    }
                     '.' => {
                         self.eat();
                         Some(Token::Dot)
@@ -162,41 +173,31 @@ impl Lexer {
 
     // Assumes self.ch is the start of an identifier
     fn read_ident(&mut self) -> String {
-        let mut ident = String::new();
-        loop {
-            match self.buff.ch {
-                Some(ch) if ch.is_ident_part() => {
-                    ident.push(ch);
-                    self.eat();
-                }
-                _ => return ident,
-            }
-        }
+        self.buff.read_until(|ch| !ch.is_ident_part())
     }
 
     // Assumes self.ch is the opening " for the string
     fn read_string_literal(&mut self) -> String {
-        let mut literal = String::new();
         // Eat the next token to start the string body
         self.eat();
-        loop {
-            match self.buff.ch {
-                Some('\"') => {
-                    self.eat();
-                    return literal;
-                }
-                Some(ch) => {
-                    literal.push(ch);
-                    self.eat();
-                }
-                None => unreachable!("read_string_literal encountered an unexpected character"),
-            }
-        }
+        let literal = self.buff.read_until(|ch| ch == '\"');
+        // Eat the next token to move out of the string body
+        self.eat();
+        literal
+    }
+
+    // Assumes self.ch is the first number in the literal
+    fn read_numeric_literal(&mut self) -> i64 {
+        // TODO: support floating point numbers
+        self.buff
+            .read_until(|ch| !ch.is_number_part())
+            .parse::<i64>()
+            .unwrap()
     }
 
     fn token_from_word(&mut self, word: String) -> Token {
         match word.as_ref() {
-            "component" => Token::Keyword(word),
+            "component" | "state" | "effect" => Token::Keyword(word),
             _ => Token::Ident(word),
         }
     }

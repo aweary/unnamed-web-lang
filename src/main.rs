@@ -18,7 +18,7 @@ fn read_file(filename: String) -> io::Result<String> {
 }
 
 fn main() {
-    let filename = String::from("main.js");
+    let filename = String::from("main.dom");
     let buffer = read_file(filename).unwrap();
     let lexer = Lexer::new(buffer);
     for token in lexer {
