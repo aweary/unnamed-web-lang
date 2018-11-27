@@ -1,4 +1,11 @@
 #[derive(Debug, PartialEq)]
+pub enum ReservedWord {
+    Component,
+    State,
+    Effect
+}
+
+#[derive(Debug, PartialEq)]
 pub enum Token {
     Assign,
     Colon,
@@ -8,7 +15,7 @@ pub enum Token {
     Exclaim,
     ForwardSlash,
     Ident(String),
-    Keyword(String),
+    Reserved(ReservedWord),
     LCaret,
     LCurlyBracket,
     LParen,

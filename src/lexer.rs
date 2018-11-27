@@ -1,6 +1,6 @@
 use char::DOMScriptChar;
 use str::char_at;
-use token::Token;
+use token::{Token, ReservedWord};
 
 #[derive(Debug)]
 struct LexBuffer {
@@ -197,7 +197,9 @@ impl Lexer {
 
     fn token_from_word(&mut self, word: String) -> Token {
         match word.as_ref() {
-            "component" | "state" | "effect" => Token::Keyword(word),
+            "component" => Token::Reserved(ReservedWord::Component),
+            "effect" => Token::Reserved(ReservedWord::Effect),
+            "state" => Token::Reserved(ReservedWord::State),
             _ => Token::Ident(word),
         }
     }
