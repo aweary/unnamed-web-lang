@@ -1,12 +1,15 @@
 #[derive(Debug, PartialEq)]
 pub enum ReservedWord {
     Component,
+    Type,
     State,
-    Effect
+    Effect,
 }
 
 #[derive(Debug, PartialEq)]
 pub enum Token {
+    TernaryCondition,
+    Add,
     Assign,
     Colon,
     Comma,
@@ -14,15 +17,15 @@ pub enum Token {
     EOF,
     Exclaim,
     ForwardSlash,
+    GreaterThan,
     Ident(String),
-    Reserved(ReservedWord),
-    LCaret,
     LCurlyBracket,
+    LessThan,
     LParen,
-    RCaret,
+    Number(i64),
     RCurlyBracket,
+    Reserved(ReservedWord),
     RParen,
     SemiColon,
     String(String),
-    Number(i64),
 }
