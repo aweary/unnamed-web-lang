@@ -1,5 +1,8 @@
-component EmailInput(value: string) {
-  <div id="1" foo bar={2} baz={baz}>Hello</div>
+component EmailInput(value: string, name: string) {
+  <div class="email-input">
+    <label for={name}>Label for input</label>
+    <input kind="email" name={name} />
+  </div>
 }
 
 // User defined types are supported! Record types

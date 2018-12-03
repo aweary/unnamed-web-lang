@@ -105,15 +105,15 @@ impl JSXAttribute {
 #[derive(Debug)]
 pub struct JSXElement {
     opening_element: JSXOpeningElement,
-    closing_element: JSXClosingElement,
-    children: Box<JSXChildren>,
+    closing_element: Option<JSXClosingElement>,
+    children: Option<Vec<Box<JSXChildren>>>,
 }
 
 impl JSXElement {
     pub fn new(
         opening_element: JSXOpeningElement,
-        closing_element: JSXClosingElement,
-        children: Box<JSXChildren>,
+        closing_element: Option<JSXClosingElement>,
+        children: Option<Vec<Box<JSXChildren>>>,
     ) -> Self {
         JSXElement {
             opening_element,
@@ -141,7 +141,7 @@ pub enum JSXAttributeValue {
 pub enum JSXChildren {
     JSXText(String),
     JSXExpressionContainer(Expression),
-    JSXElement(Box<JSXElement>),
+    JSXElement(JSXElement),
 }
 
 // pub enum Expression {

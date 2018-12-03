@@ -126,9 +126,7 @@ impl Parser {
         loop {
             match self.peek() {
                 Some(&Token::Ident(_)) => {
-                    println!("peeking an ident");
                     let attr = self.read_jsx_attribute();
-                    println!("attr: {:#?}", attr);
                     attrs.push(attr);
                 }
                 Some(&Token::ForwardSlash) | Some(&Token::GreaterThan) => {
@@ -139,6 +137,7 @@ impl Parser {
                 }
             }
         }
+        println!("read_jsx_attributes: {:?}", attrs);
         if attrs.is_empty() {
             None
         } else {
@@ -146,24 +145,123 @@ impl Parser {
         }
     }
 
-    // fn read_jsx_children(&mut self) -> JSXElement {
-    //
-    // }
+    fn is_jsx_element_self_closing(&mut self) -> bool {
+        match self.peek() {
+            Some(&Token::GreaterThan) => {
+                self.skip_assert(Token::GreaterThan);
+                false
+            }
+            Some(&Token::ForwardSlash) => {
+                self.skip_assert(Token::ForwardSlash);
+                self.skip_assert(Token::GreaterThan);
+                true
+            }
+            _ => {
+                unreachable!();
+            }
+        }
+    }
 
-    // Assumes current token is '<' for an opening JSX tag
     fn read_jsx_element(&mut self) -> JSXElement {
         let tag_name = self.read_ident();
         let attributes = self.read_jsx_attributes();
-        let opening_element = JSXOpeningElement::new(tag_name.clone(), attributes, false);
-        let children = self.read_jsx_children();
-        let closing_element = JSXClosingElement::new(tag_name);
-        JSXElement::new(opening_element, closing_element, children)
+        let self_closing = self.is_jsx_element_self_closing();
+        let opening_element = JSXOpeningElement::new(tag_name.clone(), attributes, self_closing);
+        println!("opening_element {:?}", opening_element);
+        let (children, closing_element) = if self_closing {
+            (None, None)
+        } else {
+            let children = self.read_jsx_children();
+            let closing_element = self.read_jsx_closing_element();
+            println!("closing_element {:?}", closing_element);
+            println!("children {:?}", children);
+            (Some(children), Some(closing_element))
+        };
+        let element = JSXElement::new(opening_element, closing_element, children);
+        println!("element: {:#?}", element);
+        element
     }
 
-    fn read_jsx_children(&mut self) -> Box<JSXChildren> {
-        println!("read_jsx_children : {:?}", self.lexer.ch());
-        let text = String::from("Hello, world");
+    fn read_jsx_closing_element(&mut self) -> JSXClosingElement {
+        // Closing tag
+        // self.skip_assert(Token::LessThan);
+        // self.skip_assert(Token::ForwardSlash);
+        let closing_tag_name = self.read_ident();
+        // TODO parsing error
+        // assert_eq!(tag_name, closing_tag_name);
+        self.skip_assert(Token::GreaterThan);
+        // TODO actually parse the closing tag
+        JSXClosingElement::new(closing_tag_name)
+    }
+
+    fn read_jsx_text(&mut self) -> Box<JSXChildren> {
+        let mut text = String::new();
+        loop {
+            match self.peek() {
+                Some(&Token::Ident(_)) => {
+                    let word = self.read_ident();
+                    // TODO respect whitespace when lexing instead of this hack
+                    text = text + " " + &word;
+                }
+                Some(&Token::LessThan) | Some(&Token::LCurlyBracket) => {
+                    break;
+                }
+                _ => {
+                    unreachable!();
+                }
+            }
+        }
+        println!("read_jsx_text: {:?}", text);
         Box::new(JSXChildren::JSXText(text))
+    }
+
+    fn read_jsx_children(&mut self) -> Vec<Box<JSXChildren>> {
+        let mut children: Vec<Box<JSXChildren>> = vec![];
+        loop {
+            match self.peek() {
+                // JSXText
+                Some(&Token::Ident(_)) => {
+                    children.push(self.read_jsx_text());
+                },
+                Some(&Token::LessThan) => {
+                    // A '<' token could be the start of another element
+                    // or the closing element for the enclosing element
+                    self.skip_assert(Token::LessThan);
+                    match self.peek() {
+                        Some(&Token::Ident(_)) => {
+                            // An identifier means the start of a new element
+                            let element = self.read_jsx_element();
+                            children.push(Box::new(JSXChildren::JSXElement(element)));
+                        }
+                        Some(&Token::ForwardSlash) => {
+                            self.skip_assert(Token::ForwardSlash);
+                            return children;
+                            // A '/' indicates a closing element
+                        }
+                        _ => {
+                            unreachable!();
+                        }
+                    }
+                }
+                _ => break,
+            }
+        }
+        children
+        // let child = match token {
+        //     // TODO JSX parsers respect the whitespace inside tags. Need to output tokens
+        //     Some(Token::Ident(word)) => {
+        //         JSXChildren::JSXText(word)
+        //     }
+        //     Some(Token::LessThan) => {
+        //         let element = self.read_jsx_element();
+        //         JSXChildren::JSXElement(element)
+        //     }
+        //     // TODO handle JSXExpressionContainer
+        //     token @ _ => {
+        //         unreachable!("Unexpected token: {:?}", token);
+        //     }
+        // };
+        // Box::new(child)
     }
 
     /**
