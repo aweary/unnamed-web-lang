@@ -4,13 +4,11 @@ use token::*;
 
 pub struct Parser {
     pub lexer: Lexer,
-    // state: ParserState,
 }
 
 impl Parser {
     pub fn module(source: String) -> Self {
         let lexer = Lexer::new(source);
-        // let state = ParserState::new();
         Parser { lexer }
     }
 
@@ -50,13 +48,12 @@ impl Parser {
                 loop {
                     let name = self.read_ident();
                     // TODO this should be an unexpected token error
-                    assert_eq!(Some(Token::Colon), self.lexer.next_token());
+                    self.skip_assert(Token::Colon);
                     let kind = self.read_ident();
                     params.push(Param::new(name, kind));
                     match self.lexer.next_token() {
                         Some(Token::RParen) => {
                             break;
-                            // End of the param list
                         }
                         Some(Token::Comma) => {
                             continue;
@@ -117,6 +114,7 @@ impl Parser {
      * Reads any expresison, which is something that can evaluate to some value
      */
     fn read_expr(&mut self) -> Expression {
+        // TODO actually parse expressions
         self.skip_until(|token| token == Token::RCurlyBracket);
         Expression::NumericLiteral(42)
     }
@@ -126,8 +124,7 @@ impl Parser {
         loop {
             match self.peek() {
                 Some(&Token::Ident(_)) => {
-                    let attr = self.read_jsx_attribute();
-                    attrs.push(attr);
+                    attrs.push(self.read_jsx_attribute());
                 }
                 Some(&Token::ForwardSlash) | Some(&Token::GreaterThan) => {
                     break;
@@ -137,7 +134,6 @@ impl Parser {
                 }
             }
         }
-        println!("read_jsx_attributes: {:?}", attrs);
         if attrs.is_empty() {
             None
         } else {
@@ -167,30 +163,20 @@ impl Parser {
         let attributes = self.read_jsx_attributes();
         let self_closing = self.is_jsx_element_self_closing();
         let opening_element = JSXOpeningElement::new(tag_name.clone(), attributes, self_closing);
-        println!("opening_element {:?}", opening_element);
         let (children, closing_element) = if self_closing {
             (None, None)
         } else {
             let children = self.read_jsx_children();
             let closing_element = self.read_jsx_closing_element();
-            println!("closing_element {:?}", closing_element);
-            println!("children {:?}", children);
             (Some(children), Some(closing_element))
         };
-        let element = JSXElement::new(opening_element, closing_element, children);
-        println!("element: {:#?}", element);
-        element
+        JSXElement::new(opening_element, closing_element, children)
     }
 
     fn read_jsx_closing_element(&mut self) -> JSXClosingElement {
-        // Closing tag
-        // self.skip_assert(Token::LessThan);
-        // self.skip_assert(Token::ForwardSlash);
         let closing_tag_name = self.read_ident();
         // TODO parsing error
-        // assert_eq!(tag_name, closing_tag_name);
         self.skip_assert(Token::GreaterThan);
-        // TODO actually parse the closing tag
         JSXClosingElement::new(closing_tag_name)
     }
 
@@ -211,7 +197,6 @@ impl Parser {
                 }
             }
         }
-        println!("read_jsx_text: {:?}", text);
         Box::new(JSXChildren::JSXText(text))
     }
 
@@ -222,7 +207,7 @@ impl Parser {
                 // JSXText
                 Some(&Token::Ident(_)) => {
                     children.push(self.read_jsx_text());
-                },
+                }
                 Some(&Token::LessThan) => {
                     // A '<' token could be the start of another element
                     // or the closing element for the enclosing element
@@ -234,34 +219,24 @@ impl Parser {
                             children.push(Box::new(JSXChildren::JSXElement(element)));
                         }
                         Some(&Token::ForwardSlash) => {
+                            // A '/' indicates a closing element
                             self.skip_assert(Token::ForwardSlash);
                             return children;
-                            // A '/' indicates a closing element
                         }
                         _ => {
                             unreachable!();
                         }
                     }
                 }
+                Some(&Token::LCurlyBracket) => {
+                    let expr = self.read_expr();
+                    children.push(Box::new(JSXChildren::JSXExpressionContainer(expr)));
+                }
+                // TODO parser errors
                 _ => break,
             }
         }
         children
-        // let child = match token {
-        //     // TODO JSX parsers respect the whitespace inside tags. Need to output tokens
-        //     Some(Token::Ident(word)) => {
-        //         JSXChildren::JSXText(word)
-        //     }
-        //     Some(Token::LessThan) => {
-        //         let element = self.read_jsx_element();
-        //         JSXChildren::JSXElement(element)
-        //     }
-        //     // TODO handle JSXExpressionContainer
-        //     token @ _ => {
-        //         unreachable!("Unexpected token: {:?}", token);
-        //     }
-        // };
-        // Box::new(child)
     }
 
     /**
@@ -293,8 +268,7 @@ impl Parser {
      */
     fn read_jsx_attribute(&mut self) -> JSXAttribute {
         let name = self.read_ident();
-
-        let foo = match self.peek() {
+        match self.peek() {
             Some(&Token::Assign) => {
                 self.skip_assert(Token::Assign);
                 let attribute_value = self.read_jsx_attribute_value();
@@ -309,25 +283,7 @@ impl Parser {
             _ => {
                 unreachable!();
             }
-        };
-        foo
-        // println!("read_jsx_attribute:name {:?}", name);
-        // match self.lexer.next_token() {
-        //     // Explicit assignment
-        //     Some(Token::Assign) => {
-        //         let attr_value = self.read_jsx_attribute_value();
-        //         JSXAttribute::new(name, attr_value)
-        //     }
-        //     // Shorthand form
-        //     Some(Token::Ident(_)) | Some(Token::ForwardSlash) | Some(Token::GreaterThan) => {
-        //         println!("shorthand form, creating the identifier and stuff");
-        //         let attr_ident = Identifier::new(name.clone());
-        //         let attr_ident_expr = Expression::Identifer(attr_ident);
-        //         let attr_value = JSXAttributeValue::Expression(attr_ident_expr);
-        //         JSXAttribute::new(name, attr_value)
-        //     }
-        //     token @ _ => unreachable!("Unknown character: {:?}", token),
-        // }
+        }
     }
 
     fn read_type_def(&mut self) -> Node {
