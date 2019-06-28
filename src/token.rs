@@ -4,6 +4,7 @@ pub enum ReservedWord {
     Type,
     State,
     Effect,
+    Const,
 }
 
 #[derive(Debug, PartialEq)]

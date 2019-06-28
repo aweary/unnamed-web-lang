@@ -102,8 +102,12 @@ impl Parser {
                     exprs.push(expr);
                     return exprs;
                 }
+                Some(Token::Reserved(ReservedWord::Const)) => {
+                    let name = self.read_ident();
+                    println!("const {:?}", name);
+                }
                 _ => {
-                    continue;
+                    return exprs;
                 }
             }
         }

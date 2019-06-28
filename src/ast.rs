@@ -132,6 +132,11 @@ pub enum Expression {
 }
 
 #[derive(Debug)]
+pub enum Statement {
+    VariableDeclaration,
+}
+
+#[derive(Debug)]
 pub enum JSXAttributeValue {
     StringLiteral(String),
     Expression(Expression),

@@ -141,7 +141,7 @@ impl Lexer {
             Some(token) => Some(token),
             None => self.read_next_token(),
         };
-        println!("next_token: {:?}", token);
+        // println!("next_token: {:?}", token);
         token
     }
 
@@ -152,6 +152,7 @@ impl Lexer {
                     // Start of an identifier or reserved word
                     ch if ch.is_ident_start() => {
                         let word = self.read_ident();
+                        println!("ident {:?}", word);
                         Some(self.token_from_word(word))
                     }
                     ch if ch == '\n' => {
@@ -249,6 +250,7 @@ impl Lexer {
             "effect" => Token::Reserved(ReservedWord::Effect),
             "state" => Token::Reserved(ReservedWord::State),
             "type" => Token::Reserved(ReservedWord::Type),
+            "const" => Token::Reserved(ReservedWord::Const),
             _ => Token::Ident(word),
         }
     }
