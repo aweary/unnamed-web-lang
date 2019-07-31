@@ -1,32 +1,57 @@
-#[derive(Debug, PartialEq)]
-pub enum ReservedWord {
-    Component,
-    Type,
-    State,
-    Effect,
-    Const,
+use crate::pos::Span;
+use std::fmt;
+
+#[derive(PartialEq)]
+pub struct Token {
+    pub kind: TokenKind,
+    pub span: Span,
 }
 
 #[derive(Debug, PartialEq)]
-pub enum Token {
-    TernaryCondition,
-    Add,
-    Assign,
-    Colon,
-    Comma,
-    Dot,
-    EOF,
-    Exclaim,
-    ForwardSlash,
-    GreaterThan,
+pub enum Keyword {
+    Let,
+}
+
+impl Token {
+    pub fn new(kind: TokenKind, span: Span) -> Token {
+        Token { kind, span }
+    }
+}
+
+impl fmt::Debug for Token {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "Token({:?}) - ({},{})-({},{})",
+            self.kind,
+            self.span.start.line,
+            self.span.start.column,
+            self.span.end.line,
+            self.span.end.column
+        )
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub enum TokenKind {
+    NumericLiteral(u32),
     Ident(String),
-    LCurlyBracket,
-    LessThan,
+    Keyword(Keyword),
+    Equals,
+    Plus,
+    Minus,
+    Star,
+    Slash,
+    Mod,
+    LAngle,
+    RAngle,
+    Semi,
+    LBrace,
+    RBrace,
     LParen,
-    Number(i64),
-    RCurlyBracket,
-    Reserved(ReservedWord),
     RParen,
-    SemiColon,
-    String(String),
+    Dot,
+    Colon,
+    Caret,
+    Question,
 }

@@ -2,5 +2,9 @@
 name = "domscript"
 version = "0.1.0"
 authors = ["Brandon Dail <brandondail@fb.com>"]
+edition = "2018"
 
 [dependencies]
+ucd = "0.1.1"
+colored = "1.8"
+

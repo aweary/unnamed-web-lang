@@ -1,268 +1,165 @@
-use char::DOMScriptChar;
-use str::char_at;
-use token::{ReservedWord, Token};
-use std::collections::VecDeque;
+use std::iter::Iterator;
+
+use colored::*;
+use ucd::Codepoint;
+
+use crate::reader::Reader;
+use crate::token::{Keyword, Token, TokenKind};
 
 #[derive(Debug)]
-struct LexBuffer {
-    src: String,
-    // The current char being processed
-    ch: Option<char>,
-    // Index of the last char in the buff
-    stop_index: usize,
-    index: usize,
+pub struct Lexer<'a> {
+    source: &'a String,
+    chars: Reader<'a>,
 }
 
-impl LexBuffer {
-    fn new(src: String) -> LexBuffer {
-        LexBuffer {
-            index: 0,
-            stop_index: src.len(),
-            ch: char_at(&src, 0),
-            src,
-        }
-    }
-    // Eat the current character, advancing the position
-    // and updatinng self.char
-    fn eat(&mut self) {
-        if self.index < self.stop_index {
-            let next_index = self.index + 1;
-            let next_ch = char_at(&self.src, next_index);
-            self.ch = next_ch;
-            self.index = next_index;
+impl<'a> Lexer<'a> {
+    pub fn new(source: &'a String) -> Self {
+        let chars = source.chars();
+        Lexer {
+            source,
+            chars: Reader::new(chars),
         }
     }
 
-    // Peek the next n characters in the buff without eating them
-    fn peek(&mut self) -> Option<char> {
-        // Ensure there is a next character
-        if self.index < self.stop_index - 1 {
-            char_at(&self.src, self.index + 1)
-        } else {
-            None
-        }
-    }
-
-    fn ch(&mut self) -> Option<char> {
-        self.ch
-    }
-
-    pub fn read_until<F>(&mut self, predicate: F) -> String
+    fn skip_while<F>(&mut self, pred: F)
     where
         F: Fn(char) -> bool,
     {
-        let mut word = String::new();
         loop {
-            match self.ch {
-                Some(ch) if predicate(ch) => return word,
-                Some(ch) => {
-                    word.push(ch);
-                    self.eat();
+            match self.chars.peek() {
+                // matches predicate, skip it
+                Some(&ch) if pred(ch) => {
+                    self.chars.next();
                 }
-                None => return word,
+                _ => return,
             }
         }
     }
-}
 
-#[derive(Debug)]
-pub struct Lexer {
-    buff: LexBuffer,
-    lookahead: VecDeque<Token>,
-}
-
-impl Lexer {
-    pub fn new(src: String) -> Lexer {
-        Lexer {
-            buff: LexBuffer::new(src),
-            lookahead: VecDeque::with_capacity(5),
-        }
-    }
-
-    pub fn peek(&mut self) -> Option<char> {
-        self.buff.peek()
-    }
-
-    pub fn peek_token(&mut self) -> Option<&Token> {
-        if self.lookahead.is_empty() {
-            if let Some(token) = self.next_token() {
-                self.lookahead.push_back(token);
+    fn read_into_while<F>(&mut self, out: &mut String, pred: F)
+    where
+        F: Fn(char) -> bool,
+    {
+        loop {
+            match self.chars.peek() {
+                Some(&ch) if pred(ch) => {
+                    // eat;
+                    // TODO error handling
+                    let ch = self.chars.next().unwrap();
+                    out.push(ch);
+                }
+                _ => return,
             }
         }
-        self.lookahead.front()
     }
 
-    // pub fn peek2_token(&mut self) -> (Option<Token>, Option<Token>) {
-    //     while self.lookahead.len() < 2 {
-    //         let token = self.next_token();
-    //         self.lookahead.push_back(token);
-    //     }
-    //     (self.lookahead)
-    // }
-
-    fn eat(&mut self) {
-        self.buff.eat();
+    fn skip_whitespace(&mut self) {
+        self.skip_while(|ch| Codepoint::is_whitespace(ch));
     }
 
-    pub fn ch(&mut self) -> Option<char> {
-        self.buff.ch()
+    fn read_numeric_literal(&mut self) -> Option<Token> {
+        let span_start = self.chars.start();
+        let mut num_str = String::new();
+        // TODO floating point numbers
+        self.read_into_while(&mut num_str, |ch| ch.is_digit(10));
+        // TODO error handling
+        let num = num_str.parse::<u32>().unwrap();
+        let kind = TokenKind::NumericLiteral(num);
+        let span = self.chars.end(span_start);
+        let token = Token::new(kind, span);
+        Some(token)
     }
 
-    fn read_line_comment(&mut self) {
-        self.buff.read_until(|ch| ch.is_newline());
-    }
-    // Assumes self.ch is the start of an identifier
-    fn read_ident(&mut self) -> String {
-        self.buff.read_until(|ch| !ch.is_ident_part())
-    }
-
-    // Assumes self.ch is the opening " for the string
-    fn read_string_literal(&mut self, single_quote: bool) -> String {
-        // Eat the next token to start the string body
-        self.eat();
-        let match_ch = if single_quote { '\'' } else { '"' };
-        let literal = self.buff.read_until(|ch| ch == match_ch);
-        // Eat the next token to move out of the string body
-        self.eat();
-        literal
+    fn read_punc(&mut self, kind: TokenKind) -> Option<Token> {
+        // eat
+        let span_start = self.chars.start();
+        self.chars.next();
+        let span = self.chars.end(span_start);
+        let token = Token::new(kind, span);
+        Some(token)
     }
 
-    // Assumes self.ch is the first number in the literal
-    fn read_numeric_literal(&mut self) -> i64 {
-        // TODO: support floating point numbers
-        self.buff
-            .read_until(|ch| !ch.is_number_part())
-            .parse::<i64>()
-            .unwrap()
-    }
-
-    pub fn next_token(&mut self) -> Option<Token> {
-        let token = match self.lookahead.pop_front() {
-            Some(token) => Some(token),
-            None => self.read_next_token(),
+    fn read_ident(&mut self) -> Option<Token> {
+        let span_start = self.chars.start();
+        let mut ident = String::new();
+        self.read_into_while(&mut ident, |ch| {
+            Codepoint::is_id_start(ch) || Codepoint::is_id_continue(ch)
+        });
+        let span = self.chars.end(span_start);
+        let kind = match ident.as_ref() {
+            "let" => TokenKind::Keyword(Keyword::Let),
+            _ => TokenKind::Ident(ident),
         };
-        // println!("next_token: {:?}", token);
-        token
+        let token = Token::new(kind, span);
+        Some(token)
     }
 
-    fn read_next_token(&mut self) -> Option<Token> {
-        match self.buff.ch {
-            Some(ch) => {
-                match ch {
-                    // Start of an identifier or reserved word
-                    ch if ch.is_ident_start() => {
-                        let word = self.read_ident();
-                        println!("ident {:?}", word);
-                        Some(self.token_from_word(word))
-                    }
-                    ch if ch == '\n' => {
-                        self.eat();
-                        return self.next_token();
-                    }
-                    // Whitespace, skip it and recursively call next_token
-                    ch if ch.is_whitespace() => {
-                        self.eat();
-                        return self.next_token();
-                    }
-                    '0'...'9' => Some(Token::Number(self.read_numeric_literal())),
-                    // Start of a string literal
-                    '"' => Some(Token::String(self.read_string_literal(false))),
-                    '\'' => Some(Token::String(self.read_string_literal(true))),
-                    // Single-character tokens
-                    // TODO: simplify this
-                    '=' => {
-                        self.eat();
-                        Some(Token::Assign)
-                    }
-                    '+' => {
-                        self.eat();
-                        Some(Token::Add)
-                    }
-                    '?' => {
-                        self.eat();
-                        Some(Token::TernaryCondition)
-                    }
-                    '(' => {
-                        self.eat();
-                        Some(Token::LParen)
-                    }
-                    ')' => {
-                        self.eat();
-                        Some(Token::RParen)
-                    }
-                    '{' => {
-                        self.eat();
-                        Some(Token::LCurlyBracket)
-                    }
-                    '}' => {
-                        self.eat();
-                        Some(Token::RCurlyBracket)
-                    }
-                    ':' => {
-                        self.eat();
-                        Some(Token::Colon)
-                    }
-                    '<' => {
-                        self.eat();
-                        Some(Token::LessThan)
-                    }
-                    '>' => {
-                        // Potentially the closing symbol for an XML tag.
-                        self.eat();
-                        Some(Token::GreaterThan)
-                    }
-                    '/' => match self.peek() {
-                        Some('/') => {
-                            self.read_line_comment();
-                            self.next_token()
-                        }
-                        _ => {
-                            self.eat();
-                            Some(Token::ForwardSlash)
-                        }
-                    },
-                    ',' => {
-                        self.eat();
-                        Some(Token::Comma)
-                    }
-                    ';' => {
-                        self.eat();
-                        Some(Token::SemiColon)
-                    }
-                    '!' => {
-                        self.eat();
-                        Some(Token::Exclaim)
-                    }
-                    '.' => {
-                        self.eat();
-                        Some(Token::Dot)
-                    }
-                    _ => unreachable!("Unknown character: {}", ch),
-                }
-            }
-            None => Some(Token::EOF),
+    pub fn next(&mut self) -> Option<Token> {
+        use TokenKind::*;
+        self.skip_whitespace();
+        match self.chars.peek() {
+            // base-10 numeric literals
+            Some(&ch) if ch.is_digit(10) => self.read_numeric_literal(),
+            // Identifier
+            Some(&ch) if Codepoint::is_id_start(ch) => self.read_ident(),
+            // Punctuation
+            Some('+') => self.read_punc(Plus),
+            Some('-') => self.read_punc(Minus),
+            Some('*') => self.read_punc(Star),
+            Some('/') => self.read_punc(Slash),
+            Some('=') => self.read_punc(Equals),
+            Some('(') => self.read_punc(LParen),
+            Some(')') => self.read_punc(RParen),
+            Some('{') => self.read_punc(LBrace),
+            Some('}') => self.read_punc(RBrace),
+            Some('<') => self.read_punc(LAngle),
+            Some('>') => self.read_punc(RAngle),
+            Some(':') => self.read_punc(Colon),
+            Some(';') => self.read_punc(Semi),
+            Some('.') => self.read_punc(Dot),
+            Some('%') => self.read_punc(Mod),
+            Some('^') => self.read_punc(Caret),
+            Some('?') => self.read_punc(Question),
+            // EOF
+            None => None,
+            // Unknown character
+            Some(_) => self.unknown_char_panic(),
         }
     }
 
-    fn token_from_word(&mut self, word: String) -> Token {
-        match word.as_ref() {
-            "component" => Token::Reserved(ReservedWord::Component),
-            "effect" => Token::Reserved(ReservedWord::Effect),
-            "state" => Token::Reserved(ReservedWord::State),
-            "type" => Token::Reserved(ReservedWord::Type),
-            "const" => Token::Reserved(ReservedWord::Const),
-            _ => Token::Ident(word),
-        }
+    // This should be moved out into error.rs or something
+    fn unknown_char_panic(&mut self) -> ! {
+        let pos = self.chars.start();
+        let ch = self.chars.next().unwrap();
+        let line = pos.line;
+        let lines: Vec<&str> = self.source.split('\n').collect();
+        let error_line = lines.get(line - 1).unwrap();
+        let point_error_line = format!(
+            "{:width$}{pointer}",
+            "",
+            width = pos.column,
+            pointer = "^".red()
+        );
+        let error_prefix = "Unknown character:".red().bold();
+        let line_str = "line".blue();
+        let column_str = "column".green();
+        panic!(
+            "\n\n{} '{}' at {} {}, {} {}\n\n{}\n{}\n\n",
+            error_prefix,
+            ch,
+            line_str,
+            pos.line,
+            column_str,
+            pos.column,
+            error_line,
+            point_error_line,
+        );
     }
 }
 
-impl Iterator for Lexer {
+impl<'a> Iterator for Lexer<'a> {
     type Item = Token;
     fn next(&mut self) -> Option<Self::Item> {
-        let token = self.next_token()?;
-        match token {
-            Token::EOF => None,
-            _ => Some(token),
-        }
+        self.next()
     }
 }

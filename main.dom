@@ -1,3 +1,6 @@
-component EmailInput(name: string) {
-  const value = useState("");
+component FriendList(id: ID) : List<FriendImage> {
+  const friends = FriendStore.read(id).friends;
+  <ul>
+    {friends.map |friend| => <FriendImage src={friend.avatar.src} />}
+  </ul>
 }
