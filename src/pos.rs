@@ -15,7 +15,7 @@ impl Pos {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Span {
     pub start: Pos,
     pub end: Pos,

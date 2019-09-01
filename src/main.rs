@@ -1,3 +1,4 @@
+mod ast;
 mod error;
 mod lexer;
 mod parser;
@@ -10,9 +11,17 @@ use crate::parser::Parser;
 fn main() {
     let program = String::from(
         "
-        let foo = 5 + 2;
-        let bar = foo / 5 + 2;
+        component Button(label: string) : HTMLButton {
+           return <div class=\"foo\" isDisabled={label == 5}>{label}</div>
+        }
         ",
     );
-    Parser::parse(&program);
+    match Parser::parse(&program) {
+        Ok(module) => {
+            println!("{:#?}", module);
+        }
+        Err(err) => {
+            println!("{:?}", err);
+        }
+    };
 }
