@@ -3,7 +3,7 @@ use crate::token::Token;
 // TODO make serializable w/ serde
 #[derive(Debug)]
 pub struct Module {
-    body: Body,
+    pub body: Body,
 }
 
 impl Module {
@@ -14,7 +14,7 @@ impl Module {
 
 #[derive(Debug)]
 pub struct Body {
-    stmts: Vec<Statement>,
+    pub stmts: Vec<Statement>,
 }
 
 impl Body {
@@ -136,6 +136,18 @@ impl JSXElement {
 }
 
 #[derive(Debug)]
+pub struct MatchArm {
+    test: Box<Expression>,
+    consequent: Box<Expression>,
+}
+
+impl MatchArm {
+    pub fn new(test: Expression, consequent: Expression) -> Self {
+        MatchArm { test: Box::new(test), consequent: Box::new(consequent) }
+    } 
+}
+
+#[derive(Debug)]
 pub enum Expression {
     // TODO these literals shouldnt reference the tokens
     NumericLiteral(Token),
@@ -154,6 +166,18 @@ pub enum Expression {
         test: Box<Expression>,
         consequent: Box<Expression>,
         alternate: Box<Expression>,
+    },
+    MemberExpression {
+        object: Box<Expression>,
+        property: Identifier,
+    },
+    CallExpression {
+        callee: Box<Expression>,
+        arguments: Vec<Expression>,
+    },
+    MatchExpression {
+        discriminant: Box<Expression>,
+        cases: Vec<MatchArm>,
     },
     JSXExpression(JSXElement),
 }

@@ -1,9 +1,9 @@
 use crate::ast::{
     Body, Expression, Identifier, JSXAttribute, JSXChild, JSXClosingElement, JSXElement,
-    JSXOpeningElement, JSXText, Module, Operator, Param, Precedence, Statement,
+    JSXOpeningElement, JSXText, MatchArm, Module, Operator, Param, Precedence, Statement,
 };
 use crate::error::ParseError;
-use crate::lexer::Lexer;
+use crate::lexer::{LexMode, Lexer};
 use crate::token::{Keyword, Token, TokenKind};
 
 type Result<T> = std::result::Result<T, ParseError>;
@@ -76,6 +76,7 @@ impl<'a> Parser<'a> {
     fn stmt(&mut self) -> Result<Statement> {
         match &self.peek()?.kind {
             TokenKind::Keyword(keyword) => match keyword {
+                Keyword::Match => self.expr_stmt(),
                 Keyword::Let => self.var_decl(),
                 Keyword::Func => self.func_decl(),
                 Keyword::Return => self.return_stmt(),
@@ -84,7 +85,11 @@ impl<'a> Parser<'a> {
                 Keyword::Else => Err(ParseError::UnexpectedToken(self.next()?)),
             },
             // ExpressionStatement
-            TokenKind::Ident(_) => self.expr_stmt(),
+            TokenKind::Ident(_) |
+            // JSXExpression
+            TokenKind::LessThan |
+            // NumberExpression
+            TokenKind::NumericLiteral(_) => self.expr_stmt(),
             _ => {
                 let token = self.lexer.next().unwrap();
                 return Err(ParseError::UnexpectedToken(token));
@@ -104,16 +109,12 @@ impl<'a> Parser<'a> {
         Ok(statements)
     }
 
-    // fn decl(&mut self) -> Result<Declaration> {
-    //     // ...
-    //     Err(ParseError::UnexpectedEOF);
-    // }
-
     fn next(&mut self) -> Result<Token> {
-        match self.lexer.next() {
+        let token = match self.lexer.next() {
             Ok(token) => Ok(token),
             Err(_) => Err(ParseError::LexError),
-        }
+        };
+        token
     }
 
     fn expect(&mut self, kind: TokenKind) -> Result<Token> {
@@ -151,25 +152,41 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn jsx_expr(&mut self) -> Result<JSXChild> {
+        self.lexer.mode = LexMode::Normal;
+        let expr = self.expr(0)?;
+        self.lexer.mode = LexMode::JSX;
+        self.expect(TokenKind::RBrace)?;
+        let child = JSXChild::JSXExpression(expr);
+        Ok(child)
+    }
+
     fn jsx_children(&mut self) -> Result<Option<Vec<JSXChild>>> {
+        println!("start parsing jsx children");
+        // Set self.lexer.mode = LexMode::MaybeJSXText ?
         let mut children: Vec<JSXChild> = vec![];
         loop {
+            self.lexer.mode = LexMode::JSXText;
+            let token = self.next()?;
+            println!("jsx_children {:?}", token);
             // TODO make this peek so that jsx_close_element can expect
             // LessThan
-            match self.next()?.kind {
+            match token.kind {
                 TokenKind::LessThan => {
+                    // Move out of JSX mode, this might be the closing element.
+                    self.lexer.mode = LexMode::Normal;
                     if self.peek()?.kind == TokenKind::Div {
+                        println!("oh we done parsing children now!");
                         // Closing element, end of children
                         return Ok(Some(children));
                     }
+                    println!("nested jsx element");
                     let element = self.jsx_element()?;
                     let child = JSXChild::JSXElement(Box::new(element));
                     children.push(child);
                 }
                 TokenKind::LBrace => {
-                    let expr = self.expr(0)?;
-                    self.expect(TokenKind::RBrace)?;
-                    let child = JSXChild::JSXExpression(expr);
+                    let child = self.jsx_expr()?;
                     children.push(child);
                 }
                 TokenKind::JSXText(text) => {
@@ -178,6 +195,7 @@ impl<'a> Parser<'a> {
                     children.push(child);
                 }
                 _ => {
+                    println!("done parsing children");
                     if children.is_empty() {
                         return Ok(None);
                     } else {
@@ -198,7 +216,7 @@ impl<'a> Parser<'a> {
 
     fn jsx_attribute(&mut self) -> Result<JSXAttribute> {
         let name = self.ident()?;
-        self.expect(TokenKind::Equals);
+        self.expect(TokenKind::Equals)?;
         let value = match self.peek()?.kind {
             TokenKind::StringLiteral(_) => {
                 let string_token = self.next()?;
@@ -206,53 +224,87 @@ impl<'a> Parser<'a> {
             }
             TokenKind::LBrace => {
                 self.expect(TokenKind::LBrace)?;
+                self.lexer.mode = LexMode::Normal;
                 let expr = self.expr(0)?;
+                self.lexer.mode = LexMode::JSX;
                 self.expect(TokenKind::RBrace)?;
                 expr
             }
-            _ => {
-                return Err(ParseError::UnexpectedToken(self.next()?))
-            }
+            _ => return Err(ParseError::UnexpectedToken(self.next()?)),
         };
         Ok(JSXAttribute::new(name, Box::new(value)))
     }
 
     fn jsx_attributes(&mut self) -> Result<Option<Vec<JSXAttribute>>> {
-        let mut attributes : Vec<JSXAttribute> = vec![];
+        let mut attributes: Vec<JSXAttribute> = vec![];
         loop {
-        match self.peek()?.kind {
-            TokenKind::GreaterThan => {
-                if attributes.is_empty() {
-                    return Ok(None)
-                } else {
-                    return Ok(Some(attributes))
+            match self.peek()?.kind {
+                TokenKind::GreaterThan | TokenKind::Div => {
+                    if attributes.is_empty() {
+                        return Ok(None);
+                    } else {
+                        return Ok(Some(attributes));
+                    }
                 }
+                TokenKind::Ident(_) => {
+                    let attr = self.jsx_attribute()?;
+                    attributes.push(attr);
+                }
+                _ => return Err(ParseError::UnexpectedToken(self.next()?)),
             }
-            TokenKind::Ident(_) => {
-                let attr = self.jsx_attribute()?;
-                attributes.push(attr);
-            }
-            _ => return Err(ParseError::UnexpectedToken(self.next()?))
-        }
         }
     }
 
     fn jsx_element(&mut self) -> Result<JSXElement> {
+        let mode = self.lexer.mode;
+        println!("jsx element, coming from mode {:?}", mode);
+        self.lexer.mode = LexMode::JSX;
         let tag_name = self.ident()?;
+        println!("jsx element {:?}", tag_name);
         let attrs = self.jsx_attributes()?;
         // TODO don't clone tag_name
         let open = JSXOpeningElement::new(tag_name.clone(), attrs);
-        // TODO attributes,  move to jsx_open_element;
-        self.expect(TokenKind::GreaterThan)?;
-        let children = self.jsx_children()?;
-        let close = self.jsx_close_element()?;
-        if false {
-            // TODO self closing elements]
-            // JSXClosingElement::new(tag_name.clone());
-        }
-        let elem = JSXElement::new(open, close, children);
-        println!("elem {:?}", elem);
+        // Handle self closing elements
+        let elem = if self.peek()?.kind == TokenKind::Div {
+            self.expect(TokenKind::Div)?;
+            self.expect(TokenKind::GreaterThan)?;
+            JSXElement::new(open, None, None)
+        } else {
+            self.expect(TokenKind::GreaterThan)?;
+            let children = self.jsx_children()?;
+            let close = self.jsx_close_element()?;
+            JSXElement::new(open, close, children)
+        };
+        self.lexer.mode = mode;
         Ok(elem)
+    }
+
+    fn match_arm(&mut self) -> Result<MatchArm> {
+        let test = self.expr(0)?;
+        self.expect(TokenKind::Arrow)?;
+        let consequent = self.expr(0)?;
+        self.expect(TokenKind::Comma)?;
+        let res = Ok(MatchArm::new(test, consequent));
+        println!("{:?}", res);
+        res
+    }
+
+    fn match_expr(&mut self) -> Result<Expression> {
+        let discriminant = self.expr(0)?;
+        self.expect(TokenKind::LBrace)?;
+        let mut cases = vec![];
+        loop {
+            let case = self.match_arm()?;
+            cases.push(case);
+            if self.peek()?.kind == TokenKind::RBrace {
+                break;
+            }
+        }
+        self.expect(TokenKind::RBrace)?;
+        Ok(Expression::MatchExpression {
+            discriminant: Box::new(discriminant),
+            cases,
+        })
     }
 
     fn prefix_expr(&mut self) -> Result<Expression> {
@@ -263,7 +315,13 @@ impl<'a> Parser<'a> {
             TokenKind::StringLiteral(_) => Ok(Expression::StringLiteral(token)),
             TokenKind::Ident(name) => Ok(Expression::Identifier(Identifier(name))),
             // JSX Expresion
-            TokenKind::LessThan => Ok(Expression::JSXExpression(self.jsx_element()?)),
+            TokenKind::LessThan => {
+                println!("Mode before JSXEelement {:?}", self.lexer.mode);
+                self.lexer.mode = LexMode::JSX;
+                Ok(Expression::JSXExpression(self.jsx_element()?))
+            }
+            // Match Expression
+            TokenKind::Keyword(Keyword::Match) => self.match_expr(),
             // Unary operators
             TokenKind::Plus => {
                 let operand = self.expr(Precedence::PREFIX as u32)?;
@@ -327,10 +385,34 @@ impl<'a> Parser<'a> {
         })
     }
 
+    fn member_expr(&mut self, left: Expression) -> Result<Expression> {
+        self.expect(TokenKind::Dot)?;
+        let property = self.ident()?;
+        Ok(Expression::MemberExpression {
+            object: Box::new(left),
+            property,
+        })
+    }
+
+    fn call_expr(&mut self, ident: Expression) -> Result<Expression> {
+        self.expect(TokenKind::LParen)?;
+        println!("call expr {:?}", ident);
+        // TODO handle multiple arguments
+        let arg = self.expr(0)?;
+        self.expect(TokenKind::RParen)?;
+        Ok(Expression::CallExpression {
+            callee: Box::new(ident),
+            arguments: vec![arg],
+        })
+    }
+
     fn infix_expr(&mut self, left: Expression) -> Result<Expression> {
+        println!("infix expr");
         match self.peek()?.kind {
             // ConditionalExpression
             TokenKind::Question => self.cond_expr(left),
+            // CallExpression
+            TokenKind::LParen => self.call_expr(left),
             // BinaryExpression
             TokenKind::Plus
             | TokenKind::Minus
@@ -339,13 +421,17 @@ impl<'a> Parser<'a> {
             | TokenKind::LessThan
             | TokenKind::DblEquals
             | TokenKind::GreaterThan => self.binary_expr(left),
+            // MemberExpression
+            TokenKind::Dot => self.member_expr(left),
             _ => Ok(left),
         }
     }
 
     fn peek_precedence(&mut self) -> Result<u32> {
         Ok(match self.peek()?.kind {
+            TokenKind::LParen => Precedence::ASSIGNMENT as u32,
             TokenKind::Equals => Precedence::ASSIGNMENT as u32,
+            TokenKind::Dot => Precedence::ASSIGNMENT as u32,
             TokenKind::Question => Precedence::CONDITIONAL as u32,
             TokenKind::Plus => Precedence::SUM as u32,
             TokenKind::Minus => Precedence::SUM as u32,
@@ -361,6 +447,8 @@ impl<'a> Parser<'a> {
         // todo error handling
         let mut expr = self.prefix_expr()?;
         while precedence < self.peek_precedence()? {
+            println!("loop expr {:?}", expr);
+            println!("percedence {}", self.peek_precedence()?);
             expr = self.infix_expr(expr)?;
         }
         Ok(expr)

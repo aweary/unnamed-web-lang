@@ -7,18 +7,14 @@ mod reader;
 mod token;
 
 use crate::parser::Parser;
+use std::fs;
 
 fn main() {
-    let program = String::from(
-        "
-        component Button(label: string) : HTMLButton {
-           return <div class=\"foo\" isDisabled={label == 5}>{label}</div>
-        }
-        ",
-    );
+    let filename = "main.dom";
+    let program = fs::read_to_string(filename).expect("File not file");
     match Parser::parse(&program) {
         Ok(module) => {
-            println!("{:#?}", module);
+            println!("{:?}", module);
         }
         Err(err) => {
             println!("{:?}", err);

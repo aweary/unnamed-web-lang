@@ -14,6 +14,7 @@ pub enum Keyword {
     Return,
     If,
     Else,
+    Match,
 }
 
 impl Token {
@@ -42,6 +43,7 @@ pub enum TokenKind {
     StringLiteral(String),
     Keyword(Keyword),
     JSXText(String),
+    Arrow,
     Comma,
     Equals,
     DblEquals,

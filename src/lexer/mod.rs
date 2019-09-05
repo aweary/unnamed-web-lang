@@ -13,32 +13,11 @@ use error::LexError;
 
 type Result<T> = std::result::Result<T, LexError>;
 
-// We need to be able to track when we're inside a JSX tag
-// TODO make this a bitflag
-#[derive(Debug)]
-struct JSXState {
-    seen_less_than: bool,
-    seen_ident: bool,
-    seen_greater_than: bool,
-    in_jsx_tag: bool,
-}
-
-impl JSXState {
-    #[inline]
-    pub fn new() -> Self {
-        JSXState {
-            seen_less_than: false,
-            seen_ident: false,
-            seen_greater_than: false,
-            in_jsx_tag: false,
-        }
-    }
-    pub fn reset(&mut self) {
-        self.seen_less_than = false;
-        self.seen_ident = false;
-        self.seen_greater_than = false;
-        self.in_jsx_tag = false;
-    }
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum LexMode {
+    Normal = 0,
+    JSX = 1,
+    JSXText = 2,
 }
 
 #[derive(Debug)]
@@ -46,7 +25,7 @@ pub struct Lexer<'a> {
     source: &'a String,
     chars: Reader<'a>,
     lookahead: VecDeque<Token>,
-    jsx_state: JSXState,
+    pub mode: LexMode,
 }
 
 impl<'a> Lexer<'a> {
@@ -56,7 +35,7 @@ impl<'a> Lexer<'a> {
             source,
             chars: Reader::new(chars),
             lookahead: VecDeque::with_capacity(4),
-            jsx_state: JSXState::new(),
+            mode: LexMode::Normal,
         }
     }
 
@@ -123,36 +102,26 @@ impl<'a> Lexer<'a> {
         // eat
         self.chars.next();
         // Manage JSX state
-        match kind {
-            TokenKind::LessThan => {
-                self.jsx_state.seen_less_than = true;
-            }
-            TokenKind::Div => {
-                self.jsx_state.reset();
-                // Reset if we're in a closing tag
-            }
-            TokenKind::GreaterThan => {
-                self.jsx_state.in_jsx_tag =
-                    self.jsx_state.seen_less_than && self.jsx_state.seen_ident;
-            }
-            _ => (),
-        };
         let span = self.chars.end(span_start);
         let token = Token::new(kind, span);
         Ok(token)
     }
 
     fn read_equals(&mut self) -> Result<Token> {
-        println!("read equals");
         let span_start = self.chars.start();
         // Eat..
         let eat = self.chars.next();
-        println!("eating {:?}", eat);
         match self.chars.peek() {
             Some('=') => {
                 self.chars.next();
                 let span = self.chars.end(span_start);
                 let token = Token::new(TokenKind::DblEquals, span);
+                Ok(token)
+            }
+            Some('>') => {
+                self.chars.next();
+                let span = self.chars.end(span_start);
+                let token = Token::new(TokenKind::Arrow, span);
                 Ok(token)
             }
             _ => {
@@ -172,14 +141,14 @@ impl<'a> Lexer<'a> {
         let span = self.chars.end(span_start);
         let kind = match ident.as_ref() {
             "let" => TokenKind::Keyword(Keyword::Let),
-            "fn" | "component" => TokenKind::Keyword(Keyword::Func),
+            "function" | "fn" | "component" => TokenKind::Keyword(Keyword::Func),
             "return" => TokenKind::Keyword(Keyword::Return),
             "if" => TokenKind::Keyword(Keyword::If),
             "else" => TokenKind::Keyword(Keyword::Else),
+            "match" => TokenKind::Keyword(Keyword::Match),
             _ => TokenKind::Ident(ident),
         };
         let token = Token::new(kind, span);
-        self.jsx_state.seen_ident = true;
         Ok(token)
     }
 
@@ -209,8 +178,8 @@ impl<'a> Lexer<'a> {
             '}' | '{' | '<' | '>' => false,
             _ => true,
         });
+        println!("txt {}", text.is_empty());
         let span = self.chars.end(start);
-        self.jsx_state.reset();
         // Dont output JSXText token if theres no text
         if text.is_empty() {
             self.next_token()
@@ -219,16 +188,38 @@ impl<'a> Lexer<'a> {
         }
     }
 
+    // Seperate code path for lexing tokens in JSXText mode. This is an easy way
+    // to handle the different lexing semantics for unknown characters inside JSX elements.
+    fn next_jsx_token(&mut self) -> Result<Token> {
+        use TokenKind::*;
+        let token = match self.chars.peek() {
+            Some('<') => self.read_punc(LessThan),
+            Some('>') => self.read_punc(GreaterThan),
+            Some('{') => self.read_punc(LBrace),
+            Some('}') => self.read_punc(RBrace),
+            _ => self.read_jsx_text(),
+        };
+        println!("next JSX token {:?}", token);
+        token
+    }
+
     pub fn next_token(&mut self) -> Result<Token> {
         use TokenKind::*;
         self.skip_whitespace();
-        let in_jsx_tag = self.jsx_state.in_jsx_tag;
+        if self.mode == LexMode::JSXText {
+            return self.next_jsx_token();
+        }
         let token = match self.chars.peek() {
-            Some(_) if in_jsx_tag => {
-                let token = self.read_jsx_text()?;
-                self.jsx_state.reset();
-                Ok(token)
-            }
+            // Some(ch)
+            //     if self.mode == LexMode::JSXText
+            //         && *ch != '{'
+            //         && *ch != '}'
+            //         && *ch != '<'
+            //         && *ch != '>' =>
+            // {
+            //     let token = self.read_jsx_text()?;
+            //     Ok(token)
+            // }
             // base-10 numeric literals
             Some(&ch) if ch.is_digit(10) => self.read_numeric_literal(),
             // Identifier
@@ -264,7 +255,7 @@ impl<'a> Lexer<'a> {
             // Unknown character
             Some(ch) => Err(LexError::UnexpectedCharacter(*ch)),
         };
-        println!("{:?}", token);
+        println!("{:?}: {:?}", self.mode, token);
         token
     }
 

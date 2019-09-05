@@ -1,6 +1,7 @@
-component FriendList(id: ID) : List<FriendImage> {
-  const friends = FriendStore.read(id).friends;
-  <ul>
-    {friends.map |friend| => <FriendImage src={friend.avatar.src} />}
-  </ul>
+component UserAvatar(user: User, size: AvatarSize) : Node {
+  match user.type {
+    UserTypes.Admin => <AdminAvatar user={user} size={size} />,
+    UserTypes.User => <BaseUserAvatar user={user} size={size} />,
+    UserTypes.Guest => <GuestAvatar user={user} size={size} />,
+  }
 }
