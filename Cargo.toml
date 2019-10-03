@@ -7,4 +7,9 @@ edition = "2018"
 [dependencies]
 ucd = "0.1.1"
 colored = "1.8"
-
+uuid = { version = "0.7", features = ["serde", "v4"] }
+generational-arena = "0.2.2"
+typed-arena = "1.6.1"
+bumpalo = "2.6.0"
+string-interner = "0.7.1"
+scoped-tls = "1.0.0"

@@ -1,4 +1,6 @@
 use crate::pos::Span;
+use crate::symbol::Symbol;
+use crate::ast::{self, Precedence};
 use std::fmt;
 
 #[derive(Clone, PartialEq)]
@@ -15,11 +17,17 @@ pub enum Keyword {
     If,
     Else,
     Match,
+    Import,
+    ImportFrom,
 }
 
 impl Token {
     pub fn new(kind: TokenKind, span: Span) -> Token {
         Token { kind, span }
+    }
+
+    pub fn span(&self) -> &Span {
+        &self.span
     }
 
     pub fn follow_stmt_list(&self) -> bool {
@@ -28,21 +36,56 @@ impl Token {
             _ => false,
         }
     }
+
+    pub fn precedence(&self) -> Precedence {
+        use Precedence::*;
+        use TokenKind::*;
+        match self.kind {
+            LParen => ASSIGNMENT,
+            Equals => ASSIGNMENT,
+            Dot => ASSIGNMENT,
+            Question => CONDITIONAL,
+            Plus => SUM,
+            // TODO idk if this is the right precedence
+            Or | And => CONDITIONAL,
+            Minus => SUM,
+            Mul => PRODUCT,
+            Div => PRODUCT,
+            DblEquals => COMPARE,
+            LessThan | GreaterThan => COMPARE,
+            _ => NONE,
+        }
+    }
+
+    pub fn to_op(&self) -> Option<ast::Op> {
+        use ast::Op::*;
+        match self.kind {
+            TokenKind::Plus => Some(Add),
+            TokenKind::Minus => Some(Sub),
+            TokenKind::Mul => Some(Mul),
+            TokenKind::Div => Some(Div),
+            TokenKind::Mod => Some(Mod),
+            TokenKind::And => Some(And),
+            TokenKind::Or => Some(Or),
+            _ => None
+        }
+    }
 }
 
 impl fmt::Debug for Token {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Token({:?})", self.kind,)
+        write!(f, "Token({:#?}) {:#?}", self.kind, self.span)
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TokenKind {
-    NumericLiteral(u32),
-    Ident(String),
-    StringLiteral(String),
+    // LineComment(&'a str),
+    Number(f64),
+    Ident(Symbol),
+    String(Symbol),
     Keyword(Keyword),
-    JSXText(String),
+    JSXText(Symbol),
     Arrow,
     Comma,
     Equals,
@@ -66,4 +109,6 @@ pub enum TokenKind {
     Caret,
     Question,
     EOF,
+    Or,
+    And,
 }

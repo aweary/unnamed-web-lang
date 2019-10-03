@@ -1,193 +1,20 @@
-use crate::token::Token;
+use crate::symbol::Symbol;
 
-// TODO make serializable w/ serde
-#[derive(Debug)]
+// The root node of the AST.
+pub struct Program {
+    modules: Vec<Module>
+}
+
+// An individual module. Currently the only way to define
+// a module is with a new file, so this maps directly to the filesystem
+// layout of the project.
 pub struct Module {
-    pub body: Body,
+
 }
 
-impl Module {
-    pub fn new(body: Body) -> Self {
-        Module { body }
-    }
-}
-
-#[derive(Debug)]
-pub struct Body {
-    pub stmts: Vec<Statement>,
-}
-
-impl Body {
-    pub fn new(stmts: Vec<Statement>) -> Self {
-        Body { stmts }
-    }
-}
-
-#[derive(Debug)]
-pub struct Param {
-    name: Identifier,
-    annotation: Identifier,
-}
-
-impl Param {
-    pub fn new(name: Identifier, annotation: Identifier) -> Self {
-        Param { name, annotation }
-    }
-}
-
-#[derive(Debug)]
-pub enum Statement {
-    VariableDeclaration {
-        id: Identifier,
-        value: Expression,
-    },
-    FunctionDeclaration {
-        name: Identifier,
-        body: Body,
-        params: Vec<Param>,
-        return_type: Identifier,
-    },
-    ExpressionStatement(Expression),
-    Return(Expression),
-    // TODO call this Block instead of Body?
-    // Block(Body),
-    If {
-        test: Expression,
-        consequent: Body,
-        alternate: Option<Body>,
-    },
-}
-
-#[derive(Debug)]
-pub struct JSXAttribute {
-    name: Identifier,
-    value: Box<Expression>,
-}
-
-impl JSXAttribute {
-    pub fn new(name: Identifier, value: Box<Expression>) -> Self {
-        JSXAttribute { name, value }
-    }
-}
-
-#[derive(Debug)]
-pub struct JSXOpeningElement {
-    name: Identifier,
-    attrs: Option<Vec<JSXAttribute>>,
-}
-
-impl JSXOpeningElement {
-    #[inline]
-    pub fn new(name: Identifier, attrs: Option<Vec<JSXAttribute>>) -> Self {
-        JSXOpeningElement { name, attrs }
-    }
-}
-
-#[derive(Debug)]
-pub struct JSXClosingElement {
-    name: Identifier,
-}
-
-impl JSXClosingElement {
-    #[inline]
-    pub fn new(name: Identifier) -> Self {
-        JSXClosingElement { name }
-    }
-}
-
-#[derive(Debug)]
-pub struct JSXText {
-    text: String,
-}
-
-impl JSXText {
-    pub fn new(text: String) -> Self {
-        JSXText { text }
-    }
-}
-
-#[derive(Debug)]
-pub enum JSXChild {
-    JSXText(JSXText),
-    JSXElement(Box<JSXElement>),
-    JSXExpression(Expression),
-}
-
-#[derive(Debug)]
-pub struct JSXElement {
-    open: JSXOpeningElement,
-    close: Option<JSXClosingElement>,
-    children: Option<Vec<JSXChild>>,
-}
-
-impl JSXElement {
-    #[inline]
-    pub fn new(
-        open: JSXOpeningElement,
-        close: Option<JSXClosingElement>,
-        children: Option<Vec<JSXChild>>,
-    ) -> Self {
-        JSXElement {
-            open,
-            close,
-            children,
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct MatchArm {
-    test: Box<Expression>,
-    consequent: Box<Expression>,
-}
-
-impl MatchArm {
-    pub fn new(test: Expression, consequent: Expression) -> Self {
-        MatchArm { test: Box::new(test), consequent: Box::new(consequent) }
-    } 
-}
-
-#[derive(Debug)]
-pub enum Expression {
-    // TODO these literals shouldnt reference the tokens
-    NumericLiteral(Token),
-    StringLiteral(Token),
-    Identifier(Identifier),
-    UnaryExpression {
-        operator: Operator,
-        expr: Box<Expression>,
-    },
-    BinaryExpression {
-        operator: Operator,
-        left: Box<Expression>,
-        right: Box<Expression>,
-    },
-    ConditionalExpression {
-        test: Box<Expression>,
-        consequent: Box<Expression>,
-        alternate: Box<Expression>,
-    },
-    MemberExpression {
-        object: Box<Expression>,
-        property: Identifier,
-    },
-    CallExpression {
-        callee: Box<Expression>,
-        arguments: Vec<Expression>,
-    },
-    MatchExpression {
-        discriminant: Box<Expression>,
-        cases: Vec<MatchArm>,
-    },
-    JSXExpression(JSXElement),
-}
-
-#[derive(Debug, Clone)]
-pub struct Identifier(pub String);
-
-#[derive(Debug)]
+#[derive(Debug, PartialOrd, Ord, PartialEq, Eq, Clone, Copy)]
 pub enum Precedence {
-    GROUP = 0,
+    NONE = 0,
     ASSIGNMENT = 1,
     CONDITIONAL = 2,
     SUM = 3,
@@ -197,12 +24,85 @@ pub enum Precedence {
 }
 
 #[derive(Debug)]
-pub enum Operator {
-    Plus,
-    Minus,
-    Mul,
-    Div,
-    LessThan,
-    GreaterThan,
-    Equals,
+pub struct Expr {
+    // span: Span,
+    kind: Box<ExprKind>,
+}
+
+impl Expr {
+    pub fn new(kind: ExprKind) -> Self {
+        Expr {
+            kind: Box::new(kind)
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub enum Op {
+  Add,
+  Sub,
+  Div,
+  Mul,
+  Mod,
+  And,
+  Or,
+}
+
+#[derive(Debug)]
+pub struct MatchArm {
+    pub test: Box<Expr>,
+    pub consequent: Box<Expr>,
+}
+
+#[derive(Debug)]
+pub enum ExprKind {
+    Number(f64),
+    Str(Symbol),
+    Ident(Symbol),
+    Unary(Op, Box<Expr>),
+    Binary {
+        op: Op,
+        left: Box<Expr>,
+        right: Box<Expr>
+    },
+    Cond {
+        test: Box<Expr>,
+        consequent: Box<Expr>,
+        alternate: Box<Expr>
+    },
+    Logical {
+        op: Op,
+        left: Box<Expr>,
+        right: Box<Expr>,
+    },
+    Call {
+        callee: Box<Expr>,
+        arguments: Vec<Expr>,
+    },
+    Member {
+        obj: Box<Expr>,
+        property: Symbol,
+    },
+    Match {
+        discriminant: Box<Expr>,
+        cases: Vec<MatchArm>,
+    }
+}
+
+#[derive(Debug)]
+pub struct Stmt {
+    kind: Box<StmtKind>
+}
+
+impl Stmt {
+    pub fn new(kind: StmtKind) -> Self {
+        Stmt {
+            kind: Box::new(kind)
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum StmtKind {
+    LetDecl(Symbol, Box<Expr>),
 }

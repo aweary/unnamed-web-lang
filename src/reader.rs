@@ -2,6 +2,7 @@ use std::iter::Peekable;
 use std::str::Chars;
 
 use crate::pos::{Pos, Span};
+use crate::token::{Token, TokenKind};
 
 #[derive(Debug)]
 pub struct Reader<'a> {
@@ -10,9 +11,9 @@ pub struct Reader<'a> {
 }
 
 impl<'a> Reader<'a> {
-    pub fn new(chars: Chars<'a>) -> Self {
+    pub fn new(source: &'a str) -> Self {
+        let chars = source.chars().peekable();
         let current_pos = Pos::start();
-        let chars = chars.peekable();
         Reader { current_pos, chars }
     }
 
@@ -27,6 +28,10 @@ impl<'a> Reader<'a> {
     pub fn end(&self, start: Pos) -> Span {
         let end = self.current_pos.clone();
         Span::new(start, end)
+    }
+
+    pub fn offset(&self) -> usize {
+        self.current_pos.offset
     }
 }
 
