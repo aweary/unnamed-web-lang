@@ -1,6 +1,1 @@
-/**
- * lol...... 
- */
-pub struct ScopeStack {
-
-}
+pub struct Scope {}

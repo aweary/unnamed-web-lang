@@ -1,5 +1,3 @@
-fn add(a: number:, b: number) : number {
-  let c = a + b;
-  let d = c * c;
-  return d - c;
+fn add(x: int, y: int) : int {
+  let b = x;
 }

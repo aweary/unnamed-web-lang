@@ -30,6 +30,7 @@ pub enum ParseError {
     UnexpectedEOF,
     // TODO ref to LexError
     LexError,
+    Unimplemented,
 }
 
 impl fmt::Display for ParseError {
@@ -45,6 +46,7 @@ impl Error for ParseError {
             // TODO how to read token out of this?
             ParseError::UnexpectedToken(_) => "Unexpected token",
             ParseError::LexError => "Lex Error",
+            ParseError::Unimplemented => "Unimplemented",
         }
     }
 

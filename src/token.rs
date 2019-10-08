@@ -1,6 +1,6 @@
+use crate::ast::{self, Precedence};
 use crate::pos::Span;
 use crate::symbol::Symbol;
-use crate::ast::{self, Precedence};
 use std::fmt;
 
 #[derive(Clone, PartialEq)]
@@ -32,7 +32,7 @@ impl Token {
 
     pub fn follow_stmt_list(&self) -> bool {
         match self.kind {
-            TokenKind::EOF | TokenKind::RBrace => true,
+            TokenKind::EOF | TokenKind::RCurlyBrace => true,
             _ => false,
         }
     }
@@ -67,14 +67,16 @@ impl Token {
             TokenKind::Mod => Some(Mod),
             TokenKind::And => Some(And),
             TokenKind::Or => Some(Or),
-            _ => None
+            TokenKind::GreaterThan => Some(GreaterThan),
+            TokenKind::LessThan => Some(LessThan),
+            _ => None,
         }
     }
 }
 
 impl fmt::Debug for Token {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Token({:#?}) {:#?}", self.kind, self.span)
+        write!(f, "{:?}", self.kind)
     }
 }
 
@@ -82,6 +84,7 @@ impl fmt::Debug for Token {
 pub enum TokenKind {
     // LineComment(&'a str),
     Number(f64),
+    Bool(bool),
     Ident(Symbol),
     String(Symbol),
     Keyword(Keyword),
@@ -100,6 +103,8 @@ pub enum TokenKind {
     GreaterThan,
     GreaterThanEq,
     Semi,
+    LCurlyBrace,
+    RCurlyBrace,
     LBrace,
     RBrace,
     LParen,

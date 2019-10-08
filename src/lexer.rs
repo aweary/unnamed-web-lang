@@ -5,7 +5,7 @@ use crate::pos::{Pos, Span};
 use crate::reader::Reader;
 use crate::token::{Keyword, Token, TokenKind};
 
-use crate::symbol::symbol;
+use crate::parser::ParsingContext;
 
 use std::collections::VecDeque;
 use std::iter::Iterator;
@@ -128,7 +128,7 @@ impl<'a> Lexer<'a> {
         Ok(Token::new(TokenKind::EOF, span))
     }
 
-    fn ident(&mut self) -> Result<Token> {
+    fn ident(&mut self, ctx: &mut ParsingContext) -> Result<Token> {
         let span_start = self.start_span();
         let start = self.reader.offset();
         self.skip_while(|ch| Codepoint::is_id_start(ch) || Codepoint::is_id_continue(ch));
@@ -136,6 +136,8 @@ impl<'a> Lexer<'a> {
         let span = self.reader.end(span_start);
         let ident = &self.source[start..end];
         let kind = match ident {
+            "true" => TokenKind::Bool(true),
+            "false" => TokenKind::Bool(false),
             "let" | "state" => TokenKind::Keyword(Keyword::Let),
             "function" | "fn" | "component" => TokenKind::Keyword(Keyword::Func),
             "return" => TokenKind::Keyword(Keyword::Return),
@@ -145,7 +147,7 @@ impl<'a> Lexer<'a> {
             "import" => TokenKind::Keyword(Keyword::Import),
             "from" => TokenKind::Keyword(Keyword::ImportFrom),
             _ => {
-                let symbol = symbol(ident);
+                let symbol = ctx.symbol(ident);
                 TokenKind::Ident(symbol)
             }
         };
@@ -170,7 +172,7 @@ impl<'a> Lexer<'a> {
         Ok(Token::new(kind, span))
     }
 
-    fn string(&mut self) -> Result<Token> {
+    fn string(&mut self, ctx: &mut ParsingContext) -> Result<Token> {
         let span_start = self.reader.start();
         let start = self.reader.offset();
         self.eat('"');
@@ -178,27 +180,31 @@ impl<'a> Lexer<'a> {
         self.eat('"');
         let end = self.reader.offset();
         let span = self.reader.end(span_start);
-        let sym = symbol(&self.source[start..end]);
+        let sym = ctx.symbol(&self.source[start..end]);
         Ok(Token::new(TokenKind::String(sym), span))
     }
 
-    pub fn next_token(&mut self) -> Result<Token> {
+    pub fn next_token(&mut self, ctx: &mut ParsingContext) -> Result<Token> {
         use TokenKind::*;
+        // Read from the lookahead if its populated.
         if let Some(token) = self.lookahead.pop_front() {
             return Ok(token);
         }
+        // Ignore all whitespace.
         self.skip_whitespace();
         let token = match self.peek_char() {
             Some(&ch) if ch.is_digit(10) => self.number(),
-            Some(&ch) if Codepoint::is_id_start(ch) => self.ident(),
-            Some('"') => self.string(),
+            Some(&ch) if Codepoint::is_id_start(ch) => self.ident(ctx),
+            Some('"') => self.string(ctx),
             Some('=') => self.equals(),
             Some('|') => self.double(Or, '|'),
             Some('&') => self.double(And, '&'),
             Some('(') => self.single(LParen, '('),
             Some(')') => self.single(RParen, ')'),
-            Some('{') => self.single(LBrace, '{'),
-            Some('}') => self.single(RBrace, '}'),
+            Some('{') => self.single(LCurlyBrace, '{'),
+            Some('}') => self.single(RCurlyBrace, '}'),
+            Some('[') => self.single(LBrace, '['),
+            Some(']') => self.single(RBrace, ']'),
             Some('<') => self.single(LessThan, '<'),
             Some('>') => self.single(GreaterThan, '>'),
             Some(':') => self.single(Colon, ':'),
@@ -219,9 +225,9 @@ impl<'a> Lexer<'a> {
         token
     }
 
-    pub fn peek_token(&mut self) -> Result<&Token> {
+    pub fn peek_token(&mut self, ctx: &mut ParsingContext) -> Result<&Token> {
         if self.lookahead.is_empty() {
-            let token = self.next_token()?;
+            let token = self.next_token(ctx)?;
             self.lookahead.push_front(token);
         }
         Ok(self.lookahead.front().unwrap())
@@ -231,24 +237,24 @@ impl<'a> Lexer<'a> {
 // Seperate code path for lexing tokens in JSXText mode. This is an easy way
 // to handle the different lexing semantics for unknown characters inside JSX elements.
 trait JSXLexer<'a> {
-    fn next_jsx_token(&mut self) -> Result<Token>;
-    fn jsx_text(&mut self) -> Result<Token>;
+    fn next_jsx_token(&mut self, ctx: &mut ParsingContext) -> Result<Token>;
+    fn jsx_text(&mut self, ctx: &mut ParsingContext) -> Result<Token>;
 }
 
 impl<'a> JSXLexer<'a> for Lexer<'a> {
-    fn next_jsx_token(&mut self) -> Result<Token> {
+    fn next_jsx_token(&mut self, ctx: &mut ParsingContext) -> Result<Token> {
         use TokenKind::*;
         let token = match self.peek_char() {
             Some('<') => self.single(LessThan, '<'),
             Some('>') => self.single(GreaterThan, '>'),
-            Some('{') => self.single(LBrace, '{'),
-            Some('}') => self.single(RBrace, '}'),
-            _ => self.jsx_text(),
+            Some('{') => self.single(LCurlyBrace, '{'),
+            Some('}') => self.single(RCurlyBrace, '}'),
+            _ => self.jsx_text(ctx),
         };
         token
     }
 
-    fn jsx_text(&mut self) -> Result<Token> {
+    fn jsx_text(&mut self, ctx: &mut ParsingContext) -> Result<Token> {
         let span_start = self.start_span();
         let start = self.reader.offset();
         self.skip_while(|ch| match ch {
@@ -257,25 +263,13 @@ impl<'a> JSXLexer<'a> for Lexer<'a> {
         });
         let end = self.reader.offset();
         if start == end {
-            self.next_token()
+            self.next_token(ctx)
         } else {
             let span = self.end_span(span_start);
-            let sym = symbol(&self.source[start..end]);
+            let sym = ctx.symbol(&self.source[start..end]);
             let kind = TokenKind::JSXText(sym);
             Ok(Token::new(kind, span))
         }
     }
 }
 
-impl<'a> Iterator for Lexer<'a> {
-    type Item = Token;
-    fn next(&mut self) -> Option<Self::Item> {
-        match self.next_token() {
-            Ok(token) => match token.kind {
-                TokenKind::EOF => None,
-                _ => Some(token),
-            },
-            _ => None,
-        }
-    }
-}

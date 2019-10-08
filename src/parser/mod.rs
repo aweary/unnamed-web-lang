@@ -1,71 +1,64 @@
+mod decl;
 mod expr;
 mod stmt;
-mod result;
+mod context;
 
-use result::Result;
+use decl::DeclParser;
+// use expr::ExprParser;
+// use stmt::StmtParser;
+pub use context::{ParsingContext, ExprContext};
 
-// Parsing methods are split among a handful of imported traits
-use expr::ExprParser;
-use stmt::StmtParser;
-
-use bumpalo::Bump;
-
-use generational_arena::{Arena, Index};
 
 use crate::error::ParseError;
 use crate::lexer::Lexer;
-// use crate::symbols::ScopedSymbolTable;
-use crate::context::ParsingContext;
-use crate::token::{Token, TokenKind};
-use crate::ast::{Precedence, ExprKind};
+use crate::result::Result;
+use crate::ast::{Module, Program};
 use crate::symbol::Symbol;
+use crate::token::{Token, TokenKind};
+use std::rc::Rc;
+use std::cell::RefCell;
 
-// use arena::{Arena, Id};
+// temporary use so that the Rust compiler checks this module
+// use crate::ir::*;
 
-pub fn parse_module<'a>(source: &'a str) -> String {
-    let arena = Bump::new();
-    let mut parser = Parser::new(&source, &arena);
-    match parser.parse() {
-        Ok(results) => results,
-        Err(err) => {
-            println!("err: {:?}", err);
-            // TODO error reporting. We can't return any error data that is
-            // using this memory arena
-            String::from("Something failed")
-        }
-    }
+pub fn parse_program<'a>(source: &'a str, mut ctx: &'a mut ParsingContext) -> Result<Program> {
+    let mut parser = Parser::new(&source, &mut ctx);
+    parser.parse()
 }
 
 pub struct Parser<'a> {
     lexer: Lexer<'a>,
-    expr_table: Arena<ExprKind>,
-    ctx: ParsingContext,
-    arena: &'a Bump,
-    // symbols: ScopedSymbolTable<'a>,
+    ctx: &'a mut ParsingContext,
 }
 
 impl<'a> Parser<'a> {
-    pub fn new(source: &'a str, arena: &'a Bump) -> Self {
+    pub fn new(source: &'a str, ctx: &'a mut ParsingContext) -> Self {
         let lexer = Lexer::new(&source);
-        Parser {
-            lexer,
-            expr_table: Arena::new(),
-            ctx: ParsingContext::new(),
-            arena: &arena,
-        }
+        Parser { lexer, ctx }
     }
 
     fn next_token(&mut self) -> Result<Token> {
-        match self.lexer.next_token() {
-            Ok(token) => Ok(token),
+        match self.lexer.next_token(&mut self.ctx) {
+            Ok(token) => {
+                Ok(token)
+            }
             Err(_) => Err(ParseError::LexError),
         }
     }
 
     fn peek_token(&mut self) -> Result<&Token> {
-        match self.lexer.peek_token() {
+        match self.lexer.peek_token(&mut self.ctx) {
             Ok(token) => Ok(token),
-            Err(_) => Err(ParseError::LexError)
+            Err(_) => Err(ParseError::LexError),
+        }
+    }
+
+    fn eat(&mut self, kind: TokenKind) -> Result<bool> {
+        if self.peek_token()?.kind == kind {
+            self.expect(kind)?;
+            Ok(true)
+        } else {
+            Ok(false)
         }
     }
 
@@ -86,10 +79,21 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse(&mut self) -> Result<String> {
-        let stmt = self.stmt_list();
-        println!("expr {:#?}", stmt);
-        let compiled_program = String::from("fake compiled program");
-        Ok(compiled_program)
+    /**
+     * This is currently an alias to `ident`, but a type
+     * identifier has different syntax. For example, polymorphic
+     * types have type parameters.
+     */
+    fn type_ident(&mut self) -> Result<Symbol> {
+        self.ident()
+    }
+
+    pub fn parse(&mut self) -> Result<Program> {
+        // top-level statements
+        let stmts = self.decl_list()?;
+        let module = Module { stmts };
+        let modules = vec![module];
+        let program = Program { modules };
+        Ok(program)
     }
 }

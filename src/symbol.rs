@@ -1,11 +1,23 @@
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::fmt;
 use std::num::NonZeroU32;
 use string_interner::StringInterner;
 pub use string_interner::Symbol as SymbolTrait;
 
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+use crate::ast::ExprId;
+use crate::typecheck::TKind;
+
+
+
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub struct Symbol(NonZeroU32);
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SymbolTableEntry {
+    Local(ExprId),
+    Abstract(TKind),
+}
 
 impl SymbolTrait for Symbol {
     fn from_usize(val: usize) -> Self {
@@ -18,36 +30,49 @@ impl SymbolTrait for Symbol {
     }
 }
 
-// Display the interned string for fmt::Debug
-impl fmt::Debug for Symbol {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        SYMBOLS.with(|symbols| {
-            let interner = symbols.interner.borrow();
-            let string = interner.resolve(*self).unwrap();
-            write!(f, "\"s#{}\"", string)
-        })
-    }
-}
-
 #[derive(Debug)]
-pub struct Symbols {
-    interner: RefCell<StringInterner<Symbol>>,
+pub struct SymbolTable {
+    pub scope_count: u32,
+    scopes: Vec<HashMap<Symbol, SymbolTableEntry>>,
 }
 
-impl Symbols {
-    pub fn new() -> Symbols {
-        Symbols {
-            interner: RefCell::new(StringInterner::new()),
+impl SymbolTable {
+    pub fn new() -> Self {
+        let scopes = vec![HashMap::new()];
+        Self {
+            scope_count: 0,
+            scopes,
         }
     }
-}
 
-thread_local!(pub static SYMBOLS: Symbols = Symbols::new());
+    pub fn begin_scope(&mut self) {
+        let scope = HashMap::new();
+        self.scopes.push(scope);
+    }
 
-#[inline]
-pub fn symbol(name: &str) -> Symbol {
-    SYMBOLS.with(|symbols| {
-        let mut interner = symbols.interner.borrow_mut();
-        interner.get_or_intern(name)
-    })
+    pub fn end_scope(&mut self) {
+        self.scopes.pop();
+    }
+
+    pub fn define_local(&mut self, symbol: Symbol, expr_id: ExprId) {
+        let entry = SymbolTableEntry::Local(expr_id);
+        let scope = self.scopes.last_mut().unwrap();
+        scope.insert(symbol, entry);
+    }
+
+    pub fn define_abstract(&mut self, symbol: Symbol, ty: TKind) {
+        let entry = SymbolTableEntry::Abstract(ty);
+        let scope = self.scopes.last_mut().unwrap();
+        scope.insert(symbol, entry);
+    }
+
+    pub fn resolve(&self, sym: &Symbol) -> Option<&SymbolTableEntry> {
+        // Walk up the scope chain
+        for scope in &self.scopes {
+            if scope.contains_key(sym) {
+                return scope.get(sym)
+            }
+        }
+        None
+    }
 }
