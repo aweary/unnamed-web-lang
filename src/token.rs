@@ -13,6 +13,7 @@ pub struct Token {
 pub enum Keyword {
     Let,
     Func,
+    Component,
     Return,
     If,
     Else,

@@ -29,8 +29,8 @@ impl Compiler {
                 let mut resolve_names = NameResolutionPass::new();
                 let mut template_ir = TemplateIRPass::new();
                 for module in &ast.modules {
-                    resolve_names.populated_symbol_table(&mut ctx, &module);
                     template_ir.compile_templates(&mut ctx, &module);
+                    resolve_names.populated_symbol_table(&mut ctx, &module);
                 }
             }
             Err(err) => {

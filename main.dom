@@ -1,16 +1,21 @@
-function Button(label: string) : ButtonRole {
+component Button(label: string, onPress: Function) : Node {
   return (
-    <button class="btn">
-      {label}
-    </button>
-  );
+    <button onClick={onPress} class="btn">{label}</button>
+  )
 }
 
-function AboutSection(title: string) : Node {
+
+component Counter<T>(
+  count: Number,
+  increment: Function 
+) : Node {
   return (
     <div>
-      {title}
-      <Button label="Push Me!" />
+      <title class="counter">
+        This is a counter
+      </title>
+      <Button label={count} onPress={increment} />
     </div>
   )
 }
+

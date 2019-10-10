@@ -1,12 +1,12 @@
 use crate::ast::{Expr, ExprId, ExprKind, Template, TemplateId};
-use crate::ir::{Template as TemplateIR, TemplateInstrList, StaticTemplateId};
+use crate::ir::{StaticTemplateId, Template as TemplateIR, TemplateInstrList};
 use crate::symbol::{Symbol, SymbolTable, SymbolTableEntry, SYMBOL_DEBUG_TABLE_DEV_ONLY};
 use crate::typecheck::{infer, TKind};
-use id_arena::{Arena};
+use id_arena::Arena;
 use string_interner::StringInterner;
 
 use std::cell::RefCell;
-use std::collections::{HashMap};
+use std::collections::HashMap;
 
 // Trait that allows structs to
 pub trait ExprContext {
@@ -49,7 +49,7 @@ pub struct ParsingContext {
     template_arena: Arena<Template>,
     type_cache: HashMap<ExprId, TKind>,
     static_template_map: RefCell<StaticTemplateMap>,
-    template_ir_map: RefCell<HashMap<TemplateId, TemplateIR>>,
+    pub template_ir_map: RefCell<HashMap<TemplateId, TemplateIR>>,
 }
 
 impl ExprContext for ParsingContext {

@@ -13,7 +13,6 @@ use crate::symbol::Symbol;
 use cfg::CFG;
 use scope::Scope;
 
-
 pub fn resolve(name: Symbol, scope: &Scope) -> Option<ExprId> {
     None
     // ...

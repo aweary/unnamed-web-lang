@@ -6,7 +6,7 @@ use crate::parser::Parser;
 use crate::result::Result;
 use crate::typecheck::type_of_built_in_symbol;
 
-use crate::token::Keyword::Func;
+use crate::token::Keyword::{Func, Component};
 use crate::token::TokenKind::{
     Colon, Comma, GreaterThan, Ident, Keyword, LParen, LessThan, RParen, Semi,
 };
@@ -36,9 +36,18 @@ impl<'a> DeclParser<'a> for Parser<'a> {
 
     fn decl(&mut self) -> Result<Decl> {
         match self.peek_token()?.kind {
-            Keyword(Func) => Ok(Decl {
+            Keyword(Func) => {
+                self.expect(Keyword(Func))?;
+                Ok(Decl {
                 kind: DeclKind::Func(self.fn_decl()?),
-            }),
+              })
+            },
+            Keyword(Component) => {
+                self.expect(Keyword(Component))?;
+                Ok(Decl {
+                kind: DeclKind::Component(self.fn_decl()?),
+            })
+            },
             _ => return Err(ParseError::Unimplemented),
         }
     }
@@ -79,7 +88,7 @@ impl<'a> DeclParser<'a> for Parser<'a> {
     }
 
     fn fn_decl(&mut self) -> Result<FuncDecl> {
-        self.expect(Keyword(Func))?;
+        // self.expect(Keyword(Func))?;
         let name = self.ident()?;
         // Optional type arguments
         if self.eat(LessThan)? {

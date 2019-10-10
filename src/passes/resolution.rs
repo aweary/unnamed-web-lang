@@ -21,6 +21,7 @@ impl<'a> NameResolutionPass<'a> {
 }
 
 impl<'ast> Visitor<'ast> for NameResolutionPass<'ast> {
+
     fn visit_block(&mut self, ctx: &ParsingContext, block: &'ast Block) {
         ctx.begin_scope();
         for param in &self.param_queue {

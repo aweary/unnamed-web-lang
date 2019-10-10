@@ -53,7 +53,7 @@ pub struct FuncDecl {
 #[derive(Debug)]
 pub enum DeclKind {
     Type,
-    Component,
+    Component(FuncDecl),
     Func(FuncDecl),
 }
 

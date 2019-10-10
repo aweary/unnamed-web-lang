@@ -106,6 +106,12 @@ pub fn walk_expr<'ast, V: Visitor<'ast>>(visitor: &mut V, ctx: &ParsingContext, 
             visitor.visit_expr(&ctx, left);
             visitor.visit_expr(&ctx, right);
         }
+        ExprKind::Cond { test, consequent, alternate } => {
+            println!("{:?}", ctx.resolve_expr(consequent));
+            visitor.visit_expr(ctx, test);
+            visitor.visit_expr(ctx, consequent);
+            visitor.visit_expr(ctx, alternate);
+        }
         ExprKind::Call(ref call) => {
             visitor.visit_expr(&ctx, call.callee);
             for expr in &call.arguments {
