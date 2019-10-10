@@ -1,12 +1,14 @@
 use crate::parser::Parser;
 use crate::result::Result;
 
-use crate::ast::ObjectProperty;
-use crate::ast::{Expr, ExprKind, MatchArm, Precedence, ExprId};
-use crate::ast::{Call};
-use crate::ast::{number_expr};
+use crate::ast::number_expr;
+use crate::ast::{Call, ObjectProperty, Template, TemplateAttr};
+use crate::ast::{Expr, ExprId, ExprKind, MatchArm, Precedence};
+use crate::ast::{TemplateChild, TemplateId};
 use crate::error::ParseError;
 use crate::token::{Keyword, TokenKind};
+
+use crate::lexer::LexMode;
 
 macro_rules! optional_comma {
     ($self:ident, $kind:ident) => {
@@ -33,6 +35,11 @@ pub trait ExprParser<'a> {
     fn logical_expr(&mut self, left: ExprId) -> Result<ExprId>;
     fn call_expr(&mut self, left: ExprId) -> Result<ExprId>;
     fn member_expr(&mut self, left: ExprId) -> Result<ExprId>;
+    fn template(&mut self) -> Result<TemplateId>;
+    fn template_expr(&mut self) -> Result<ExprId>;
+    fn template_attr(&mut self) -> Result<TemplateAttr>;
+    fn template_attrs(&mut self) -> Result<Vec<TemplateAttr>>;
+    fn template_children(&mut self) -> Result<Option<Vec<TemplateChild>>>;
     fn match_arm_expr(&mut self) -> Result<MatchArm>;
     fn match_expr(&mut self) -> Result<ExprId>;
     fn expr_list(&mut self, terminator: TokenKind) -> Result<Vec<ExprId>>;
@@ -61,9 +68,7 @@ impl<'a> ExprParser<'a> for Parser<'a> {
                 // This should never fail since we know this is
                 // Plus | Minus and those both map to Op variants
                 let op = token.to_op().unwrap();
-                let id = self.ctx.alloc_expr(
-                    Expr::new(ExprKind::Unary(op, expr_id))
-                );
+                let id = self.ctx.alloc_expr(Expr::new(ExprKind::Unary(op, expr_id)));
                 Ok(id)
             }
             // Group
@@ -76,6 +81,8 @@ impl<'a> ExprParser<'a> for Parser<'a> {
             }
             // Match
             TokenKind::Keyword(Keyword::Match) => self.match_expr(),
+            // JSX expression
+            TokenKind::LessThan => self.template_expr(),
             // TODO JSXExpression
             _ => Err(ParseError::UnexpectedToken(token)),
         }
@@ -86,7 +93,6 @@ impl<'a> ExprParser<'a> for Parser<'a> {
         let mut exprs = vec![];
         loop {
             if self.eat(terminator.clone())? {
-                println!("terminator!");
                 break;
             }
             let expr = self.expr(Precedence::NONE)?;
@@ -100,6 +106,126 @@ impl<'a> ExprParser<'a> for Parser<'a> {
             }
         }
         Ok(exprs)
+    }
+
+    fn template_attr(&mut self) -> Result<TemplateAttr> {
+        use TokenKind::{Equals, LCurlyBrace, RCurlyBrace, String};
+        let name = self.ident()?;
+        self.expect(Equals)?;
+        let value = match self.peek_token()?.kind {
+            String(string) => {
+                self.expect(String(string))?;
+                self.ctx.alloc_expr(Expr::new(ExprKind::Str(string)))
+            }
+            LCurlyBrace => {
+                self.expect(LCurlyBrace)?;
+                self.lexer.mode = LexMode::Normal;
+                let expr_id = self.expr(Precedence::NONE)?;
+                self.lexer.mode = LexMode::JSX;
+                self.expect(RCurlyBrace)?;
+                expr_id
+            }
+            _ => return Err(ParseError::UnexpectedToken(self.next_token()?)),
+        };
+        Ok(TemplateAttr { name, value })
+    }
+
+    fn template_attrs(&mut self) -> Result<Vec<TemplateAttr>> {
+        use TokenKind::{Div, GreaterThan, Ident};
+        let mut attrs = vec![];
+        loop {
+            match self.peek_token()?.kind {
+                GreaterThan | Div => return Ok(attrs),
+                Ident(_) => {
+                    let attr = self.template_attr()?;
+                    attrs.push(attr);
+                }
+                _ => return Err(ParseError::UnexpectedToken(self.next_token()?)),
+            }
+        }
+    }
+
+    fn template_children(&mut self) -> Result<Option<Vec<TemplateChild>>> {
+        use TokenKind::{Div, LCurlyBrace, LessThan, RCurlyBrace, TemplateText};
+        let mut children = vec![];
+        loop {
+            self.lexer.mode = LexMode::TemplateText;
+            let token = self.next_token()?;
+            match token.kind {
+                LessThan => {
+                    // Move out of TemplateText mode, this might be a closing element
+                    self.lexer.mode = LexMode::Normal;
+                    if self.peek_token()?.kind == Div {
+                        return Ok(Some(children));
+                    }
+                    let template_id = self.template()?;
+                    let child = TemplateChild::Template(template_id);
+                    children.push(child);
+                }
+                LCurlyBrace => {
+                    self.lexer.mode = LexMode::Normal;
+                    let expr_id = self.expr(Precedence::NONE)?;
+                    self.lexer.mode = LexMode::JSX;
+                    self.expect(RCurlyBrace)?;
+                    let child = TemplateChild::Expr(expr_id);
+                    children.push(child);
+                }
+                TemplateText(text) => {
+                    let child = TemplateChild::Text(text);
+                    children.push(child);
+                }
+                _ => {
+                    if children.is_empty() {
+                        return Ok(None);
+                    } else {
+                        return Ok(Some(children));
+                    }
+                }
+            }
+        }
+    }
+
+    fn template(&mut self) -> Result<TemplateId> {
+        use TokenKind::{Div, GreaterThan};
+        self.lexer.mode = LexMode::JSX;
+        let name = self.ident()?;
+        let attrs = self.template_attrs()?;
+        let template_id = if self.peek_token()?.kind == Div {
+            // Self-closing, no children
+            self.expect(Div)?;
+            self.expect(GreaterThan)?;
+            self.ctx.alloc_template(Template {
+                name,
+                attrs,
+                children: None,
+            })
+        } else {
+            self.expect(GreaterThan)?;
+            let children = self.template_children()?;
+            // template_children will eat the token for < here,
+            // which is kind of weird but whatever...
+            self.expect(Div)?;
+            // Closing tag must match the opening tag.
+            assert_eq!(name, self.ident()?);
+            self.expect(GreaterThan)?;
+            self.ctx.alloc_template(Template {
+                name,
+                attrs,
+                children,
+            })
+        };
+        Ok(template_id)
+    }
+
+    fn template_expr(&mut self) -> Result<ExprId> {
+        let mode = self.lexer.mode;
+        self.lexer.mode = LexMode::JSX;
+        let template_id = self.template()?;
+        self.lexer.mode = mode;
+        let expr_id = self
+            .ctx
+            .alloc_expr(Expr::new(ExprKind::Template(template_id)));
+        Ok(expr_id)
     }
 
     fn array_expr(&mut self) -> Result<ExprId> {
@@ -125,9 +251,7 @@ impl<'a> ExprParser<'a> for Parser<'a> {
                 _ => return Err(ParseError::UnexpectedToken(self.next_token().unwrap())),
             }
         }
-        let expr_id = self.ctx.alloc_expr(
-            Expr::new(ExprKind::Object(properties))
-        );
+        let expr_id = self.ctx.alloc_expr(Expr::new(ExprKind::Object(properties)));
         Ok(expr_id)
     }
 
@@ -136,10 +260,7 @@ impl<'a> ExprParser<'a> for Parser<'a> {
         self.expect(TokenKind::Arrow)?;
         let consequent = self.expr(Precedence::NONE)?;
         self.expect(TokenKind::Comma)?;
-        Ok(MatchArm {
-            test,
-            consequent,
-        })
+        Ok(MatchArm { test, consequent })
     }
 
     fn match_expr(&mut self) -> Result<ExprId> {
@@ -177,22 +298,17 @@ impl<'a> ExprParser<'a> for Parser<'a> {
     fn call_expr(&mut self, callee: ExprId) -> Result<ExprId> {
         self.expect(TokenKind::LParen)?;
         let arguments = self.expr_list(TokenKind::RParen)?;
-        let call = Call {
-            callee,
-            arguments
-        };
+        let call = Call { callee, arguments };
         let expr_id = self.ctx.alloc_expr(Expr::new(ExprKind::Call(call)));
         Ok(expr_id)
-        
     }
 
     fn member_expr(&mut self, obj: ExprId) -> Result<ExprId> {
         self.expect(TokenKind::Dot)?;
         let property = self.ident()?;
-        let expr_id = self.ctx.alloc_expr(Expr::new(ExprKind::Member {
-            obj,
-            property,
-        }));
+        let expr_id = self
+            .ctx
+            .alloc_expr(Expr::new(ExprKind::Member { obj, property }));
         Ok(expr_id)
     }
 
@@ -222,11 +338,7 @@ impl<'a> ExprParser<'a> for Parser<'a> {
             (op, precedence)
         };
         let right = self.expr(precedence)?;
-        let kind = ExprKind::Binary {
-            op,
-            left,
-            right,
-        };
+        let kind = ExprKind::Binary { op, left, right };
         let expr_id = self.ctx.alloc_expr(Expr::new(kind));
         Ok(expr_id)
     }
@@ -240,11 +352,7 @@ impl<'a> ExprParser<'a> for Parser<'a> {
             (op, precedence)
         };
         let right = self.expr(precedence)?;
-        let kind = ExprKind::Logical {
-            op,
-            left,
-            right,
-        };
+        let kind = ExprKind::Logical { op, left, right };
         let expr_id = self.ctx.alloc_expr(Expr::new(kind));
         Ok(expr_id)
     }

@@ -1,6 +1,6 @@
-use uuid::Uuid;
 use crate::symbol::Symbol;
 use crate::typecheck::TKind;
+use uuid::Uuid;
 
 use super::expr::ExprId;
 

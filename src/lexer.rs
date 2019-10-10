@@ -12,10 +12,11 @@ use std::iter::Iterator;
 
 type Result<T> = std::result::Result<T, LexError>;
 
+#[derive(PartialEq, Debug, Clone, Copy)]
 pub enum LexMode {
     Normal,
     JSX,
-    JSXText,
+    TemplateText,
 }
 
 pub struct Lexer<'a> {
@@ -192,6 +193,9 @@ impl<'a> Lexer<'a> {
         }
         // Ignore all whitespace.
         self.skip_whitespace();
+        if self.mode == LexMode::TemplateText {
+            return self.next_jsx_token(ctx);
+        }
         let token = match self.peek_char() {
             Some(&ch) if ch.is_digit(10) => self.number(),
             Some(&ch) if Codepoint::is_id_start(ch) => self.ident(ctx),
@@ -234,7 +238,7 @@ impl<'a> Lexer<'a> {
     }
 }
 
-// Seperate code path for lexing tokens in JSXText mode. This is an easy way
+// Seperate code path for lexing tokens in TemplateText mode. This is an easy way
 // to handle the different lexing semantics for unknown characters inside JSX elements.
 trait JSXLexer<'a> {
     fn next_jsx_token(&mut self, ctx: &mut ParsingContext) -> Result<Token>;
@@ -267,9 +271,8 @@ impl<'a> JSXLexer<'a> for Lexer<'a> {
         } else {
             let span = self.end_span(span_start);
             let sym = ctx.symbol(&self.source[start..end]);
-            let kind = TokenKind::JSXText(sym);
+            let kind = TokenKind::TemplateText(sym);
             Ok(Token::new(kind, span))
         }
     }
 }
-

@@ -1,10 +1,8 @@
 use crate::ast::*;
-use crate::symbol::{Symbol};
-use crate::visitor::{walk_block, walk_expr, walk_fn, Visitor, walk_mod};
-use crate::parser::{ParsingContext};
+use crate::parser::ParsingContext;
+use crate::symbol::Symbol;
+use crate::visitor::{walk_block, walk_expr, walk_fn, Visitor};
 use std::collections::VecDeque;
-
-use crate::typecheck::TKind;
 
 pub struct NameResolutionPass<'a> {
     param_queue: VecDeque<&'a Param>,
@@ -23,11 +21,10 @@ impl<'a> NameResolutionPass<'a> {
 }
 
 impl<'ast> Visitor<'ast> for NameResolutionPass<'ast> {
-
     fn visit_block(&mut self, ctx: &ParsingContext, block: &'ast Block) {
         ctx.begin_scope();
         for param in &self.param_queue {
-          ctx.define_abstract(param.name, param.ty)
+            ctx.define_abstract(param.name, param.ty)
         }
         self.param_queue.clear();
         walk_block(self, &ctx, &block);
@@ -39,36 +36,32 @@ impl<'ast> Visitor<'ast> for NameResolutionPass<'ast> {
         let name = decl.name;
         let ty = ctx.type_of(expr_id);
         ctx.define_local(name, expr_id);
-        println!("{:?} is type : {:?}", decl.name, ty);
+        println!("{:?} has type : {:?}", name, ty);
         walk_expr(self, &ctx, decl.init);
     }
 
-    fn visit_ident(&mut self, ident: &Symbol) {
-        // if !ctx.symbols.resolves(ident) {
-        //     println!("ERROR: Reference to undefined variable {:?}", ident);
-        // }
+    fn visit_ident(&mut self, ctx: &ParsingContext, ident: &Symbol) {
+        if !ctx.is_defined(ident) {
+            println!("UNKNOWN IDENTIFIER: {:?}", ident);
+        }
     }
 
     /**
      * Functions require special handling as their params define
      * values that are scoped to the function's block. Its the one
-     * case where we define values scoped to a block *outside* that 
+     * case where we define values scoped to a block *outside* that
      * block.
      */
     fn visit_fn(&mut self, ctx: &ParsingContext, func: &'ast FuncDecl) {
-    //   self.symbols.define(func.name, );
+        //   self.symbols.define(func.name, );
         match &func.params {
             Some(param_list) => {
                 for param in param_list {
-                  self.param_queue.push_front(&param);
+                    self.param_queue.push_front(&param);
                 }
             }
             None => (),
         };
         walk_fn(self, &ctx, &func);
     }
-
-    
 }
-
-

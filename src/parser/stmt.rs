@@ -44,10 +44,7 @@ impl<'a> StmtParser<'a> for Parser<'a> {
         let name = self.ident()?;
         self.expect(Equals)?;
         let init = self.expr(Precedence::NONE)?;
-        let let_decl = LetDecl {
-            name,
-            init,
-        };
+        let let_decl = LetDecl { name, init };
         Ok(Stmt::new(StmtKind::LetDecl(let_decl)))
     }
 

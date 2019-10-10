@@ -1,6 +1,6 @@
 use petgraph::graph::Graph;
 
-use crate::ir::{ExprId, DefId};
+use crate::ir::{DefId, ExprId};
 
 /**
  * A basic block is a set of statements with no branching

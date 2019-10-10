@@ -7,7 +7,6 @@ use crate::typecheck::TKind;
 pub use expr::*;
 pub use stmt::*;
 
-
 // The root node of the AST.
 #[derive(Debug)]
 pub struct Program {
@@ -34,9 +33,3 @@ pub enum Precedence {
     COMPARE = 5,
     PREFIX = 6,
 }
-
-
-
-
-
-

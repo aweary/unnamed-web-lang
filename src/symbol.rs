@@ -8,9 +8,7 @@ pub use string_interner::Symbol as SymbolTrait;
 use crate::ast::ExprId;
 use crate::typecheck::TKind;
 
-
-
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Symbol(NonZeroU32);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -29,6 +27,38 @@ impl SymbolTrait for Symbol {
         (self.0.get() as usize) - 1
     }
 }
+
+impl fmt::Debug for Symbol {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // For non-release builds we use
+        if cfg!(debug_assertions) {
+            SYMBOL_DEBUG_TABLE_DEV_ONLY.with(|symbols| {
+                let interner = symbols.interner.borrow();
+                let string = interner.resolve(*self).unwrap();
+                write!(f, "\"s#{}\"", string)
+            })
+        } else {
+            write!(f, "Symbol({})", self.0)
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct Symbols {
+    pub interner: RefCell<StringInterner<Symbol>>,
+}
+
+impl Symbols {
+    pub fn new() -> Symbols {
+        Symbols {
+            interner: RefCell::new(StringInterner::new()),
+        }
+    }
+}
+
+// TODO make this DEV-only
+#[cfg(debug_assertions)]
+thread_local!(pub static SYMBOL_DEBUG_TABLE_DEV_ONLY: Symbols = Symbols::new());
 
 #[derive(Debug)]
 pub struct SymbolTable {
@@ -70,7 +100,7 @@ impl SymbolTable {
         // Walk up the scope chain
         for scope in &self.scopes {
             if scope.contains_key(sym) {
-                return scope.get(sym)
+                return scope.get(sym);
             }
         }
         None

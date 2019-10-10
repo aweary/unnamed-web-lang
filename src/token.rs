@@ -88,7 +88,7 @@ pub enum TokenKind {
     Ident(Symbol),
     String(Symbol),
     Keyword(Keyword),
-    JSXText(Symbol),
+    TemplateText(Symbol),
     Arrow,
     Comma,
     Equals,

@@ -1,3 +1,16 @@
-fn add(x: int, y: int) : int {
-  let b = x;
+function Button(label: string) : ButtonRole {
+  return (
+    <button class="btn">
+      {label}
+    </button>
+  );
+}
+
+function AboutSection(title: string) : Node {
+  return (
+    <div>
+      {title}
+      <Button label="Push Me!" />
+    </div>
+  )
 }

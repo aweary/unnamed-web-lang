@@ -1,7 +1,6 @@
 use crate::symbol::Symbol;
 use crate::typecheck::TKind;
-use id_arena::{Id};
-
+use id_arena::Id;
 
 #[derive(Debug)]
 pub struct Expr {
@@ -15,6 +14,7 @@ pub struct Expr {
 }
 
 pub type ExprId = Id<Expr>;
+pub type TemplateId = Id<Template>;
 
 impl Expr {
     pub fn new(kind: ExprKind) -> Self {
@@ -45,6 +45,26 @@ pub struct MatchArm {
 }
 
 #[derive(Debug)]
+pub struct TemplateAttr {
+    pub name: Symbol,
+    pub value: ExprId,
+}
+
+#[derive(Debug)]
+pub enum TemplateChild {
+    Text(Symbol),
+    Template(TemplateId),
+    Expr(ExprId),
+}
+
+#[derive(Debug)]
+pub struct Template {
+    pub name: Symbol,
+    pub attrs: Vec<TemplateAttr>,
+    pub children: Option<Vec<TemplateChild>>,
+}
+
+#[derive(Debug)]
 pub struct ObjectProperty(pub Symbol, pub ExprId);
 
 #[derive(Debug)]
@@ -62,6 +82,7 @@ pub enum ExprKind {
     Unary(Op, ExprId),
     Array(Vec<ExprId>),
     Object(Vec<ObjectProperty>),
+    Template(TemplateId),
     Binary {
         op: Op,
         left: ExprId,
@@ -89,9 +110,7 @@ pub enum ExprKind {
 }
 
 pub fn number_expr(num: f64) -> Expr {
-    let mut expr = Expr::new(
-        ExprKind::Number(num)
-    );
+    let mut expr = Expr::new(ExprKind::Number(num));
     expr.ty = Some(TKind::Number);
     expr
 }

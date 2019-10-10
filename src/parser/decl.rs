@@ -4,7 +4,7 @@ use crate::ast::{Decl, DeclKind, FuncDecl, Param};
 use crate::error::ParseError;
 use crate::parser::Parser;
 use crate::result::Result;
-use crate::typecheck::TKind;
+use crate::typecheck::type_of_built_in_symbol;
 
 use crate::token::Keyword::Func;
 use crate::token::TokenKind::{
@@ -47,18 +47,8 @@ impl<'a> DeclParser<'a> for Parser<'a> {
         let name = self.ident()?;
         self.expect(Colon)?;
         let ident = self.type_ident()?;
-        // This maps the tokens representing the built-in types
-        // of the environment, to the internal representation
-        // the type system uses (TKind).
-        // If a new type is added, it needs to go here to be parsed.
-        let ty = match self.ctx.symbol_str(ident) {
-            Some("int") | Some("number") => TKind::Number,
-            s => {
-                println!("SSS {:?}",s);
-                TKind::Error
-            },
-        };
-        // let ty = TKind::Number;
+        // TODO handle user-defined types
+        let ty = type_of_built_in_symbol(&self.ctx, ident);
         Ok(Param { name, ty })
     }
 

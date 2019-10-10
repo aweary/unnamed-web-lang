@@ -1,22 +1,19 @@
+mod context;
 mod decl;
 mod expr;
 mod stmt;
-mod context;
 
 use decl::DeclParser;
 // use expr::ExprParser;
 // use stmt::StmtParser;
-pub use context::{ParsingContext, ExprContext};
+pub use context::{ExprContext, ParsingContext};
 
-
+use crate::ast::{Module, Program};
 use crate::error::ParseError;
 use crate::lexer::Lexer;
 use crate::result::Result;
-use crate::ast::{Module, Program};
 use crate::symbol::Symbol;
 use crate::token::{Token, TokenKind};
-use std::rc::Rc;
-use std::cell::RefCell;
 
 // temporary use so that the Rust compiler checks this module
 // use crate::ir::*;
@@ -39,9 +36,7 @@ impl<'a> Parser<'a> {
 
     fn next_token(&mut self) -> Result<Token> {
         match self.lexer.next_token(&mut self.ctx) {
-            Ok(token) => {
-                Ok(token)
-            }
+            Ok(token) => Ok(token),
             Err(_) => Err(ParseError::LexError),
         }
     }

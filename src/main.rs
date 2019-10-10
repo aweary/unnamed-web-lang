@@ -16,6 +16,7 @@ use std::fs;
 
 use crate::parser::{parse_program, ParsingContext};
 use crate::passes::resolution::NameResolutionPass;
+use crate::passes::templates::TemplateIRPass;
 
 pub struct Compiler {}
 
@@ -23,10 +24,18 @@ impl Compiler {
     pub fn run(&mut self, path: &str) {
         let program = fs::read_to_string(path).expect("File not file");
         let mut ctx = ParsingContext::new();
-        let ast = parse_program(&program, &mut ctx).unwrap();
-        let mut resolve_names = NameResolutionPass::new();
-        for module in &ast.modules {
-            resolve_names.populated_symbol_table(&mut ctx, &module);
+        match parse_program(&program, &mut ctx) {
+            Ok(ast) => {
+                let mut resolve_names = NameResolutionPass::new();
+                let mut template_ir = TemplateIRPass::new();
+                for module in &ast.modules {
+                    resolve_names.populated_symbol_table(&mut ctx, &module);
+                    template_ir.compile_templates(&mut ctx, &module);
+                }
+            }
+            Err(err) => {
+                println!("error: {:?}", err);
+            }
         }
     }
 }
