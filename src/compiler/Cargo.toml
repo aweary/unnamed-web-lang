@@ -7,12 +7,22 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-parser = { path = "../parser" }
-lexer = { path = "../lexer" }
-syntax = { path = "../syntax" }
-diagnostics = { path = "../diagnostics" }
-typecheck = { path = "../typecheck" }
-serde_json = "1.0.41"
+# rustc-ap-rustc_data_structures = "631.0.0"
+rustc-hash = "1.0.1"
+salsa = "0.14.1"
 bincode = "1.2.0"
 codespan = { version = "0.5.0", features = ["serialization"] }
 codespan-reporting = "0.5.0"
+codegen = { path = "../codegen" }
+log = { path = "../log" }
+source = { path = "../source" }
+diagnostics = { path = "../diagnostics" }
+generational-arena = { version = "0.2", features = ["serde"] }
+lexer = { path = "../lexer" }
+path-dedot = "1.1.13"
+parser = { path = "../parser" }
+petgraph = "0.4.13"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0.41"
+syntax = { path = "../syntax" }
+typecheck = { path = "../typecheck" }

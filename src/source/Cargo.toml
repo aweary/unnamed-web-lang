@@ -1,5 +1,5 @@
 [package]
-name = "codegen"
+name = "source"
 version = "0.1.0"
 authors = ["Brandon Dail <brandondail@fb.com>"]
 edition = "2018"
@@ -7,5 +7,8 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-syntax = { path = "../syntax" }
-
+relative-path = "1.0.0"
+fxhash = "0.2.1"
+salsa = "0.14.1"
+codespan = { version = "0.5.0", features = ["serialization"] }
+codespan-reporting = "0.5.0"

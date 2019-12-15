@@ -1,0 +1,12 @@
+enum Result {
+  Ok,
+  Error,
+}
+
+type User {
+  name: String,
+}
+
+fn add(a: Number, b: Number) : Number {
+  return a + b;
+}

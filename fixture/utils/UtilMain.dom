@@ -1,0 +1,6 @@
+
+import foo from "./Network.dom";
+
+fn foo(a: string) : void {
+  return a;
+}

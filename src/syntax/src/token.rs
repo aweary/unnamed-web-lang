@@ -47,6 +47,7 @@ impl Token {
         use BinOp::*;
         match self.kind {
             TokenKind::Equals => Some(Equals),
+            TokenKind::DblEquals => Some(DblEquals),
             TokenKind::Plus => Some(Add),
             TokenKind::Minus => Some(Sub),
             TokenKind::Mul => Some(Mul),

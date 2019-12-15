@@ -6,24 +6,12 @@ pub trait Visitor: Sized {
         // Item...
     }
 
-    fn visit_fn_decl(&mut self, decl: &mut FnDecl) {
-        walk_fn_decl(self, decl);
+    fn visit_fn_def(&mut self, def: &mut FnDef) {
+        walk_fn_def(self, def);
     }
 
     fn visit_stmt(&mut self, stmt: &mut Stmt) {
-        use StmtKind::*;
-        match stmt.kind {
-            Expr(ref mut expr) => self.visit_expr(expr),
-            Local(ref mut local) => self.visit_local(local),
-            Item(ref mut item) => self.visit_item(item),
-            While(ref mut expr, ref mut block) => {
-                // TODO visit_while
-                self.visit_expr(expr);
-                self.visit_block(block);
-            }
-            Return(ref mut expr) => self.visit_expr(expr),
-            _ => (),
-        };
+        walk_stmt(self, stmt);
         // ...
     }
 
@@ -34,6 +22,10 @@ pub trait Visitor: Sized {
 
     fn visit_local(&mut self, local: &mut Local) {
         walk_local(self, local);
+    }
+
+    fn visit_import(&mut self, _import: &mut Import) {
+        // ...
     }
 
     fn visit_reference(&mut self, _ident: &mut Ident) {
@@ -53,6 +45,10 @@ pub trait Visitor: Sized {
 
     fn visit_mod(&mut self, module: &mut Mod) {
         walk_mod(self, module);
+    }
+
+    fn visit_template(&mut self, template: &mut Template) {
+        // TODO walk_template
     }
 
     fn visit_program(&mut self, program: &mut Program) {
@@ -76,12 +72,16 @@ pub fn walk_mod<V: Visitor>(visitor: &mut V, module: &mut Mod) {
 pub fn walk_expr<V: Visitor>(visitor: &mut V, Expr { kind, .. }: &mut Expr) {
     use ExprKind::*;
     match kind {
-        If(ref mut condition, ref mut block, ref mut alt_block) => {
+        If(IfExpr {
+            ref mut condition,
+            ref mut block,
+            ref mut alt,
+        }) => {
             visitor.visit_expr(condition);
             visitor.visit_block(block);
-            if let Some(ref mut block) = alt_block {
-                visitor.visit_block(block);
-            }
+            // if let Some(ref mut block) = alt_block {
+            //     visitor.visit_block(block);
+            // }
         }
         For(ref mut pattern, ref mut expr, ref mut block) => {
             walk_local_pattern(visitor, pattern);
@@ -109,6 +109,9 @@ pub fn walk_expr<V: Visitor>(visitor: &mut V, Expr { kind, .. }: &mut Expr) {
                 visitor.visit_expr(expr);
             }
         }
+        Template(ref mut template) => {
+            visitor.visit_template(template);
+        }
         _ => (),
     };
 }
@@ -119,11 +122,18 @@ pub fn walk_block<V: Visitor>(visitor: &mut V, block: &mut Block) {
     }
 }
 
-pub fn walk_fn_decl<V: Visitor>(visitor: &mut V, FnDecl { params, .. }: &mut FnDecl) {
-    for param in params.iter_mut() {
-        visitor.visit_param(param);
-        // ...
+pub fn walk_fn_def<V: Visitor>(visitor: &mut V, FnDef { params, body, .. }: &mut FnDef) {
+    match params {
+        ParamType::Empty => (),
+        ParamType::Single(ref mut param) => visitor.visit_param(param),
+        ParamType::Multi(ref mut params) => {
+            for param in params.iter_mut() {
+                visitor.visit_param(param);
+                // ...
+            }
+        }
     }
+    visitor.visit_block(body);
     // ...
 }
 
@@ -175,15 +185,34 @@ pub fn walk_item<V: Visitor>(visitor: &mut V, item: &mut Item) {
         Enum(ref _enum_def, ref _generics) => {
             // ...
         }
-        Fn(ref mut decl, ref _header, ref _genrics, ref mut block) => {
-            visitor.visit_fn_decl(decl);
-            visitor.visit_block(block);
+        Fn(ref mut fn_def) => {
+            visitor.visit_fn_def(fn_def);
+            visitor.visit_block(&mut fn_def.body);
             // ...
+        }
+        Import(ref mut import) => {
+            visitor.visit_import(import);
         }
         _ => {
             // ...
         }
     }
+}
+
+pub fn walk_stmt<V: Visitor>(visitor: &mut V, stmt: &mut Stmt) {
+    use StmtKind::*;
+    match stmt.kind {
+        Expr(ref mut expr) => visitor.visit_expr(expr),
+        Local(ref mut local) => visitor.visit_local(local),
+        Item(ref mut item) => visitor.visit_item(item),
+        While(ref mut expr, ref mut block) => {
+            // TODO visit_while
+            visitor.visit_expr(expr);
+            visitor.visit_block(block);
+        }
+        Return(ref mut expr) => visitor.visit_expr(expr),
+        _ => (),
+    };
 }
 
 pub fn walk_local<V: Visitor>(

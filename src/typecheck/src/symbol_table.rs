@@ -33,7 +33,6 @@ impl SymbolTable {
     }
 
     pub fn define(&mut self, symbol: Symbol, ty: Ty) {
-        println!("define");
         // TODO better None hndling
         let scope = self.scopes.last_mut().unwrap();
         scope.insert(symbol, ty);
@@ -45,7 +44,7 @@ impl SymbolTable {
     pub fn resolve(&self, symbol: &Symbol) -> Option<&Ty> {
         for scope in &self.scopes {
             if scope.contains_key(symbol) {
-                return scope.get(symbol)
+                return scope.get(symbol);
             }
         }
         None

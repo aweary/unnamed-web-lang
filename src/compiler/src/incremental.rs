@@ -1,3 +1,6 @@
+/// A version of the compiler focused on incremental recomputation,
+/// with the goal of providing a first-class incrementation compilation
+/// experience for IDE integration and `build --watch` mode.
 use parser::Parser;
 use syntax::visitor::Visitor;
 
@@ -92,7 +95,6 @@ pub trait ParserDatabase: Source {
     #[salsa::interned]
     fn intern_def(&self, def: ir::Def) -> DefId;
     fn lower_item(&self, item: ast::Item) -> DefId;
-    fn codegen_def(&self, def: DefId) -> String;
     // #[salsa::cycle(module_dep_cycle)]
     // fn module_deps(&self, module_id: ModuleId) -> Vec<ModuleId>;
     // Lower to IR
@@ -100,40 +102,13 @@ pub trait ParserDatabase: Source {
     fn parse_module(&self, module: ModuleId) -> ast::Mod;
 }
 
-fn codegen_def(db: &impl ParserDatabase, id: DefId) -> String {
-    let item = db.lookup_intern_item(id);
-    let mut builder = String::new();
-    use ast::{ItemKind, FnDef};
-    match item.kind {
-        ItemKind::Fn(fn_def) => {
-            let FnDef { name, .. } = fn_def;
-            builder.push_str("function ");
-            // TODO Into<&str> for Ident
-            builder.push_str(name.name.as_str());
-            builder.push_str("() { ... }");
-            // ..
-        }
-        ItemKind::Enum(_, _) => {
-            // ...
-        }
-        ItemKind::Type(_) => {
-            // ...
-        }
-        _ => {
-            // ...
-        }
-    }
-    builder
-}
-
 fn lower_module(db: &impl ParserDatabase, id: ModuleId) -> ir::Module {
     println!("Lowering {:?}", id);
     let ast = db.parse_module(id);
     let mut items = vec![];
     for item in ast.items {
-        let id = db.intern_item(item);
-        let codegen = db.codegen_def(id);
-        println!("codegen for {:?}: {:?}", id, codegen);
+        let def_id = db.lower_item(item);
+        items.push(def_id);
     }
     ir::Module { items }
 }
@@ -158,15 +133,7 @@ fn parse_module(db: &impl ParserDatabase, id: ModuleId) -> ast::Mod {
     let source = db.source_text(file_id);
     let sess = ParseSess::default();
     let mut parser = Parser::new_from_str(&source, &sess);
-    match parser.parse_module() {
-        Ok(res) => {
-             res
-        }
-        Err(err) => {
-            println!("err {:?}", err);
-            panic!();
-        }
-    }
+    parser.parse_module().unwrap()
 }
 
 // fn module_deps(db: &impl ParserDatabase, module_id: ModuleId) -> Vec<ModuleId> {
@@ -220,4 +187,8 @@ pub fn run_from_source_root(path: PathBuf) {
     let module_id = db.intern_module_path(entry_point);
     let hir = db.lower_module(module_id);
     println!("hir {:#?}", hir);
+    for id in hir.items {
+        let item = db.lookup_intern_def(id);
+        println!("item {:?}", item);
+    }
 }

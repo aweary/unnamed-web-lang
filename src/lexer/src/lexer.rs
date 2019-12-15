@@ -328,13 +328,14 @@ impl<'a> Lexer<'a> {
             Some('-') => self.punc(Minus, '-'),
             Some('*') => self.punc(Mul, '*'),
             Some(&ch) => {
+                println!("unexpected char {:?}", ch);
                 let span_start = self.start_span();
                 self.eat(ch);
                 let span = self.end_span(span_start);
                 // TODO move this into a helper function
                 let diagnostic = Diagnostic::new_error(
                     "Unexpected character",
-                    Label::new(self.sess.source_map.current_file.unwrap(), span, ""),
+                    Label::new(self.sess.source_map.current_file_id(), span, ""),
                 );
                 Err(diagnostic)
             }

@@ -10,7 +10,7 @@ use diagnostics::{Diagnostic, Label};
 
 pub struct SourceMap {
     pub files: Files,
-    pub current_file: Option<FileId>,
+    pub current_file: Option<SourceFile>,
     loader: FileLoader,
 }
 
@@ -18,31 +18,45 @@ impl Default for SourceMap {
     fn default() -> Self {
         SourceMap {
             files: Files::new(),
-            current_file: None,
+            current_file: Default::default(),
             loader: Default::default(),
         }
     }
 }
 
 impl SourceMap {
-    pub fn new() -> SourceMap {
-        SourceMap {
-            files: Files::new(),
-            current_file: None,
-            loader: Default::default(),
-        }
+    pub fn load_file_from_path(&mut self, path: &Path) -> FileId {
+        let abs_path = self
+            .loader
+            .to_absolute(&path)
+            .expect("Failed to convert to absolute path");
+        println!("loading path {:?}", abs_path);
+        let source = self.loader.read_file(&path).unwrap();
+        let id = self.files.add(path.to_str().unwrap(), source);
+        let source_file = SourceFile {
+            path: path.to_path_buf(),
+            abs_path,
+            id,
+        };
+        self.current_file = Some(source_file);
+        id
     }
 
     pub fn load_file(&mut self, path_str: &str) -> FileId {
         let path = Path::new(path_str);
-        let source = self.loader.read_file(path).unwrap();
-        let id = self.files.add(path_str, source);
-        self.current_file = Some(id);
-        id
+        self.load_file_from_path(path)
+    }
+
+    pub fn current_file_id(&self) -> FileId {
+        if let Some(current_file) = &self.current_file {
+            current_file.id
+        } else {
+            unreachable!("There should always be a current file");
+        }
     }
 
     pub fn report_error(&self, message: &str, span: Span, label: &str) {
-        let id = self.current_file.expect("No file loaded.");
+        let id = self.current_file_id();
         let err = Diagnostic::new_error(message, Label::new(id, span, label));
         // TODO we should buffer diagnostics and report all at once
         // at the end of parsing
@@ -52,9 +66,14 @@ impl SourceMap {
     }
 }
 
-#[derive(Clone)]
+/// A source file represents everything we need to know about a single
+/// file in the module system. It contains information about the file's
+/// path, content, and dependencies.
+#[derive(Clone, Debug)]
 pub struct SourceFile {
-    path: PathBuf,
+    pub path: PathBuf,
+    pub abs_path: PathBuf,
+    pub id: FileId,
 }
 
 #[derive(Default)]
@@ -65,7 +84,7 @@ impl FileLoader {
         fs::read_to_string(path)
     }
 
-    fn _to_absolute(&self, path: &Path) -> Option<PathBuf> {
+    fn to_absolute(&self, path: &Path) -> Option<PathBuf> {
         if path.is_absolute() {
             Some(path.to_path_buf())
         } else {

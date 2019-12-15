@@ -1,0 +1,4 @@
+// Need a way to map this to a globally unique ModuleId,
+// which we can then use to access the module's AST or HIR.
+// We can also use ModuleIds to model dependencies in the HIR.
+import util from "./utils/UtilMain.dom";

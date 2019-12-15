@@ -2,12 +2,14 @@ use crate::context::Context;
 use syntax::ast::*;
 use syntax::symbol::Symbol;
 use syntax::visitor::{
-    walk_block, walk_expr, walk_fn_decl, walk_item, walk_local_pattern, Visitor,
+    walk_block, walk_expr, walk_fn_def, walk_item, walk_local_pattern, walk_stmt, Visitor,
 };
+
+use typecheck::infer::infer_fn;
 
 /// The first type checking pass. Also responsible for name resolution.
 /// Is able to check and cache most types. Polymorphic structs or functions
-/// will be revalidated in a second pass. 
+/// will be revalidated in a second pass.
 pub struct EarlyTypecheckPass<'a> {
     pub ctx: &'a mut Context,
     /// Whether a new block requires a new scope entry. Always true
@@ -60,42 +62,51 @@ impl<'a> Visitor for EarlyTypecheckPass<'a> {
         }
     }
 
+    fn visit_stmt(&mut self, stmt: &mut Stmt) {
+        if let StmtKind::Expr(expr) = &mut stmt.kind {
+            let ty = self.ctx.infer(expr);
+            if ty != Ty::Unit {
+                // Warn about an expression statement evaluating
+                // to something other than unit.
+            }
+        };
+        walk_stmt(self, stmt);
+    }
+
     fn visit_item(&mut self, item: &mut Item) {
         let name = &item.ident.name;
         // TODO this is translating a function AST node to the type. Probably not the best place for it.
         // It also doesn't accurately translate the types (e.g, for multiple arguments or polymorphic functions).
         match &item.kind {
-            ItemKind::Fn(fn_decl, ..) => {
-                let FnDecl { params, output } = &**fn_decl;
-                // TODO translate this correctly...
-                let ty = Ty::Function(
-                    Box::new(Ty::Literal(LiteralTy::Number)),
-                    Box::new(Ty::Literal(LiteralTy::String)),
-                );
+            ItemKind::Fn(fn_def) => {
+                // TODO this should be happening via self.ctx, infer_fn shouldnt be public
+                let ty = infer_fn(&mut self.ctx.ty_context, fn_def).unwrap();
                 self.ctx.ty_context.define(name.clone(), ty);
-                // ...
+            }
+            ItemKind::Type(ref _type_def) => {
+                // println!("{:#?}", type_def);
             }
             _ => {
-                println!("Unrecognized item");
+                // println!("Unrecognized item");
             }
         };
         walk_item(self, item);
     }
 
-    fn visit_fn_decl(&mut self, decl: &mut FnDecl) {
+    fn visit_fn_def(&mut self, def: &mut FnDef) {
         self.ctx.push_scope();
         self.block_needs_scope = false;
-        walk_fn_decl(self, decl);
+        walk_fn_def(self, def);
     }
 
     fn visit_param(&mut self, param: &mut Param) {
         // Resolve the type annotation, TODO this is bad
-        self.param_ty = *param.ty.clone();
+        self.param_ty = Some(param.ty.clone());
         walk_local_pattern(self, &mut param.local);
         self.param_ty = None;
     }
 
-    fn visit_reference(&mut self, ident: &mut Ident) {
+    fn visit_reference(&mut self, _ident: &mut Ident) {
         // if !self.ctx.symbols.resolve(&ident.name) {
         //     // TODO should be fatal, how to handle errors in passes?
         //     self.ctx
@@ -106,7 +117,6 @@ impl<'a> Visitor for EarlyTypecheckPass<'a> {
 
     fn visit_expr(&mut self, expr: &mut Expr) {
         // TODO how to handle type checking all expressions? Not just assignments.
-        println!("expression {:#?}\n\n", expr);
         walk_expr(self, expr);
     }
 
@@ -115,25 +125,12 @@ impl<'a> Visitor for EarlyTypecheckPass<'a> {
 
         // Get the symbol for this local.
         let symbol = resolve_symbol_from_pattern(&local.name);
-        println!("local {:?}", symbol);
         // TODO shouldnt be Option
         if let Some(init) = &mut local.init {
             walk_expr(self, init);
             let ty = self.ctx.infer(init);
-            println!("{:?} : {:?}", symbol, ty);
+            println!("{:?}", ty);
             self.ctx.ty_context.define(symbol, ty);
-            // Infer and register the symbol and type if it exists.
-            // if let Some(ty) = self.ctx.infer(init) {
-            //     // self.ctx.ty_context.add(
-            //     //     TyElement::TypedVariable(
-            //     //         symbol,
-            //     //         ty
-            //     //     )
-            //     // )
-            // } else {
-            //     // Otherwise we don't know what the type is yet. We need to register
-            //     // this symbol with a type variable that will be solved later.
-            // }
         }
     }
 }

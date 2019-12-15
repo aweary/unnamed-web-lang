@@ -1,6 +1,9 @@
 use compiler;
+use std::env;
+use std::path;
 
 pub fn main() {
-    let path_str = "fixture.dom";
-    compiler::run_from_file(path_str);
+    // Pretend this path is coming from the CLI
+    let path = env::current_dir().unwrap().join("fixture");
+    compiler::run_from_source_root(path);
 }

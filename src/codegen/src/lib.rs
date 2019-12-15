@@ -1,5 +1,8 @@
 #![warn(clippy::all)]
 
+pub mod codegen;
+pub use codegen::*;
+
 #[cfg(test)]
 mod tests {
     #[test]

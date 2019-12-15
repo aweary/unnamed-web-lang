@@ -8,6 +8,8 @@ use syntax::token::{self, Keyword, Token, TokenKind};
 use syntax::ty;
 use syntax::Span;
 
+use std::path::PathBuf;
+
 use diagnostics::ParseResult as Result;
 
 const DUMMY_NODE_ID: ast::NodeId = ast::NodeId(0);
@@ -110,7 +112,7 @@ impl Parser<'_> {
 
     /// Parse a single module, i.e., a single file. In the future
     /// we might support defining submodules within a single file.
-    fn parse_module(&mut self) -> Result<ast::Mod> {
+    pub fn parse_module(&mut self) -> Result<ast::Mod> {
         let mut items: Vec<ast::Item> = vec![];
         while !self.peek()?.follows_item_list() {
             items.push(self.parse_item()?);
@@ -128,6 +130,8 @@ impl Parser<'_> {
             TokenKind::Reserved(Keyword::Enum) => self.parse_enum(),
             // Type definition
             TokenKind::Reserved(Keyword::Type) => self.parse_type(),
+            // Import declaration
+            TokenKind::Reserved(Keyword::Import) => self.import(),
             // Everything else
             _ => {
                 let token = self.next_token().unwrap();
@@ -143,12 +147,86 @@ impl Parser<'_> {
         }
     }
 
-    fn parse_type(&mut self) -> Result<ast::Item> {
-        self.skip()?;
-        let _name = self.ident()?;
+    fn import(&mut self) -> Result<ast::Item> {
+        use Keyword::*;
+        use TokenKind::Reserved;
+        self.expect(Reserved(Import))?;
+        let lo = self.span;
+        let name = self.ident()?;
+        self.expect(Reserved(ImportFrom))?;
+        let path = self.import_path()?;
+        let span = lo.merge(path.span);
+        Ok(ast::Item {
+            id: DUMMY_NODE_ID,
+            ident: name.clone(),
+            span,
+            kind: ast::ItemKind::Import(Box::new(ast::Import { name, span, path })),
+        })
+    }
+
+    fn import_path(&mut self) -> Result<ast::ImportPath> {
+        if let TokenKind::Literal(lit) = self.next_token()?.kind {
+            if lit.kind == token::LitKind::Str {
+                let mut path_str = lit.symbol.as_str();
+                // Strip the quotes from the symbol
+                path_str = &path_str[1..path_str.len() - 1];
+                let path = PathBuf::from(path_str);
+                return Ok(ast::ImportPath {
+                    path,
+                    span: self.span,
+                });
+            }
+        }
         Err(self
             .sess
-            .fatal("Unsupported", "Type definitions are unsupported", self.span))
+            .fatal("Expected import path", "found this", self.span))
+    }
+
+    fn parse_type(&mut self) -> Result<ast::Item> {
+        use TokenKind::{Colon, Comma, Ident, LCurlyBrace, RCurlyBrace, Reserved};
+        self.expect(Reserved(Keyword::Type))?;
+        let lo = self.span;
+        let name = self.ident()?;
+        let generics = self.generics()?;
+        self.expect(LCurlyBrace)?;
+        let mut properties = vec![];
+        loop {
+            match self.peek()?.kind {
+                // End of definition
+                RCurlyBrace => break,
+                // New property
+                Ident(_) => {
+                    let name = self.ident()?;
+                    self.expect(Colon)?;
+                    let ty = self.ty()?;
+                    let prop = ast::TypeProperty { name, ty };
+                    properties.push(prop);
+                    self.eat(Comma)?;
+                }
+                _ => {
+                    return Err(self.sess.fatal(
+                        "Unexpected token",
+                        "Expected identifier",
+                        self.span,
+                    ))
+                }
+            }
+        }
+        self.expect(RCurlyBrace)?;
+        let span = lo.merge(self.span);
+        let def = ast::TypeDef {
+            // TODO don't clone?
+            name: name.clone(),
+            span,
+            generics,
+            properties,
+        };
+        Ok(ast::Item {
+            ident: name.clone(),
+            id: DUMMY_NODE_ID,
+            kind: ast::ItemKind::Type(Box::new(def)),
+            span,
+        })
     }
 
     fn parse_enum(&mut self) -> Result<ast::Item> {
@@ -240,14 +318,17 @@ impl Parser<'_> {
             "number" | "Number" => Ty::Literal(LiteralTy::Number),
             "string" | "String" => Ty::Literal(LiteralTy::String),
             "bool" | "Bool" | "boolean" | "Boolean" => Ty::Literal(LiteralTy::Bool),
+            "Array" => {
+                // We expect generics here.
+                Ty::Array(Ty::Literal(LiteralTy::String).into())
+            }
             "Unit" => Ty::Unit,
             _ => Ty::Variable(ty_name, generics),
         };
         Ok(ty)
     }
 
-    /// Parse a function definition
-    fn parse_fn(&mut self) -> Result<ast::Item> {
+    fn fn_def(&mut self) -> Result<ast::FnDef> {
         self.expect(TokenKind::Reserved(Keyword::Func))?;
         let lo = self.span;
         let name = self.ident()?;
@@ -255,21 +336,34 @@ impl Parser<'_> {
         let params = self.parse_fn_params()?;
         let return_ty = {
             if self.eat(TokenKind::Colon)? {
-                Some(self.ty()?)
+                self.ty()?
             } else {
-                None
+                // No explicit return type annotation means the function
+                // implicitly returns Unit
+                ast::Ty::Unit
             }
         };
-        let decl = ast::FnDecl {
-            params,
-            output: Box::new(return_ty),
-        };
-        // TODO actually parse this once it means something
-        let header = ast::FnHeader { is_async: false };
-        // TODO same here
-        let body = self.block()?;
+        let body = Box::new(self.block()?);
         let span = lo.merge(self.span);
-        let kind = ast::ItemKind::Fn(Box::new(decl), header, generics, Box::new(body));
+        // We don't currently parse this, hardcode false
+        let is_async = false;
+        Ok(ast::FnDef {
+            name,
+            params,
+            body,
+            return_ty,
+            is_async,
+            generics,
+            span,
+        })
+    }
+
+    /// Parse a function definition
+    fn parse_fn(&mut self) -> Result<ast::Item> {
+        let fn_def = self.fn_def()?;
+        let span = fn_def.span;
+        let name = fn_def.name.clone();
+        let kind = ast::ItemKind::Fn(fn_def);
         Ok(ast::Item {
             // TODO
             id: DUMMY_NODE_ID,
@@ -280,7 +374,7 @@ impl Parser<'_> {
     }
 
     /// Parse a list of function parameters
-    fn parse_fn_params(&mut self) -> Result<Vec<ast::Param>> {
+    fn parse_fn_params(&mut self) -> Result<ast::ParamType> {
         use TokenKind::{Comma, Ident, LBrace, LCurlyBrace, RParen};
         let mut params = vec![];
         self.expect(TokenKind::LParen)?;
@@ -307,7 +401,15 @@ impl Parser<'_> {
             }
         }
         self.expect(TokenKind::RParen)?;
-        Ok(params)
+        match params.len() {
+            0 => Ok(ast::ParamType::Empty),
+            1 => {
+                let param = params.get(0).expect("proven");
+                // TODO move memory out of params so we dont clone?
+                Ok(ast::ParamType::Single(param.clone()))
+            }
+            _ => Ok(ast::ParamType::Multi(params)),
+        }
     }
 
     // fn type_ident(&mut )
@@ -325,15 +427,17 @@ impl Parser<'_> {
                 TokenKind::Colon => {
                     self.expect(TokenKind::Colon)?;
                     // There is a type annotation
-                    Some(self.ty()?)
+                    self.ty()?
                 }
-                _ => None,
+                // If no annotation is provided we assume the type
+                // must be inferred.
+                _ => ast::Ty::Existential,
             }
         };
         let span = lo.merge(self.span);
         Ok(ast::Param {
             local,
-            ty: Box::new(ty),
+            ty,
             id: DUMMY_NODE_ID,
             span,
         })
@@ -584,11 +688,34 @@ impl Parser<'_> {
     fn ident_expr(&mut self) -> Result<ast::Expr> {
         let ident = self.ident()?;
         let span = ident.span;
-        Ok(ast::Expr {
-            id: DUMMY_NODE_ID,
-            kind: ast::ExprKind::Reference(ident),
-            span,
-        })
+        ast::expr(ast::ExprKind::Reference(ident), span)
+    }
+
+    fn obj_expr(&mut self) -> Result<ast::Expr> {
+        use TokenKind::{Colon, Comma, Ident, LCurlyBrace, RCurlyBrace};
+        self.expect(LCurlyBrace)?;
+        let lo = self.span;
+        let mut properties = vec![];
+        loop {
+            match self.peek()?.kind {
+                RCurlyBrace => break,
+                Ident(_) => {
+                    let key = self.ident()?;
+                    self.expect(Colon)?;
+                    let value = self.expr(Precedence::NONE)?;
+                    properties.push((key, value));
+                    self.eat(Comma)?;
+                }
+                _ => {
+                    return Err(self
+                        .sess
+                        .fatal("Unexpected", "Trying to parse object", self.span))
+                }
+            }
+        }
+        self.expect(RCurlyBrace)?;
+        let span = lo.merge(self.span);
+        ast::expr(ast::ExprKind::Object(properties), span)
     }
 
     fn assign_expr(&mut self, left: ast::Expr) -> Result<ast::Expr> {
@@ -618,11 +745,7 @@ impl Parser<'_> {
         let right = self.expr(precedence)?;
         let kind = ast::ExprKind::Assign(op, Box::new(left), Box::new(right));
         let span = lo.merge(self.span);
-        Ok(ast::Expr {
-            id: DUMMY_NODE_ID,
-            kind,
-            span,
-        })
+        ast::expr(kind, span)
     }
 
     fn prefix_expr(&mut self) -> Result<ast::Expr> {
@@ -631,11 +754,7 @@ impl Parser<'_> {
             TokenKind::Literal(_) => {
                 let lit = self.parse_lit()?;
                 let span = lit.span;
-                Ok(ast::Expr {
-                    id: DUMMY_NODE_ID,
-                    kind: ast::ExprKind::Lit(lit),
-                    span,
-                })
+                ast::expr(ast::ExprKind::Lit(lit), span)
             }
             // Array literals
             TokenKind::LBrace => {
@@ -643,11 +762,7 @@ impl Parser<'_> {
                 let lo = self.span;
                 let exprs = self.expr_list(TokenKind::RBrace)?;
                 let span = lo.merge(self.span);
-                Ok(ast::Expr {
-                    id: DUMMY_NODE_ID,
-                    kind: ast::ExprKind::Array(exprs),
-                    span,
-                })
+                ast::expr(ast::ExprKind::Array(exprs), span)
             }
             // Identifier
             TokenKind::Ident(_) => self.ident_expr(),
@@ -658,21 +773,17 @@ impl Parser<'_> {
                 let op = token.to_un_op().unwrap();
                 let expr = self.expr(Precedence::PREFIX)?;
                 let span = lo.merge(self.span);
-                Ok(ast::Expr {
-                    id: DUMMY_NODE_ID,
-                    kind: ast::ExprKind::Unary(op, Box::new(expr)),
-                    span,
-                })
+                ast::expr(ast::ExprKind::Unary(op, Box::new(expr)), span)
             }
             // Block expression OR object literal?
             TokenKind::LCurlyBrace => {
-                let block = self.block()?;
-                let span = block.span;
-                Ok(ast::Expr {
-                    id: DUMMY_NODE_ID,
-                    kind: ast::ExprKind::Block(Box::new(block)),
-                    span,
-                })
+                self.obj_expr()
+                // let block = self.block()?;
+                // let span = block.span;
+                // ast::expr(MY_NODE_
+                //     kind: ast::ExprKind::Block(Box::new(block)),
+                //     span,
+                // })
             }
             // Group expression
             TokenKind::LParen => {
@@ -694,11 +805,13 @@ impl Parser<'_> {
             TokenKind::LessThan => {
                 let template = self.template()?;
                 let span = template.span;
-                Ok(ast::Expr {
-                    id: DUMMY_NODE_ID,
-                    span,
-                    kind: ast::ExprKind::Template(template),
-                })
+                ast::expr(ast::ExprKind::Template(template), span)
+            }
+            // Function expression
+            TokenKind::Reserved(Keyword::Func) => {
+                let fn_def = self.fn_def()?;
+                let span = fn_def.span;
+                ast::expr(ast::ExprKind::Func(Box::new(fn_def)), span)
             }
             // Match expression
             TokenKind::Reserved(Keyword::Match) => self.match_expr(),
@@ -803,11 +916,7 @@ impl Parser<'_> {
                 let lit = self.parse_lit()?;
                 let span = lit.span;
 
-                ast::Expr {
-                    id: DUMMY_NODE_ID,
-                    span,
-                    kind: ast::ExprKind::Lit(lit),
-                }
+                ast::expr(ast::ExprKind::Lit(lit), span)?
             }
             LCurlyBrace => {
                 self.expect(LCurlyBrace)?;
@@ -887,31 +996,42 @@ impl Parser<'_> {
         let expr = self.expr(Precedence::NONE)?;
         let block = self.block()?;
         let span = lo.merge(self.span);
-        Ok(ast::Expr {
-            id: DUMMY_NODE_ID,
+        ast::expr(
+            ast::ExprKind::For(pattern, Box::new(expr), Box::new(block)),
             span,
-            kind: ast::ExprKind::For(pattern, Box::new(expr), Box::new(block)),
-        })
+        )
     }
 
     fn if_expr(&mut self) -> Result<ast::Expr> {
         self.expect(TokenKind::Reserved(Keyword::If))?;
         let lo = self.span;
         let condition = self.expr(Precedence::NONE)?;
-        let consequent = self.block()?;
-        // TODO, support `if else`
+        let block = self.block()?;
         let alt = if self.eat(TokenKind::Reserved(Keyword::Else))? {
-            let block = self.block()?;
-            Some(Box::new(block))
+            // We have an alternative and it could either be a simple
+            // else block, or an else if. The model we use for this is
+            // that else statements can either be followed by a block,
+            // or another if expressions.
+            Some(match self.peek()?.kind {
+                TokenKind::Reserved(Keyword::If) => {
+                    let else_if = self.if_expr()?;
+                    ast::Else::If(Box::new(else_if))
+                }
+                _ => {
+                    let block = self.block()?;
+                    ast::Else::Block(Box::new(block))
+                }
+            })
         } else {
             None
         };
         let span = lo.merge(self.span);
-        Ok(ast::Expr {
-            id: DUMMY_NODE_ID,
-            kind: ast::ExprKind::If(Box::new(condition), Box::new(consequent), alt),
-            span,
-        })
+        let kind = ast::ExprKind::If(ast::IfExpr {
+            condition: Box::new(condition),
+            block: Box::new(block),
+            alt: None,
+        });
+        ast::expr(kind, span)
     }
 
     fn expect_lit(&mut self) -> Result<token::Lit> {
@@ -986,12 +1106,7 @@ impl Parser<'_> {
         self.expect(TokenKind::RCurlyBrace)?;
         let kind = ast::ExprKind::Match(Box::new(cond), cases);
         let span = lo.merge(self.span);
-        let expr = ast::Expr {
-            id: DUMMY_NODE_ID,
-            span,
-            kind,
-        };
-        Ok(expr)
+        ast::expr(kind, span)
     }
 
     fn match_arm_expr(&mut self) -> Result<ast::MatchArm> {
@@ -1022,11 +1137,7 @@ impl Parser<'_> {
         self.expect(TokenKind::Dot)?;
         let property = self.ident()?;
         let span = obj.span.merge(self.span);
-        Ok(ast::Expr {
-            id: DUMMY_NODE_ID,
-            span,
-            kind: ast::ExprKind::Member(Box::new(obj), property),
-        })
+        ast::expr(ast::ExprKind::Member(Box::new(obj), property), span)
     }
 
     fn optional_member_expr(&mut self, obj: ast::Expr) -> Result<ast::Expr> {
@@ -1034,11 +1145,7 @@ impl Parser<'_> {
         let property = self.ident()?;
         let span = obj.span.merge(self.span);
         self.sess.emit_warning("", "", span);
-        Ok(ast::Expr {
-            id: DUMMY_NODE_ID,
-            span,
-            kind: ast::ExprKind::Member(Box::new(obj), property),
-        })
+        ast::expr(ast::ExprKind::Member(Box::new(obj), property), span)
     }
 
     fn expr_list(&mut self, terminator: TokenKind) -> Result<Vec<ast::Expr>> {
@@ -1066,11 +1173,7 @@ impl Parser<'_> {
         let lo = callee.span;
         let args = self.expr_list(TokenKind::RParen)?;
         let span = lo.merge(self.span);
-        Ok(ast::Expr {
-            id: DUMMY_NODE_ID,
-            span,
-            kind: ast::ExprKind::Call(Box::new(callee), args),
-        })
+        ast::expr(ast::ExprKind::Call(Box::new(callee), args), span)
     }
 
     fn binary_expr(&mut self, left: ast::Expr) -> Result<ast::Expr> {
@@ -1084,11 +1187,7 @@ impl Parser<'_> {
         let right = self.expr(precedence)?;
         let kind = ast::ExprKind::Binary(op, Box::new(left), Box::new(right));
         let span = lo.merge(self.span);
-        Ok(ast::Expr {
-            id: DUMMY_NODE_ID,
-            kind,
-            span,
-        })
+        ast::expr(kind, span)
     }
 
     fn cond_expr(&mut self, test: ast::Expr) -> Result<ast::Expr> {
@@ -1097,11 +1196,10 @@ impl Parser<'_> {
         self.expect(TokenKind::Colon)?;
         let alt = self.expr(Precedence::ASSIGNMENT)?;
         let span = test.span.merge(self.span);
-        Ok(ast::Expr {
-            id: DUMMY_NODE_ID,
-            kind: ast::ExprKind::Cond(Box::new(test), Box::new(consequent), Box::new(alt)),
+        ast::expr(
+            ast::ExprKind::Cond(Box::new(test), Box::new(consequent), Box::new(alt)),
             span,
-        })
+        )
     }
 }
 
