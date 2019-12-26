@@ -1,20 +1,32 @@
 pub mod files;
 
 use codespan::{FileId, Files};
-use files::absolute_path;
 use salsa::{self, InternId, InternKey};
 
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use fxhash::hash32;
 use std::fs;
 use std::path::PathBuf;
 
+use fxhash;
+
+
 // use relative_path::{RelativePathBuf};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+// We generate module IDs from paths. They can be the keys for salsa::intern?
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct ModuleId(pub u32);
+
+impl InternKey for ModuleId {
+    fn from_intern_id(v: InternId) -> Self {
+        ModuleId(v.as_u32())
+    }
+
+    fn as_intern_id(&self) -> InternId {
+        InternId::from(self.0)
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct SourceRoot {
@@ -44,6 +56,8 @@ fn resolve_file(db: &impl Source, path: PathBuf) -> FileId {
     let mut files = files_db.lock().unwrap();
     // TODO don't unwrap here
     let source = fs::read_to_string(path.clone()).unwrap();
+    let source_hash = fxhash::hash(&source);
+    println!("source hash {:?}", source_hash);
     files.add(path.to_str().unwrap(), source)
 }
 

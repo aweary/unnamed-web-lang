@@ -1,51 +1,152 @@
-use serde::{Deserialize, Serialize};
-use syntax::ast;
-use syntax::symbol::Symbol;
+/// WebScript uses an IR that only slightly diverges from the AST.
+/// The process of lowering the AST to the IR does the name resolution
+/// making it easier to typecheck.
+use salsa::{self, InternId, InternKey};
+use syntax::{Span, FileId};
 
-use generational_arena::{Arena, Index};
+// We reuse these from the AST
+pub use syntax::ast::{BinOp, UnOp};
 
-/// Index for an expression IR node
-#[derive(Clone, Debug, Serialize, Deserialize, Hash, Eq, PartialEq)]
-struct ExprId(pub Index);
-
-/// Identifies a unique definition
-#[derive(Clone, Debug, Serialize, Deserialize, Hash, Eq, PartialEq)]
-struct DefId(pub Index);
-
-/// Identifies a unique module
-#[derive(Clone, Debug, Serialize, Deserialize, Hash, Eq, PartialEq)]
-struct ModuleId {
-    // ...
+// A module is a collection of definitions, some exported and some not
+struct Module_ {
+    // The definitions defined in this module
+    defs: Vec<DefId_>,
 }
 
-struct ExprArena {
-    map: Arena<ast::Expr>,
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum DefId_ {
+    Function(FunctionId),
+    Component(ComponentId),
+    Type(TypeId),
+    Enum(EnumId),
 }
 
-impl ExprArena {
-    pub fn alloc(&mut self, expr: ast::Expr) -> ExprId {
-        ExprId(self.map.insert(expr))
-    }
+// Uniquely identifies a module
+// The file that defines the module. Currently modules can only
+    // be defined by creating a new file, so ModuleId is technically
+    // just a light wrapper around FileId.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+struct ModuleId(FileId);
+
+/// A function definition. It contains a set of statements and expressions.
+struct FunctionDef {
+    span: Span,
+    body: Block,
 }
 
-/// IR for a component definition.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-struct ComponentDef {
-    // ...
+// A block
+struct Block_ {
+    stmts: Vec<StmtId>,
 }
 
-/// Reference an HTML element tag name
-#[derive(Clone, Debug, Serialize, Deserialize, Hash, Eq, PartialEq)]
-struct ElementReference(u32);
+/// Uniquely identifies a function definition in a module
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+struct FunctionId {
+    module_id: ModuleId,
+}
 
-// Bytecode-like instruction for template IR
-#[derive(Clone, Debug, Serialize, Deserialize, Hash, Eq, PartialEq)]
-enum TemplateInst {
-    // Create a new HTML element
-    PushHostElement(ElementReference),
-    // Pop the topmost HTML element off of the stack
-    PopHostElement,
-    // Insert static text into the topmost HTML element on the stack
-    StaticText(Symbol),
-    DynamicText(ExprId),
+/// Uniquely identifies a component definition in a module
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+struct ComponentId {
+    module_id: ModuleId
+}
+
+/// A record type definition
+struct TypeDef {
+  // ...
+}
+
+/// Uniquely identifies a type definition in a module
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+struct TypeId {
+    module_id: ModuleId
+}
+
+/// An enum definition.
+struct EnumDef {
+
+}
+/// Uniquely identifies a type definition in a module
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+struct EnumId {
+    module_id: ModuleId
+}
+
+/// Macro for creating an internable ID
+macro_rules! intern_id {
+    ($name: ident) => {
+        #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+        pub struct $name(pub u32);
+
+        impl InternKey for $name {
+            fn from_intern_id(v: InternId) -> Self {
+                $name(v.as_u32())
+            }
+            fn as_intern_id(&self) -> InternId {
+                InternId::from(self.0)
+            }
+        }
+    };
+}
+
+intern_id!(SpanId);
+intern_id!(ExprId);
+intern_id!(DefId);
+intern_id!(StmtId);
+intern_id!(LocalId);
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct Module {
+    pub items: Vec<DefId>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum DefKind {
+    Func { body: Block },
+    Type,
+    Enum,
+    Import,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct Def {
+    pub kind: DefKind,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum Literal {
+    String(String),
+    Bool(bool),
+    Number(u32),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct Block(pub Vec<StmtId>);
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum Expr {
+    /// Literal expression
+    Literal(Literal),
+    /// Binary expression
+    Binary {
+        lhs: ExprId,
+        rhs: ExprId,
+        op: BinOp,
+    },
+    // Array literal expression
+    Array(Vec<ExprId>),
+    // Unary expression
+    Unary(UnOp, ExprId),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum Stmt {
+    Expr(ExprId),
+    Local(LocalId),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct Local {
+    // pub name: Symbol,
+    pub init: Option<ExprId>,
 }

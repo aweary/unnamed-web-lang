@@ -3,7 +3,6 @@ use lexer::LexMode;
 use lexer::Lexer as Tokenizer;
 use syntax::ast;
 use syntax::precedence::Precedence;
-use syntax::sess::ParseSess;
 use syntax::token::{self, Keyword, Token, TokenKind};
 use syntax::ty;
 use syntax::Span;
@@ -11,34 +10,48 @@ use syntax::Span;
 use std::path::PathBuf;
 
 use diagnostics::ParseResult as Result;
+use diagnostics::{Diagnostic, FileId, Label};
+
+use crate::db::ParserDatabase;
 
 const DUMMY_NODE_ID: ast::NodeId = ast::NodeId(0);
 
-pub struct Parser<'s> {
+pub struct Parser<'s, T> {
+    db: &'s T,
     tokenizer: Tokenizer<'s>,
-    sess: &'s ParseSess,
     span: Span,
+    file_id: FileId,
 }
 
-impl Parser<'_> {
-    /// Returns a `Parser` instance using the `source` string
-    /// as an input. This should be used sparingly as it assumes that
-    /// the *entire source* will be contained within `source`, so imports
-    /// wont work. It's mainly an internal debugging path.lexer
-    ///
-    /// ```
-    /// # Example
-    /// use parser::Parser;
-    /// let source = String::from("let a = 10");
-    /// let mut parser = Parser::new_from_str(&source);
-    /// ```
-    pub fn new_from_str<'a>(source: &'a str, sess: &'a ParseSess) -> Parser<'a> {
-        let tokenizer = Tokenizer::new(source, sess);
-        // Start off with an empty span
+/// TODO move to diagnostics crate
+trait DiagnosticReporting {
+    fn fatal(&self, message: &str, label: &str, span: Span) -> Diagnostic;
+    fn warn(&self, message: &str, label: &str, span: Span);
+}
+
+impl<T> DiagnosticReporting for Parser<'_, T> {
+    fn fatal(&self, message: &str, label: &str, span: Span) -> Diagnostic {
+        Diagnostic::new_error(message, Label::new(self.file_id, span, label))
+    }
+
+    /// Emits a warning without buffering, only use if you're absolutely sure that
+    /// a warning should be emitted now without any additional context.
+    fn warn(&self, message: &str, label: &str, span: Span) {
+        // let warning = Diagnostic::new_warning(message, Label::new(file_id, span, label));
+        // self.emit_diagnostic(warning);
+    }
+}
+
+impl<T: ParserDatabase> Parser<'_, T> {
+    pub fn new<'a>(source: &'a str, file_id: FileId, db: &'a T) -> Parser<'a, T> {
+        // Create a tokenzier/lexer
+        let tokenizer = Tokenizer::new(&source, file_id);
+        // Start with a dummy span
         let span = Span::new(0, 0);
         Parser {
+            file_id,
+            db,
             tokenizer,
-            sess,
             span,
         }
     }
@@ -68,7 +81,7 @@ impl Parser<'_> {
         // TODO don't unwrap here.
         let token = self.next_token().unwrap();
         if token.kind != kind {
-            Err(self.sess.fatal(
+            Err(self.fatal(
                 "Unexpceted token",
                 &format!("Expected {} but found {}", kind, token.kind),
                 token.span,
@@ -95,9 +108,7 @@ impl Parser<'_> {
                 name: symbol,
                 span: token.span,
             }),
-            _ => Err(self
-                .sess
-                .fatal("Unexpected token", "Expected an identifier", token.span)),
+            _ => Err(self.fatal("Unexpected token", "Expected an identifier", token.span)),
         }
     }
 
@@ -135,7 +146,7 @@ impl Parser<'_> {
             // Everything else
             _ => {
                 let token = self.next_token().unwrap();
-                Err(self.sess.fatal(
+                Err(self.fatal(
                     "Unexpected token",
                     &format!(
                         "Expexcted `fn`, `component`, `enum`, or `type`, found {:?}",
@@ -177,9 +188,7 @@ impl Parser<'_> {
                 });
             }
         }
-        Err(self
-            .sess
-            .fatal("Expected import path", "found this", self.span))
+        Err(self.fatal("Expected import path", "found this", self.span))
     }
 
     fn parse_type(&mut self) -> Result<ast::Item> {
@@ -203,13 +212,7 @@ impl Parser<'_> {
                     properties.push(prop);
                     self.eat(Comma)?;
                 }
-                _ => {
-                    return Err(self.sess.fatal(
-                        "Unexpected token",
-                        "Expected identifier",
-                        self.span,
-                    ))
-                }
+                _ => return Err(self.fatal("Unexpected token", "Expected identifier", self.span)),
             }
         }
         self.expect(RCurlyBrace)?;
@@ -257,11 +260,7 @@ impl Parser<'_> {
                     break;
                 }
                 _ => {
-                    return Err(self.sess.fatal(
-                        "Enums are not yet supported",
-                        "Unsupported",
-                        self.span,
-                    ))
+                    return Err(self.fatal("Enums are not yet supported", "Unsupported", self.span))
                 }
             }
         }
@@ -392,7 +391,7 @@ impl Parser<'_> {
                 }
                 _ => {
                     self.next_token()?;
-                    return Err(self.sess.fatal(
+                    return Err(self.fatal(
                         "Expected a funciton paramter",
                         "Found this shit",
                         self.span,
@@ -461,7 +460,7 @@ impl Parser<'_> {
         // let mut terminated = false;
         while !self.peek()?.follows_item_list() {
             // if terminated {
-            //     return Err(self.sess.fatal(
+            //     return Err(self.fatal(
             //         "Expected a semicolon",
             //         "Only the last statement in a list may omit the semicolon",
             //         self.span,
@@ -537,12 +536,12 @@ impl Parser<'_> {
                     Ident(_) => Some(self.local_pattern()?),
                     _ => {
                         self.skip()?;
-                        return Err(self.sess.fatal("", "", self.span));
+                        return Err(self.fatal("", "", self.span));
                     }
                 };
                 let catch_block = self.block()?;
                 let span = lo.merge(self.span);
-                self.sess.emit_warning("trycatch", "try", span);
+                self.warn("trycatch", "try", span);
                 stmt(
                     ast::StmtKind::TryCatch(
                         Box::new(try_block),
@@ -562,12 +561,12 @@ impl Parser<'_> {
                 stmt(ast::StmtKind::Expr(Box::new(expr)), span)
             } // _ => {
               //     self.skip()?;
-              //     Err(self.sess.fatal("Unsupported statement", "here", self.span))
+              //     Err(self.fatal("Unsupported statement", "here", self.span))
               // }
         }
     }
 
-    fn array_pattern(&mut self) -> Result<(ast::LocalPattern)> {
+    fn array_pattern(&mut self) -> Result<ast::LocalPattern> {
         use TokenKind::{Comma, Ident, LBrace, RBrace};
         self.expect(LBrace)?;
         let lo = self.span;
@@ -588,7 +587,7 @@ impl Parser<'_> {
                 }
                 _ => {
                     self.skip()?;
-                    return Err(self.sess.fatal("Unexpected token", "Unexpected", self.span));
+                    return Err(self.fatal("Unexpected token", "Unexpected", self.span));
                 }
             }
         }
@@ -614,7 +613,7 @@ impl Parser<'_> {
                 // Valid following tokens, move on...
                 Comma | RCurlyBrace => ast::LocalPattern::Ident(key.clone(), key.span),
                 // Everything else is a syntax error
-                _ => return Err(self.sess.fatal("Unexpected token", "Unexpected", self.span)),
+                _ => return Err(self.fatal("Unexpected token", "Unexpected", self.span)),
             };
             let span = lo.merge(self.span);
             let property = ast::LocalObjectProperty { span, key, value };
@@ -628,7 +627,7 @@ impl Parser<'_> {
                 // End of list, exit
                 RCurlyBrace => break,
                 // Everything else is a syntax error
-                _ => return Err(self.sess.fatal("Unexpected token", "Unexpected", self.span)),
+                _ => return Err(self.fatal("Unexpected token", "Unexpected", self.span)),
             }
         }
         self.expect(RCurlyBrace)?;
@@ -652,7 +651,7 @@ impl Parser<'_> {
             // ...
             _ => {
                 self.skip()?;
-                Err(self.sess.fatal("Unknown pattern", "unexpected", self.span))
+                Err(self.fatal("Unknown pattern", "unexpected", self.span))
             }
         }
     }
@@ -706,11 +705,7 @@ impl Parser<'_> {
                     properties.push((key, value));
                     self.eat(Comma)?;
                 }
-                _ => {
-                    return Err(self
-                        .sess
-                        .fatal("Unexpected", "Trying to parse object", self.span))
-                }
+                _ => return Err(self.fatal("Unexpected", "Trying to parse object", self.span)),
             }
         }
         self.expect(RCurlyBrace)?;
@@ -727,7 +722,7 @@ impl Parser<'_> {
                 // Allowed...
             }
             _ => {
-                return Err(self.sess.fatal(
+                return Err(self.fatal(
                     "Invalid left hand assignment",
                     "Expected an identifier",
                     left.span,
@@ -817,7 +812,7 @@ impl Parser<'_> {
             TokenKind::Reserved(Keyword::Match) => self.match_expr(),
             _ => {
                 self.skip()?;
-                Err(self.sess.fatal(
+                Err(self.fatal(
                     "Failed to parse an expression",
                     "We expected an expression here",
                     self.span,
@@ -894,7 +889,7 @@ impl Parser<'_> {
                 }
                 _ => {
                     self.skip()?;
-                    return Err(self.sess.fatal(
+                    return Err(self.fatal(
                         "Unexpected token",
                         "Expected <, /, or an identifier",
                         self.span,
@@ -928,7 +923,7 @@ impl Parser<'_> {
             }
             _ => {
                 self.skip()?;
-                return Err(self.sess.fatal(
+                return Err(self.fatal(
                     "Unexpected token",
                     "trying to parse template attributes",
                     self.span,
@@ -1038,9 +1033,7 @@ impl Parser<'_> {
         let token = self.next_token()?;
         match token.kind {
             TokenKind::Literal(lit) => Ok(lit),
-            _ => Err(self
-                .sess
-                .fatal("Expected literal", "found this", token.span)),
+            _ => Err(self.fatal("Expected literal", "found this", token.span)),
         }
     }
 
@@ -1061,7 +1054,7 @@ impl Parser<'_> {
                 })
             }
 
-            _ => Err(self.sess.fatal("expected literal", "lol", self.span)),
+            _ => Err(self.fatal("expected literal", "lol", self.span)),
         }
     }
 
@@ -1083,9 +1076,7 @@ impl Parser<'_> {
             QuestionDot => self.optional_member_expr(left),
             _ => {
                 self.skip()?;
-                Err(self
-                    .sess
-                    .fatal("Unknown infix expression", "Here", self.span))
+                Err(self.fatal("Unknown infix expression", "Here", self.span))
             }
         }
     }
@@ -1118,7 +1109,7 @@ impl Parser<'_> {
                 // All allowed
             }
             _ => {
-                return Err(self.sess.fatal(
+                return Err(self.fatal(
                     "Unsupported expression in match arm",
                     "Match arm expressions are limited to references",
                     test.span,
@@ -1144,7 +1135,7 @@ impl Parser<'_> {
         self.expect(TokenKind::QuestionDot)?;
         let property = self.ident()?;
         let span = obj.span.merge(self.span);
-        self.sess.emit_warning("", "", span);
+        self.warn("", "", span);
         ast::expr(ast::ExprKind::Member(Box::new(obj), property), span)
     }
 
@@ -1213,7 +1204,7 @@ fn stmt(kind: ast::StmtKind, span: Span) -> Result<ast::Stmt> {
     })
 }
 
-impl Iterator for Parser<'_> {
+impl<T: ParserDatabase> Iterator for Parser<'_, T> {
     type Item = Token;
     fn next(&mut self) -> Option<Self::Item> {
         match self.next_token() {

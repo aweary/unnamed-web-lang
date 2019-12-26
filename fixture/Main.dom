@@ -1,12 +1,8 @@
-enum Result {
-  Ok,
-  Error,
-}
 
-type User {
-  name: String,
-}
+import add from "./Math.dom"
 
-fn add(a: Number, b: Number) : Number {
-  return a + b;
+function main() : Unit {
+  let a = 1;
+  let b = 2;
+  let c = a + b;
 }

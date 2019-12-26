@@ -1,7 +1,6 @@
 use crate::reader::Reader;
 
-use diagnostics::{Diagnostic, Label, ParseResult as Result};
-use syntax::sess::ParseSess;
+use diagnostics::{Diagnostic, FileId, Label, ParseResult as Result};
 use syntax::token::{token, Token, TokenKind};
 use syntax::token::{Keyword, Lit, LitKind};
 // use syntax::span::{ByteIndex, Span};
@@ -22,9 +21,9 @@ pub enum LexMode {
 pub struct Lexer<'a> {
     pub reader: Reader<'a>,
     pub source: &'a str,
-    pub sess: &'a ParseSess,
     pub mode: LexMode,
     pub lookahead: VecDeque<Token>,
+    file_id: FileId,
 }
 
 macro_rules! symbol {
@@ -34,12 +33,12 @@ macro_rules! symbol {
 }
 
 impl<'a> Lexer<'a> {
-    pub fn new(source: &'a str, sess: &'a ParseSess) -> Self {
+    pub fn new(source: &'a str, file_id: FileId) -> Self {
         let reader = Reader::new(&source);
         Lexer {
             reader,
             source,
-            sess,
+            file_id,
             mode: LexMode::Normal,
             lookahead: VecDeque::with_capacity(4),
         }
@@ -106,9 +105,9 @@ impl<'a> Lexer<'a> {
         } else {
             let _ch2 = self.next_char().unwrap();
             let span = self.end_span(span_start);
-            self.sess
-                .source_map
-                .report_error("Expected another of the same", span, "");
+            // self.sess
+            //     .source_map
+            //     .report_error("Expected another of the same", span, "");
             // TODO how to handle reporting a sequence of lex errors?
             Ok(token(TokenKind::LexError, span))
             // Err(Error::UnexpectedCharacter(ch2))
@@ -335,7 +334,7 @@ impl<'a> Lexer<'a> {
                 // TODO move this into a helper function
                 let diagnostic = Diagnostic::new_error(
                     "Unexpected character",
-                    Label::new(self.sess.source_map.current_file_id(), span, ""),
+                    Label::new(self.file_id, span, ""),
                 );
                 Err(diagnostic)
             }

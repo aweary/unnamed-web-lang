@@ -252,6 +252,13 @@ pub struct Param {
     // ...
 }
 
+impl Param {
+    pub fn name(&self) -> &str {
+        // TODO
+        "a"
+    }
+}
+
 // #[derive(Hash, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 // pub struct Ty {
 //     // TODO do we need a name?

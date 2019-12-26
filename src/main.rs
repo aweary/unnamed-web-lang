@@ -1,6 +1,5 @@
 use compiler;
 use std::env;
-use std::path;
 
 pub fn main() {
     // Pretend this path is coming from the CLI

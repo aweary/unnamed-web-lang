@@ -1,8 +1,8 @@
 #![warn(clippy::all)]
 
+mod codegen;
 mod compiler;
-mod context;
 mod ir;
-mod passes;
+mod lowering;
 
 pub use compiler::*;
