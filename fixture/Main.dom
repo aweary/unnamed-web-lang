@@ -1,8 +1,9 @@
-
-import add from "./Math.dom"
-
-function main() : Unit {
-  let a = 1;
-  let b = 2;
-  let c = a + b;
+fn Button(label: String) : View {
+  if label == "Brandon" {
+    let a = 20;
+  }
+  let first_name = "Brandon";
+  let last_name = "Dail";
+  let name = first_name;
+  return name;
 }

@@ -2,19 +2,18 @@ use parser::{ErrorReporting, ParserDatabase, ParserDatabaseStorage};
 // TODO import these from diagnostics
 use crate::codegen::{CodegenDatabase, CodegenDatabaseStorage};
 use crate::ir::SpanId;
-use crate::lowering::{IRDatabase, IRDatabaseStorage, LoweringT, LoweringCtxt};
+use crate::lowering::{IRDatabase, IRDatabaseStorage, LoweringCtxt, LoweringT};
 use codespan_reporting::term::emit;
 use codespan_reporting::term::termcolor::{ColorChoice, StandardStream};
 use diagnostics::Diagnostic;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-use std::cell::Cell;
 use codespan::Files;
 use log::{self, debug};
 use salsa;
 use source::*;
-
+use std::cell::Cell;
 
 /// Stores all data necsesary for parsing
 // struct CompilerRoot {
@@ -27,7 +26,6 @@ use source::*;
     IRDatabaseStorage,
     CodegenDatabaseStorage
 )]
-
 #[derive(Default)]
 pub struct CompilerDatabase {
     runtime: salsa::Runtime<CompilerDatabase>,

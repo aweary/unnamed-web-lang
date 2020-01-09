@@ -11,7 +11,6 @@ use std::path::PathBuf;
 
 use fxhash;
 
-
 // use relative_path::{RelativePathBuf};
 
 // We generate module IDs from paths. They can be the keys for salsa::intern?

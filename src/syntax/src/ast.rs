@@ -222,6 +222,15 @@ pub enum LocalPattern {
     List(Vec<Ident>, Span),
 }
 
+impl Into<Symbol> for LocalPattern {
+    fn into(self) -> Symbol {
+        match self {
+            LocalPattern::Ident(ident, _) => ident.name,
+            _ => todo!("Cannot make destructured LocalPattern into Symbol"),
+        }
+    }
+}
+
 #[derive(Hash, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub struct Local {
     pub id: NodeId,
@@ -253,9 +262,11 @@ pub struct Param {
 }
 
 impl Param {
-    pub fn name(&self) -> &str {
-        // TODO
-        "a"
+    pub fn name(&self) -> Symbol {
+        match &self.local {
+            LocalPattern::Ident(ident, _) => ident.name.clone(),
+            _ => todo!("Cant get name for destructure yet"),
+        }
     }
 }
 

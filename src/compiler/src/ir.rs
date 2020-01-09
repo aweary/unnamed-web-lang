@@ -1,43 +1,26 @@
 /// WebScript uses an IR that only slightly diverges from the AST.
 /// The process of lowering the AST to the IR does the name resolution
 /// making it easier to typecheck.
+/// 
+/// The IR exists with the express purpose of allowing:
+/// 1. Name resolution
+/// 2. Type checking
+/// 3. Compiler optimazations
+/// ...
 use salsa::{self, InternId, InternKey};
-use syntax::{Span, FileId};
+use syntax::{FileId, Span};
+use syntax::symbol::Symbol;
 
 // We reuse these from the AST
-pub use syntax::ast::{BinOp, UnOp};
-
-// A module is a collection of definitions, some exported and some not
-struct Module_ {
-    // The definitions defined in this module
-    defs: Vec<DefId_>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum DefId_ {
-    Function(FunctionId),
-    Component(ComponentId),
-    Type(TypeId),
-    Enum(EnumId),
-}
+use std::fmt;
+pub use syntax::ast::{BinOp, Ident, ParamType, UnOp};
 
 // Uniquely identifies a module
 // The file that defines the module. Currently modules can only
-    // be defined by creating a new file, so ModuleId is technically
-    // just a light wrapper around FileId.
+// be defined by creating a new file, so ModuleId is technically
+// just a light wrapper around FileId.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 struct ModuleId(FileId);
-
-/// A function definition. It contains a set of statements and expressions.
-struct FunctionDef {
-    span: Span,
-    body: Block,
-}
-
-// A block
-struct Block_ {
-    stmts: Vec<StmtId>,
-}
 
 /// Uniquely identifies a function definition in a module
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -48,28 +31,19 @@ struct FunctionId {
 /// Uniquely identifies a component definition in a module
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 struct ComponentId {
-    module_id: ModuleId
-}
-
-/// A record type definition
-struct TypeDef {
-  // ...
+    module_id: ModuleId,
 }
 
 /// Uniquely identifies a type definition in a module
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 struct TypeId {
-    module_id: ModuleId
+    module_id: ModuleId,
 }
 
-/// An enum definition.
-struct EnumDef {
-
-}
 /// Uniquely identifies a type definition in a module
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 struct EnumId {
-    module_id: ModuleId
+    module_id: ModuleId,
 }
 
 /// Macro for creating an internable ID
@@ -102,7 +76,11 @@ pub struct Module {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum DefKind {
-    Func { body: Block },
+    Func {
+        body: Block,
+        name: Ident,
+        params: ParamType,
+    },
     Type,
     Enum,
     Import,
@@ -120,11 +98,34 @@ pub enum Literal {
     Number(u32),
 }
 
+impl fmt::Display for Literal {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Literal::String(value) => write!(f, "{}", value),
+            Literal::Bool(value) => write!(f, "{}", value),
+            Literal::Number(value) => write!(f, "{}", value),
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Block(pub Vec<StmtId>);
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum Expr {
+pub struct Expr {
+    pub kind: ExprKind,
+    pub span: Span,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum Reference {
+    Local(LocalId),
+    Param,
+}
+
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum ExprKind {
     /// Literal expression
     Literal(Literal),
     /// Binary expression
@@ -137,16 +138,29 @@ pub enum Expr {
     Array(Vec<ExprId>),
     // Unary expression
     Unary(UnOp, ExprId),
+    // Reference to some local
+    Reference(Reference),
+    // Block expression
+    Block(Block),
+    // If expression
+    If(ExprId, Block),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum Stmt {
+pub struct Stmt {
+    pub kind: StmtKind,
+    pub span: Span,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum StmtKind {
     Expr(ExprId),
     Local(LocalId),
+    Return(ExprId),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Local {
-    // pub name: Symbol,
+    pub name: Symbol,
     pub init: Option<ExprId>,
 }

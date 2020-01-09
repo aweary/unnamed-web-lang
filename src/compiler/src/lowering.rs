@@ -1,17 +1,61 @@
-use parser::ParserDatabase;
+use parser::{ErrorReporting, ParserDatabase};
 use salsa;
 use salsa::InternKey;
-
 use source::ModuleId;
-use syntax::ast;
-
 use std::path::PathBuf;
+use syntax::ast;
+use syntax::symbol::Symbol;
 
-use crate::ir::{self, DefId, ExprId, LocalId, SpanId, StmtId};
+use diagnostics::{Diagnostic, Label};
 
-use id_arena::{Arena, Id};
+use fxhash::FxHashMap;
 
+use crate::ir::{self, DefId, ExprId, LocalId, Reference, SpanId, StmtId};
 use path_dedot::*;
+
+type Scope = FxHashMap<Symbol, Reference>;
+
+struct ScopeList<'a, T> {
+    db: &'a T,
+    scopes: Vec<Scope>,
+}
+
+impl<'a, T: IRDatabase> ScopeList<'a, T> {
+    pub fn new(db: &'a T) -> Self {
+        let mut scope_list = ScopeList { db, scopes: vec![] };
+        // Initialize module-level scope
+        scope_list.scopes.push(FxHashMap::default());
+        scope_list
+    }
+
+    pub fn push_scope(&mut self) {
+        let scope = FxHashMap::default();
+        self.scopes.push(scope);
+    }
+
+    pub fn pop_scope(&mut self) {
+        self.scopes.pop();
+    }
+
+    pub fn define(&mut self, name: &Symbol, item: Reference) {
+        let current_scope = self
+            .scopes
+            .last_mut()
+            .expect("Cannot define a local without a scope.");
+        current_scope.insert(name.clone(), item);
+    }
+
+    pub fn resolve(&mut self, ident: &ast::Ident) -> Option<Reference> {
+        let name = &ident.name.clone();
+        for scope in &self.scopes {
+            if scope.contains_key(&name) {
+                let local = scope.get(&name).unwrap();
+                return Some(local.clone());
+            }
+        }
+        None
+    }
+}
 
 // Resolve imports
 pub trait ImportResolve {
@@ -36,6 +80,8 @@ impl ImportResolve for ast::Import {
 pub struct LoweringContext<'a, T> {
     // Salsa database
     db: &'a T,
+    scope_list: ScopeList<'a, T>,
+    needs_new_scope: bool,
 }
 
 impl<'a, T> LoweringContext<'a, T>
@@ -43,7 +89,11 @@ where
     T: IRDatabase,
 {
     pub fn new(db: &'a T) -> Self {
-        LoweringContext { db }
+        LoweringContext {
+            db,
+            scope_list: ScopeList::new(db),
+            needs_new_scope: true,
+        }
     }
 
     pub fn lower_module(&mut self, id: ModuleId) -> ir::Module {
@@ -51,10 +101,169 @@ where
         let ast = db.parse_module(id);
         let mut items = vec![];
         for item in ast.items {
-            let id = db.lower_item(item);
+            let id = self.lower_item(item);
             items.push(id);
         }
         ir::Module { items }
+    }
+
+    fn lower_item(&mut self, item: ast::Item) -> DefId {
+        use ast::ItemKind;
+        match item.kind {
+            ItemKind::Fn(fn_def) => self.lower_fn(fn_def),
+            ItemKind::Import(import) => self.lower_import(*import),
+            _ => unreachable!("Unknown type"),
+        }
+    }
+
+    fn lower_fn(&mut self, fn_def: ast::FnDef) -> DefId {
+        let ast::FnDef {
+            body, name, params, ..
+        } = fn_def;
+        self.scope_list.push_scope();
+        self.needs_new_scope = false;
+        for param in params.clone().into_iter() {
+            let name = param.name();
+            self.scope_list.define(&name, Reference::Param);
+        }
+        let body = self.lower_block(*body);
+        let kind = ir::DefKind::Func { body, name, params };
+        self.db.intern_def(ir::Def { kind })
+    }
+
+    fn lower_block(&mut self, block: ast::Block) -> ir::Block {
+        let mut stmts = vec![];
+        if self.needs_new_scope {
+            self.scope_list.push_scope();
+        } else {
+            self.needs_new_scope = true;
+        }
+        for stmt in block.stmts {
+            let stmt_id = self.lower_stmt(stmt);
+            stmts.push(stmt_id);
+        }
+        self.scope_list.pop_scope();
+        ir::Block(stmts)
+    }
+
+    fn lower_stmt(&mut self, stmt: ast::Stmt) -> StmtId {
+        use ast::{Stmt, StmtKind};
+        let Stmt { kind, .. } = stmt;
+        let span = stmt.span;
+        let kind = match kind {
+            // Expression statement
+            StmtKind::Expr(expr) => {
+                let expr_id = self.lower_expr(*expr);
+                ir::StmtKind::Expr(expr_id)
+            }
+            // Local definitions
+            StmtKind::Local(local) => {
+                let local_id = self.lower_local(*local);
+                ir::StmtKind::Local(local_id)
+            }
+            // Return statement
+            StmtKind::Return(expr) => {
+                let expr_id = self.lower_expr(*expr);
+                ir::StmtKind::Return(expr_id)
+            }
+            _ => {
+                todo!("Unknown statemetn");
+            }
+        };
+        self.db.intern_stmt(ir::Stmt { span, kind })
+    }
+
+    fn lower_expr(&mut self, expr: ast::Expr) -> ExprId {
+        use ast::ExprKind;
+        let span = expr.span;
+        let kind = match expr.kind {
+            ExprKind::Unary(op, expr) => {
+                let id = self.lower_expr(*expr);
+                ir::ExprKind::Unary(op, id)
+                // ...
+            }
+            ExprKind::Binary(op, left, right) => {
+                let lhs = self.lower_expr(*left);
+                let rhs = self.lower_expr(*right);
+                ir::ExprKind::Binary { lhs, rhs, op }
+            }
+            ExprKind::Lit(lit) => ir::ExprKind::Literal(match lit.kind {
+                ast::LitKind::Bool(symbol) => ir::Literal::Bool(symbol.into()),
+                ast::LitKind::Str(symbol) => ir::Literal::String(symbol.into()),
+                ast::LitKind::Number(symbol) => ir::Literal::Number(symbol.into()),
+            }),
+            // Reference some variable
+            ExprKind::Reference(ident) => {
+                // We need to resolve which
+                match self.scope_list.resolve(&ident) {
+                    Some(local_id) => ir::ExprKind::Reference(local_id),
+                    None => {
+                        let db = self.db;
+                        let source_module_id = db.get_current_module_id();
+                        let source_path = db.lookup_intern_module_path(source_module_id);
+                        let file_id = db.resolve_file(source_path);
+                        let err =
+                            Diagnostic::new_error("Fuck", Label::new(file_id, span, "Unknown"));
+                        db.report_diagnostic(err);
+                        panic!();
+                    }
+                }
+            }
+            ExprKind::If(ast::IfExpr {
+                condition, block, ..
+            }) => {
+                let expr_id = self.lower_expr(*condition);
+                let block_id = self.lower_block(*block);
+                ir::ExprKind::If(expr_id, block_id)
+            }
+            _ => {
+                todo!("");
+            }
+        };
+        let expr = ir::Expr { span, kind };
+        self.db.intern_expr(expr)
+    }
+
+    /// When we lower a local definition we also register that name
+    /// in the current scope so we can do name resolution while lowering.
+    fn lower_local(&mut self, local: ast::Local) -> LocalId {
+        use ast::{Local, LocalPattern};
+        let Local { name, init, .. } = local;
+        let init = if let Some(expr) = init {
+            let expr_id = self.lower_expr(*expr);
+            Some(expr_id)
+        } else {
+            None
+        };
+        // TODO need to store this in some scope map?
+        let local = ir::Local { init, name: name.clone().into() };
+        let id = self.db.intern_local(local);
+        match name {
+            LocalPattern::Ident(ident, _span) => {
+                let entry = Reference::Local(id);
+                self.scope_list.define(&ident.name, entry);
+            }
+            _ => {
+                todo!("Destructuring not supported.");
+            }
+        };
+        id
+    }
+
+    fn lower_import(&mut self, import: ast::Import) -> DefId {
+        let db = self.db;
+        // Get the path for the import
+        // Now we need to normalize this path
+        let full_path = import.resolve(self.db);
+        let module_id = db.intern_module_path(full_path);
+        let current_module_id = db.get_current_module_id();
+        db.set_current_module_id(module_id);
+        // We're parsing/lowering a new module, so we route this through
+        // the query system.
+        let hir = self.db.lower_module(module_id);
+        db.set_current_module_id(current_module_id);
+        // TODO
+        DefId(0)
     }
 }
 
@@ -64,17 +273,8 @@ pub trait LoweringT {
 }
 
 #[salsa::query_group(IRDatabaseStorage)]
-pub trait IRDatabase: ParserDatabase + LoweringT + LoweringCtxt {
-    #[salsa::input]
-    fn module_id(&self, key: ()) -> ModuleId;
+pub trait IRDatabase: ParserDatabase + LoweringT + LoweringCtxt + ErrorReporting {
     fn lower_module(&self, module_id: ModuleId) -> ir::Module;
-    fn lower_item(&self, item: ast::Item) -> DefId;
-    fn lower_expr(&self, expr: ast::Expr) -> ExprId;
-    fn lower_fn(&self, fn_def: ast::FnDef) -> DefId;
-    fn lower_import(&self, fn_def: ast::Import) -> DefId;
-    fn lower_stmt(&self, stmt: ast::Stmt) -> StmtId;
-    fn lower_block(&self, block: ast::Block) -> ir::Block;
-    fn lower_local(&self, local: ast::Local) -> LocalId;
     #[salsa::interned]
     fn intern_def(&self, def: ir::Def) -> DefId;
     #[salsa::interned]
@@ -87,126 +287,7 @@ pub trait IRDatabase: ParserDatabase + LoweringT + LoweringCtxt {
     fn intern_span(&self, span: syntax::Span) -> SpanId;
 }
 
-/// Resolve an import and get a reference to the DefId for the import(s)
-/// that this import is using.
-fn lower_import(db: &impl IRDatabase, import: ast::Import) -> DefId {
-    // Get the path for the import
-    // Now we need to normalize this path
-    let full_path = import.resolve(db);
-    let module_id = db.intern_module_path(full_path);
-    let hir = db.lower_module(module_id);
-    println!("lowering import {:?}", hir);
-    DefId(0)
-}
-
 fn lower_module(db: &impl IRDatabase, id: ModuleId) -> ir::Module {
     let mut lowering_ctx = LoweringContext::new(db);
     lowering_ctx.lower_module(id)
-}
-
-fn lower_item(db: &impl IRDatabase, item: ast::Item) -> DefId {
-    use ast::ItemKind;
-    match item.kind {
-        ItemKind::Fn(fn_def) => db.lower_fn(fn_def),
-        ItemKind::Import(import) => db.lower_import(*import),
-        _ => unreachable!("Unknown type"),
-    }
-}
-
-fn lower_fn(db: &impl IRDatabase, fn_def: ast::FnDef) -> DefId {
-    let ast::FnDef { body, .. } = fn_def;
-    let body = db.lower_block(*body);
-    let kind = ir::DefKind::Func { body };
-    db.intern_def(ir::Def { kind })
-}
-
-fn lower_stmt(db: &impl IRDatabase, stmt: ast::Stmt) -> StmtId {
-    use ast::{Stmt, StmtKind};
-    let Stmt { kind, .. } = stmt;
-    db.intern_stmt(match kind {
-        // Expression statement
-        StmtKind::Expr(expr) => {
-            let expr_id = db.lower_expr(*expr);
-            ir::Stmt::Expr(expr_id)
-        }
-        // Local definitions
-        StmtKind::Local(local) => {
-            let local_id = db.lower_local(*local);
-            ir::Stmt::Local(local_id)
-        }
-        _ => {
-            todo!("Unknown statemetn");
-        }
-    })
-}
-
-/// When we lower a local definition we also register that name
-/// in the current scope so we can do name resolution while lowering.
-fn lower_local(db: &impl IRDatabase, local: ast::Local) -> LocalId {
-    use ast::{Local, LocalPattern};
-    let Local { name, init, .. } = local;
-    let init = if let Some(expr) = init {
-        let expr_id = db.lower_expr(*expr);
-        Some(expr_id)
-    } else {
-        None
-    };
-    // TODO need to store this in some scope map?
-    let local = ir::Local { init };
-    let id = db.intern_local(local);
-    match name {
-        LocalPattern::Ident(ident, _span) => {
-            db.define(ident, id);
-            // ...
-        }
-        _ => {
-            todo!("Destructuring not supported.");
-        }
-    };
-    id
-}
-
-fn lower_block(db: &impl IRDatabase, block: ast::Block) -> ir::Block {
-    let mut stmts = vec![];
-    println!("new scope");
-    for stmt in block.stmts {
-        let stmt_id = db.lower_stmt(stmt);
-        stmts.push(stmt_id);
-        // ...
-    }
-    println!("end scope");
-    ir::Block(stmts)
-}
-
-fn lower_expr(db: &impl IRDatabase, expr: ast::Expr) -> ExprId {
-    use ast::ExprKind;
-    let expr = match expr.kind {
-        ExprKind::Unary(op, expr) => {
-            let id = db.lower_expr(*expr);
-            ir::Expr::Unary(op, id)
-            // ...
-        }
-        ExprKind::Binary(op, left, right) => {
-            let lhs = db.lower_expr(*left);
-            let rhs = db.lower_expr(*right);
-            ir::Expr::Binary { lhs, rhs, op }
-        }
-        ExprKind::Lit(lit) => ir::Expr::Literal(match lit.kind {
-            ast::LitKind::Bool(symbol) => ir::Literal::Bool(symbol.into()),
-            ast::LitKind::Str(symbol) => ir::Literal::String(symbol.into()),
-            ast::LitKind::Number(symbol) => ir::Literal::Number(symbol.into()),
-        }),
-        // Reference some variable
-        ExprKind::Reference(ident) => {
-            // We need to resolve which
-            println!("referencing {:?}", ident);
-            panic!("no");
-        }
-        _ => {
-            todo!("");
-        }
-    };
-    let id = db.intern_expr(expr.clone());
-    println!("expr {:?} {:?}", expr, id);
-    id
 }

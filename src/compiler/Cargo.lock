@@ -98,6 +98,7 @@ dependencies = [
  "codespan 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "codespan-reporting 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "diagnostics 0.1.0",
+ "fxhash 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "generational-arena 0.2.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "id-arena 2.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "lexer 0.1.0",

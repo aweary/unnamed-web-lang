@@ -5,6 +5,7 @@ use crate::lowering::IRDatabase;
 use parser::ParserDatabase;
 use salsa;
 
+use crate::ir::*;
 use source::ModuleId;
 use syntax::{ast, visitor::Visitor};
 // use crate::ir::{self, DefId};
@@ -42,14 +43,90 @@ where
     }
 
     pub fn codegen_module(mut self, module_id: ModuleId) -> String {
+        self.add_comment("Compiled by WebScript");
         let mut module = self.db.lower_module(module_id);
         for def_id in module.items {
             let def = self.db.lookup_intern_def(def_id);
-            println!("item! {:?}", def);
+            self.codegen_def(def);
         }
-        self.add_comment("Compiled by WebScript");
-        // self.visit_mod(&mut module);
         self.code
+    }
+
+    fn codegen_def(&mut self, def: Def) {
+        match def.kind {
+            DefKind::Func { name, params, body } => {
+                self.push("function ");
+                self.push(name.to_str());
+                self.push("(");
+                for (i, param) in params.into_iter().enumerate() {
+                    if i > 0 {
+                        self.push(",");
+                    }
+                    self.push(param.name().as_str());
+                }
+                self.push(")");
+                self.codegen_fn_body(body);
+                // ...
+            }
+            _ => {
+                todo!();
+            }
+        };
+    }
+
+    fn codegen_fn_body(&mut self, body: Block) {
+        self.push("{\n");
+        for stmt_id in body.0 {
+            self.codegen_stmt(stmt_id);
+        }
+        self.push("}\n");
+    }
+
+    fn codegen_stmt(&mut self, id: StmtId) {
+        let stmt = self.db.lookup_intern_stmt(id);
+        match stmt.kind {
+            StmtKind::Return(expr_id) => {
+                self.push("return ");
+                self.codegen_expr(expr_id);
+            }
+            StmtKind::Local(local_id) => {
+                let local = self.db.lookup_intern_local(local_id);
+                let name = local.name.as_str();
+                self.push("let ");
+                // TODO renaming, minification
+                self.push(name);
+                if let Some(expr_id) = local.init {
+                    self.push(" = ");
+                    self.codegen_expr(expr_id);
+                }
+                // self.push(local);
+            }
+            _ => {
+                // todo!();
+            }
+        };
+        self.push(";\n");
+    }
+
+    fn codegen_expr(&mut self, id: ExprId) {
+        let expr = self.db.lookup_intern_expr(id);
+        match expr.kind {
+            ExprKind::Literal(lit) => {
+                self.push(&format!("{}", lit));
+            }
+            ExprKind::Reference(reference) => {
+                match reference {
+                    Reference::Local(local_id) => {
+                        // TODO check if we should inline this?
+                        let local = self.db.lookup_intern_local(local_id);
+                        let name : syntax::symbol::Symbol = local.name.into();
+                        self.push(name.as_str());
+                    }
+                    _ => (),
+                };
+            }
+            _ => (),
+        };
     }
     // ...
 }
@@ -63,7 +140,7 @@ where
         let name = def.name.to_str();
         self.push(&format!("function {}(", name));
         for param in def.params.clone().into_iter() {
-            self.push(param.name());
+            self.push(param.name().as_str());
             self.push(",");
         }
         self.push(") { ... }\n");

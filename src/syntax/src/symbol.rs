@@ -26,7 +26,7 @@ impl Symbol {
 // Symbols are used to represent all literal values in the AST,
 // which needs to be converted to the correct representation in
 // the IR. This is a somewhat-unsafe way to do it via Symbol itself.
-// The Ident AST struct implements a safer conversion on top of this. 
+// The Ident AST struct implements a safer conversion on top of this.
 macro_rules! symbol_into {
     ($into:ident) => {
         impl Into<$into> for Symbol {
