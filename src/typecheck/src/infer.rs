@@ -9,7 +9,7 @@ use std::iter::FromIterator;
 
 pub type CheckResult<T> = std::result::Result<T, (String, Span)>;
 
-fn check(ctx: &mut TyContext, expr: &Expr, ty: &Ty) -> CheckResult<()> {
+pub fn check(ctx: &mut TyContext, expr: &Expr, ty: &Ty) -> CheckResult<()> {
     match (&expr.kind, ty) {
         // Check a literal against a literal type.
         (ExprKind::Lit(lit), Ty::Literal(_)) => {

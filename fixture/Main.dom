@@ -1,9 +1,10 @@
-fn Button(label: String) : View {
-  if label == "Brandon" {
-    let a = 20;
-  }
-  let first_name = "Brandon";
-  let last_name = "Dail";
-  let name = first_name;
-  return name;
+import {add} from "./foo.dom"
+
+
+export component Button(label: string) {
+  return (
+    <button>
+      {label}
+    </button>
+  );
 }

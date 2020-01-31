@@ -1,166 +1,190 @@
-/// WebScript uses an IR that only slightly diverges from the AST.
-/// The process of lowering the AST to the IR does the name resolution
-/// making it easier to typecheck.
-/// 
-/// The IR exists with the express purpose of allowing:
-/// 1. Name resolution
-/// 2. Type checking
-/// 3. Compiler optimazations
-/// ...
-use salsa::{self, InternId, InternKey};
-use syntax::{FileId, Span};
-use syntax::symbol::Symbol;
+use id_arena::Id;
+use crate::ctx::Context;
+use syntax::{Span, symbol::Symbol};
 
-// We reuse these from the AST
-use std::fmt;
-pub use syntax::ast::{BinOp, Ident, ParamType, UnOp};
+// Things we reuse from the AST
+pub use syntax::ast::{BinOp, Ident};
 
-// Uniquely identifies a module
-// The file that defines the module. Currently modules can only
-// be defined by creating a new file, so ModuleId is technically
-// just a light wrapper around FileId.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-struct ModuleId(FileId);
+/// Uniquely identifies a module in the module graph IR
+pub type ModuleId = Id<Module>;
 
-/// Uniquely identifies a function definition in a module
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-struct FunctionId {
-    module_id: ModuleId,
-}
+/// Uniquely identifies a top-level item in a module
+pub type ItemId = Id<Item>;
 
-/// Uniquely identifies a component definition in a module
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-struct ComponentId {
-    module_id: ModuleId,
-}
-
-/// Uniquely identifies a type definition in a module
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-struct TypeId {
-    module_id: ModuleId,
-}
-
-/// Uniquely identifies a type definition in a module
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-struct EnumId {
-    module_id: ModuleId,
-}
-
-/// Macro for creating an internable ID
-macro_rules! intern_id {
-    ($name: ident) => {
-        #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-        pub struct $name(pub u32);
-
-        impl InternKey for $name {
-            fn from_intern_id(v: InternId) -> Self {
-                $name(v.as_u32())
-            }
-            fn as_intern_id(&self) -> InternId {
-                InternId::from(self.0)
-            }
-        }
-    };
-}
-
-intern_id!(SpanId);
-intern_id!(ExprId);
-intern_id!(DefId);
-intern_id!(StmtId);
-intern_id!(LocalId);
-
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+/// An individual module. The module system currently only allows
+/// you to define a new module by creating a new file, so this maps
+/// 1:1 to a file.
+#[derive(Debug)]
 pub struct Module {
-    pub items: Vec<DefId>,
+    pub items: Vec<ItemId>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum DefKind {
-    Func {
-        body: Block,
-        name: Ident,
-        params: ParamType,
-    },
-    Type,
-    Enum,
-    Import,
+/// A top-level item contained by a module. 
+#[derive(Debug)]
+pub struct Item {
+    /// The type of item
+    pub kind: ItemKind,
+    /// The visibility of the item, i.e., is it exported from the module?
+    pub visibility: ItemVisibility,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct Def {
-    pub kind: DefKind,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum Literal {
-    String(String),
-    Bool(bool),
-    Number(u32),
-}
-
-impl fmt::Display for Literal {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Literal::String(value) => write!(f, "{}", value),
-            Literal::Bool(value) => write!(f, "{}", value),
-            Literal::Number(value) => write!(f, "{}", value),
+impl Item {
+    pub fn name(&self, ctx: &Context) -> Symbol {
+        match &self.kind {
+            ItemKind::Func(func_def_id) => {
+                let func_def = &ctx.func_def_arena[*func_def_id];
+                func_def.name.name.clone()
+            }
+            _ => Symbol::intern("IDK"),
         }
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct Block(pub Vec<StmtId>);
-
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct Expr {
-    pub kind: ExprKind,
-    pub span: Span,
+#[derive(Debug)]
+pub enum ItemKind {
+    /// An import from another module
+    Import,
+    /// A function definition
+    Func(FuncDefId),
+    /// A component definition
+    Component(ComponentDefId),
+    /// An enum definition
+    Enum(EnumDefId),
+    /// A type definition
+    Type(TypeDefId),
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum Reference {
-    Local(LocalId),
-    Param,
+#[derive(Debug, PartialEq, Eq)]
+pub enum ItemVisibility {
+    Private,
+    Public,
 }
 
-
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum ExprKind {
-    /// Literal expression
-    Literal(Literal),
-    /// Binary expression
-    Binary {
-        lhs: ExprId,
-        rhs: ExprId,
-        op: BinOp,
-    },
-    // Array literal expression
-    Array(Vec<ExprId>),
-    // Unary expression
-    Unary(UnOp, ExprId),
-    // Reference to some local
-    Reference(Reference),
-    // Block expression
-    Block(Block),
-    // If expression
-    If(ExprId, Block),
+/// A function definition
+#[derive(Debug)]
+pub struct FuncDef {
+    pub name: Ident,
+    pub block: BlockId,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+/// Unique ID pointing to a function definition
+pub type FuncDefId = Id<FuncDef>;
+
+pub struct ComponentDef {
+    pub name: Ident,
+    pub block: BlockId,
+}
+
+pub type ComponentDefId = Id<ComponentDef>;
+
+
+/// A block of code, denoted by a pair of curly braces in the source code
+#[derive(Debug)]
+pub struct Block {
+    pub stmts: Vec<StmtId>,
+}
+
+/// Unique ID pointing to a block
+pub type BlockId = Id<Block>;
+
+#[derive(Debug)]
 pub struct Stmt {
-    pub kind: StmtKind,
-    pub span: Span,
+    pub kind: StmtKind
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Debug)]
 pub enum StmtKind {
     Expr(ExprId),
     Local(LocalId),
     Return(ExprId),
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Debug)]
 pub struct Local {
-    pub name: Symbol,
     pub init: Option<ExprId>,
 }
+
+pub type LocalId = Id<Local>;
+
+/// Unique ID pointing to a stmt
+pub type StmtId = Id<Stmt>;
+
+#[derive(Debug)]
+pub struct Expr {
+    pub kind: ExprKind,
+}
+
+#[derive(Debug)]
+pub enum ExprKind {
+    /// Reference to some named value
+    Reference(Reference),
+    /// Inline literal value
+    Literal(Literal),
+    /// Binary expression
+    Binary(BinOp, ExprId, ExprId),
+    /// Call expression
+    Call { callee: ExprId, arguments: Vec<ExprId> },
+    /// If expression
+    If(IfExpr),
+    /// Template expression
+    Template(TemplateId),
+}
+
+#[derive(Debug)]
+pub enum IfExprAlt {
+    Block(BlockId),
+    If(Box<IfExpr>),
+}
+
+#[derive(Debug)]
+pub struct IfExpr {
+    pub condition: ExprId,
+    pub consequent: BlockId,
+    pub alt: Option<IfExprAlt> 
+}
+
+
+#[derive(Debug)]
+pub enum Literal {
+    Number(Symbol),
+    String(Symbol),
+    Boolean(Symbol),
+}
+
+
+#[derive(Debug, Clone)]
+pub struct Reference {
+    pub kind: ReferenceKind,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub enum ReferenceKind {
+    Item(ItemId),
+    Local(LocalId),
+    // TODO
+    Param,
+}
+
+
+#[derive(Debug, Clone)]
+pub struct Template {}
+
+pub type TemplateId = Id<Template>;
+
+/// Unique ID pointing to an expression
+pub type ExprId = Id<Expr>;
+
+/// An enum definition
+#[derive(Debug)]
+pub struct EnumDef {}
+
+/// Unique ID pointing to an enum definition
+pub type EnumDefId = Id<EnumDef>;
+
+/// A type definition
+#[derive(Debug)]
+pub struct TypeDef {}
+
+/// Unique ID pointing to an enum definition
+pub type TypeDefId = Id<TypeDef>;

@@ -55,8 +55,6 @@ pub struct Mod {
 
 #[derive(Hash, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub struct Item {
-    pub ident: Ident,
-    pub id: NodeId,
     pub kind: ItemKind,
     pub span: Span,
 }
@@ -71,17 +69,21 @@ pub enum ItemKind {
     ///
     /// e.g., `fn add(a: number, b: number) : number { ... }
     Fn(FnDef),
+    /// A component definition
+    Component(ComponentDef),
     /// An enum definition
     Enum(EnumDef, Option<Generics>),
     /// Type definition for records
     Type(Box<TypeDef>),
     /// Import declaration
     Import(Box<Import>),
+    /// Exported declaration
+    Export(Box<Item>),
 }
 
 #[derive(Hash, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub struct Import {
-    pub name: Ident,
+    pub specifiers: Vec<ImportSpecifier>,
     pub span: Span,
     pub path: ImportPath,
 }
@@ -90,6 +92,21 @@ impl Import {
     pub fn to_path_buf(&self) -> PathBuf {
         self.clone().path.path
     }
+
+    pub fn resolve(&self, base: &PathBuf) -> PathBuf {
+        use path_dedot::*;
+        let path = &self.path.path;
+        base.join(path).parse_dot().unwrap()
+    }
+}
+
+#[derive(Hash, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+pub struct ImportSpecifier {
+    // The name of the item being imported
+    pub ident: Ident,
+    // An optional alias using the `{A as B}` syntax
+    pub alias: Option<Ident>,
+    pub span: Span,
 }
 
 #[derive(Hash, Eq, PartialEq, Clone, Serialize, Deserialize)]
@@ -154,13 +171,25 @@ pub struct FnDef {
 }
 
 #[derive(Hash, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+pub struct ComponentDef {
+    pub name: Ident,
+    pub params: ParamType,
+    pub body: Box<Block>,
+    pub return_ty: Ty,
+    pub generics: Option<Generics>,
+    pub span: Span,
+}
+
+#[derive(Hash, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub struct EnumDef {
+    pub name: Ident,
     pub variants: Vec<Variant>,
 }
 
 #[derive(Hash, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub struct Variant {
     pub ident: Ident,
+    pub value: Option<Expr>,
     pub id: NodeId,
     pub span: Span,
     // ...

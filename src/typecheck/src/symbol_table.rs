@@ -1,7 +1,6 @@
 use super::Ty;
 
 use std::collections::HashMap;
-use syntax::ast::*;
 use syntax::symbol::Symbol;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

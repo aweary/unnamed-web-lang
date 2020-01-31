@@ -1,9 +1,9 @@
 #![warn(clippy::all)]
+#![allow(dead_code)]
 
-mod codegen;
 mod compiler;
 mod ir;
 mod lowering;
-mod intravisit;
+mod ctx;
 
 pub use compiler::*;

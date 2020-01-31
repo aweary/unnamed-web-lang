@@ -9,7 +9,39 @@ use syntax::symbol::Symbol;
 
 use std::collections::VecDeque;
 use std::iter::Iterator;
-use ucd::Codepoint;
+
+trait IdentChar {
+    fn is_id_char(&self) -> bool;
+    fn is_id_start(&self) -> bool;
+    fn is_id_continue(&self) -> bool;
+    fn is_whitespace(&self) -> bool;
+}
+
+impl IdentChar for char {
+    fn is_id_char(&self) -> bool {
+        self.is_id_start() || self.is_id_continue()
+    }
+
+    fn is_id_start(&self) -> bool {
+        use ucd::Codepoint;
+        match *self {
+            ch if Codepoint::is_id_start(ch) => true,
+            ch if Codepoint::is_id_start_other(ch) => true,
+            '$' | '_' => true,
+            _ => false,
+        }
+    }
+
+    fn is_id_continue(&self) -> bool {
+        use ucd::Codepoint;
+        Codepoint::is_id_continue(*self) || Codepoint::is_id_continue_other(*self)
+    }
+
+    fn is_whitespace(&self) -> bool {
+        use ucd::Codepoint;
+        Codepoint::is_whitespace(*self)
+    }
+}
 
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub enum LexMode {
@@ -23,7 +55,7 @@ pub struct Lexer<'a> {
     pub source: &'a str,
     pub mode: LexMode,
     pub lookahead: VecDeque<Token>,
-    file_id: FileId,
+    pub file_id: FileId,
 }
 
 macro_rules! symbol {
@@ -38,9 +70,9 @@ impl<'a> Lexer<'a> {
         Lexer {
             reader,
             source,
-            file_id,
             mode: LexMode::Normal,
             lookahead: VecDeque::with_capacity(4),
+            file_id,
         }
     }
 
@@ -84,7 +116,7 @@ impl<'a> Lexer<'a> {
     }
 
     fn skip_whitespace(&mut self) {
-        self.skip_while(Codepoint::is_whitespace);
+        self.skip_while(|ch| ch.is_whitespace());
     }
 
     // Read a token containing a single character
@@ -159,9 +191,10 @@ impl<'a> Lexer<'a> {
      * or a reserved word (keyword).
      */
     fn ident(&mut self) -> Result<Token> {
+        use TokenKind::{Ident, Literal, Reserved};
         let span_start = self.start_span();
         let start = self.reader.offset();
-        self.skip_while(|ch| Codepoint::is_id_start(ch) || Codepoint::is_id_continue(ch));
+        self.skip_while(|ch| ch.is_id_char());
         let end = self.reader.offset();
         let span = self.reader.end(span_start);
         let ident = &self.source[start.to_usize()..end.to_usize()];
@@ -172,25 +205,28 @@ impl<'a> Lexer<'a> {
                     kind: LitKind::Bool,
                     symbol: Symbol::intern(ident),
                 };
-                TokenKind::Literal(lit)
+                Literal(lit)
             }
-            "let" | "state" => TokenKind::Reserved(Let),
-            "function" | "fn" | "func" => TokenKind::Reserved(Func),
-            "component" => TokenKind::Reserved(Component),
-            "return" => TokenKind::Reserved(Return),
-            "if" => TokenKind::Reserved(If),
-            "else" => TokenKind::Reserved(Else),
-            "match" => TokenKind::Reserved(Match),
-            "import" => TokenKind::Reserved(Import),
-            "from" => TokenKind::Reserved(ImportFrom),
-            "while" => TokenKind::Reserved(While),
-            "enum" => TokenKind::Reserved(Enum),
-            "type" => TokenKind::Reserved(Type),
-            "for" => TokenKind::Reserved(For),
-            "in" => TokenKind::Reserved(In),
-            "try" => TokenKind::Reserved(Try),
-            "catch" => TokenKind::Reserved(Catch),
-            _ => TokenKind::Ident(Symbol::intern(ident)),
+            "let" | "state" => Reserved(Let),
+            "function" | "fn" | "func" => Reserved(Func),
+            "component" => Reserved(Component),
+            "return" => Reserved(Return),
+            "if" => Reserved(If),
+            "else" => Reserved(Else),
+            "match" => Reserved(Match),
+            "import" => Reserved(Import),
+            "from" => Reserved(ImportFrom),
+            "while" => Reserved(While),
+            "enum" => Reserved(Enum),
+            "type" => Reserved(Type),
+            "for" => Reserved(For),
+            "in" => Reserved(In),
+            "try" => Reserved(Try),
+            "catch" => Reserved(Catch),
+            // Allow `export` for now, not sure what keyword to use
+            "pub" | "export" => Reserved(Pub),
+            "as" => Reserved(As),
+            _ => Ident(Symbol::intern(ident)),
         };
         Ok(token(kind, span))
     }
@@ -298,10 +334,9 @@ impl<'a> Lexer<'a> {
         if self.mode == LexMode::TemplateText {
             return self.next_jsx_token();
         }
-        // Skip comments
         match self.peek_char() {
             Some(&ch) if ch.is_digit(10) => self.number(),
-            Some(&ch) if Codepoint::is_id_start(ch) => self.ident(),
+            Some(&ch) if ch.is_id_start() => self.ident(),
             Some('"') => self.string(),
             Some('=') => self.equals(),
             Some('+') => self.plus(),
@@ -327,7 +362,6 @@ impl<'a> Lexer<'a> {
             Some('-') => self.punc(Minus, '-'),
             Some('*') => self.punc(Mul, '*'),
             Some(&ch) => {
-                println!("unexpected char {:?}", ch);
                 let span_start = self.start_span();
                 self.eat(ch);
                 let span = self.end_span(span_start);

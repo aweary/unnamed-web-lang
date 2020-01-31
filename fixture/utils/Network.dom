@@ -1,3 +1,0 @@
-fn connect(address: String) : Unit {
-  return b;
-}

@@ -1,99 +1,37 @@
-use parser::{ErrorReporting, ParserDatabase, ParserDatabaseStorage};
+use crate::ctx::Context;
+
+use parser::Parser;
 // TODO import these from diagnostics
-use crate::codegen::{CodegenDatabase, CodegenDatabaseStorage};
-use crate::ir::SpanId;
-use crate::lowering::{IRDatabase, IRDatabaseStorage, LoweringCtxt, LoweringT};
-use codespan_reporting::term::emit;
-use codespan_reporting::term::termcolor::{ColorChoice, StandardStream};
-use diagnostics::Diagnostic;
+use diagnostics::{FileId, ParseResult};
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
 
-use codespan::Files;
-use log::{self, debug};
-use salsa;
-use source::*;
-use std::cell::Cell;
+use crate::lowering::{lower_module};
 
-/// Stores all data necsesary for parsing
-// struct CompilerRoot {
+use syntax::ast::*;
 
-// }
 
-#[salsa::database(
-    SourceDatabase,
-    ParserDatabaseStorage,
-    IRDatabaseStorage,
-    CodegenDatabaseStorage
-)]
-#[derive(Default)]
-pub struct CompilerDatabase {
-    runtime: salsa::Runtime<CompilerDatabase>,
-    current_module_id: Cell<Option<ModuleId>>,
-}
-
-impl LoweringCtxt for CompilerDatabase {
-    fn set_current_module_id(&self, module_id: ModuleId) {
-        self.current_module_id.set(Some(module_id))
-    }
-
-    fn get_current_module_id(&self) -> ModuleId {
-        self.current_module_id.get().unwrap()
-    }
-}
-
-// TODO this should be moved out somewhere...
-impl LoweringT for CompilerDatabase {
-    fn map_id_to_span(&self, id: impl salsa::InternKey, span_id: SpanId) {
-        // ...
-    }
-
-    fn define(&self, ident: syntax::ast::Ident, id: crate::ir::LocalId) {
-        println!("Mapping {:?} to {:?}", ident, id);
-        // ...
-    }
-}
-
-/// Report errors gracefully
-/// TODO ErrorReporting should be part of the diagnostics crate
-impl ErrorReporting for CompilerDatabase {
-    fn report_diagnostic(&self, diagnostic: Diagnostic) {
-        let files_db = self.files(());
-        let files = files_db.lock().unwrap();
-        let writer = StandardStream::stderr(ColorChoice::Auto);
-        let config = codespan_reporting::term::Config::default();
-        emit(&mut writer.lock(), &config, &files, &diagnostic).unwrap();
-    }
-}
-
-impl salsa::Database for CompilerDatabase {
-    fn salsa_runtime(&self) -> &salsa::Runtime<Self> {
-        &self.runtime
-    }
-
-    fn salsa_runtime_mut(&mut self) -> &mut salsa::Runtime<Self> {
-        &mut self.runtime
-    }
-}
-
-impl CompilerDatabase {
-    pub fn new() -> Self {
-        // TODO move log::init to a more appropriate place
-        log::init();
-        let mut db = CompilerDatabase::default();
-        db.set_files((), Arc::new(Mutex::new(Files::new())));
-        db
-    }
+fn parse_module_from_path(ctx: &mut Context, path: &PathBuf) -> ParseResult<(Mod, FileId)> {
+    let file_id = ctx.add_file(path).unwrap();
+    let source = ctx.resolve_file(file_id);
+    // TODO maybe parser should just get the file_id and ctx reference?
+    let mut parser = Parser::new(source, file_id);
+    Ok((parser.parse_module()?, file_id))
 }
 
 /// Run the compiler, pointing at a directory. We expect
 /// to resolve {dir}/main.dom as the entrypoint.  
 pub fn run_from_source_root(path: PathBuf) {
+    // Resolve the entry point path, which we currently assume is main.dom
     let entry_point = path.join("main.dom");
-    debug!("run_from_source_root {:?}", entry_point);
-    let db = CompilerDatabase::new();
-    let module_id = db.intern_module_path(entry_point);
-    db.set_current_module_id(module_id);
-    let code = db.codegen_module(module_id);
-    println!("{}", code);
+    println!("run_from_source_root {:?}", entry_point);
+    let mut ctx = Context::new();
+    match lower_module(&mut ctx, &entry_point) {
+        Ok(_) => {
+            // ...
+        }
+        Err(diagnostic) => {
+            // ...
+            ctx.emit_diagnostic(diagnostic);
+        }
+    };
 }

@@ -12,47 +12,38 @@ use std::path::PathBuf;
 use diagnostics::ParseResult as Result;
 use diagnostics::{Diagnostic, FileId, Label};
 
-use crate::db::ParserDatabase;
-
 const DUMMY_NODE_ID: ast::NodeId = ast::NodeId(0);
 
-pub struct Parser<'s, T> {
-    db: &'s T,
+pub struct Parser<'s> {
+    /// The tokenizer/lexer for this Parser instance
     tokenizer: Tokenizer<'s>,
+    /// The span of the current token
     span: Span,
+    /// The file ID for the file being parsed. Used for diagnostic reporting
     file_id: FileId,
 }
 
 /// TODO move to diagnostics crate
 trait DiagnosticReporting {
     fn fatal(&self, message: &str, label: &str, span: Span) -> Diagnostic;
-    fn warn(&self, message: &str, label: &str, span: Span);
 }
 
-impl<T> DiagnosticReporting for Parser<'_, T> {
+impl DiagnosticReporting for Parser<'_> {
     fn fatal(&self, message: &str, label: &str, span: Span) -> Diagnostic {
         Diagnostic::new_error(message, Label::new(self.file_id, span, label))
     }
-
-    /// Emits a warning without buffering, only use if you're absolutely sure that
-    /// a warning should be emitted now without any additional context.
-    fn warn(&self, message: &str, label: &str, span: Span) {
-        // let warning = Diagnostic::new_warning(message, Label::new(file_id, span, label));
-        // self.emit_diagnostic(warning);
-    }
 }
 
-impl<T: ParserDatabase> Parser<'_, T> {
-    pub fn new<'a>(source: &'a str, file_id: FileId, db: &'a T) -> Parser<'a, T> {
+impl Parser<'_> {
+    pub fn new<'a>(source: &'a str, file_id: FileId) -> Parser<'a> {
         // Create a tokenzier/lexer
         let tokenizer = Tokenizer::new(&source, file_id);
         // Start with a dummy span
         let span = Span::new(0, 0);
         Parser {
-            file_id,
-            db,
             tokenizer,
             span,
+            file_id,
         }
     }
 
@@ -79,13 +70,20 @@ impl<T: ParserDatabase> Parser<'_, T> {
 
     fn expect(&mut self, kind: TokenKind) -> Result<Token> {
         // TODO don't unwrap here.
+        let prev_span = self.span;
         let token = self.next_token().unwrap();
         if token.kind != kind {
-            Err(self.fatal(
-                "Unexpceted token",
-                &format!("Expected {} but found {}", kind, token.kind),
-                token.span,
-            ))
+            Err(self
+                .fatal(
+                    "Unexpceted token",
+                    &format!("Expected {} after this token", kind),
+                    prev_span,
+                )
+                .with_secondary_labels(vec![Label::new(
+                    self.file_id,
+                    self.span,
+                    &format!("But we found this instead"),
+                )]))
         } else {
             Ok(token)
         }
@@ -137,12 +135,24 @@ impl<T: ParserDatabase> Parser<'_, T> {
         match self.peek()?.kind {
             // Function definition
             TokenKind::Reserved(Keyword::Func) => self.parse_fn(),
+            // Component definition
+            TokenKind::Reserved(Keyword::Component) => self.parse_component(),
             // Enum definition
             TokenKind::Reserved(Keyword::Enum) => self.parse_enum(),
             // Type definition
             TokenKind::Reserved(Keyword::Type) => self.parse_type(),
             // Import declaration
             TokenKind::Reserved(Keyword::Import) => self.import(),
+            // Item declaration, but public
+            TokenKind::Reserved(Keyword::Pub) => {
+                self.expect(TokenKind::Reserved(Keyword::Pub))?;
+                let lo = self.span;
+                let item = self.parse_item()?;
+                Ok(ast::Item {
+                    span: lo.merge(item.span),
+                    kind: ast::ItemKind::Export(Box::new(item)),
+                })
+            }
             // Everything else
             _ => {
                 let token = self.next_token().unwrap();
@@ -163,16 +173,82 @@ impl<T: ParserDatabase> Parser<'_, T> {
         use TokenKind::Reserved;
         self.expect(Reserved(Import))?;
         let lo = self.span;
-        let name = self.ident()?;
+        let specifiers = self.import_specifiers()?;
         self.expect(Reserved(ImportFrom))?;
         let path = self.import_path()?;
         let span = lo.merge(path.span);
         Ok(ast::Item {
-            id: DUMMY_NODE_ID,
-            ident: name.clone(),
             span,
-            kind: ast::ItemKind::Import(Box::new(ast::Import { name, span, path })),
+            kind: ast::ItemKind::Import(Box::new(ast::Import {
+                specifiers,
+                span,
+                path,
+            })),
         })
+    }
+
+    fn import_specifiers(&mut self) -> Result<Vec<ast::ImportSpecifier>> {
+        let mut specifiers = vec![];
+        // We don't support default imports/exports, so always expect braces
+        self.expect(TokenKind::LCurlyBrace)?;
+        loop {
+            match self.peek()?.kind {
+                // Specifier
+                TokenKind::Ident(_) => {
+                    let ident = self.ident()?;
+                    let lo = self.span;
+                    let mut alias = None;
+                    // If the next token is `as`, we have an alias
+                    if let TokenKind::Reserved(Keyword::As) = self.peek()?.kind {
+                        self.expect(TokenKind::Reserved(Keyword::As))?;
+                        alias = Some(self.ident()?);
+                    }
+
+                    let specifier = ast::ImportSpecifier {
+                        span: lo.merge(self.span),
+                        ident,
+                        alias,
+                    };
+                    specifiers.push(specifier);
+                    // Expect either a comma (meaning there's another specifier) or
+                    // a right curly brace (meaning the list has ended)
+                    match self.peek()?.kind {
+                        // Either are fine, skip
+                        TokenKind::Comma => {
+                            self.eat(TokenKind::Comma)?;
+                        }
+                        TokenKind::RCurlyBrace => {
+                            break;
+                        }
+                        // Fatal
+                        _ => {
+                            let token = self.next_token().unwrap();
+                            return Err(self.fatal(
+                                "Unexpected token",
+                                &format!("Expexcted a comma, found {:?}", token.kind),
+                                token.span,
+                            ));
+                        }
+                    }
+                }
+                // End of specifiers, break out
+                TokenKind::RCurlyBrace => {
+                    break;
+                }
+                // All other tokens are syntax errors
+                _ => {
+                    let token = self.next_token().unwrap();
+                    return Err(self.fatal(
+                        "Unexpected token",
+                        &format!("Expexcted an identifier, found {:?}", token.kind),
+                        token.span,
+                    ));
+                }
+            }
+        }
+        // ...
+        self.expect(TokenKind::RCurlyBrace)?;
+        Ok(specifiers)
     }
 
     fn import_path(&mut self) -> Result<ast::ImportPath> {
@@ -219,21 +295,19 @@ impl<T: ParserDatabase> Parser<'_, T> {
         let span = lo.merge(self.span);
         let def = ast::TypeDef {
             // TODO don't clone?
-            name: name.clone(),
+            name,
             span,
             generics,
             properties,
         };
         Ok(ast::Item {
-            ident: name.clone(),
-            id: DUMMY_NODE_ID,
             kind: ast::ItemKind::Type(Box::new(def)),
             span,
         })
     }
 
     fn parse_enum(&mut self) -> Result<ast::Item> {
-        use TokenKind::{Comma, Ident, LCurlyBrace, RCurlyBrace, Reserved};
+        use TokenKind::{Comma, Equals, Ident, LCurlyBrace, RCurlyBrace, Reserved};
         self.expect(Reserved(Keyword::Enum))?;
         let lo = self.span;
         // TODO support polymorphic names, self.type_ident()
@@ -242,33 +316,46 @@ impl<T: ParserDatabase> Parser<'_, T> {
         let mut variants = vec![];
         self.expect(LCurlyBrace)?;
         loop {
-            match self.next_token()?.kind {
-                Ident(symbol) => {
-                    let ident = ast::Ident {
-                        name: symbol,
-                        span: self.span,
+            match self.peek()?.kind {
+                Ident(_) => {
+                    let ident = self.ident()?;
+                    let lo = self.span;
+                    // Enum variants allow initializers to provide runtime values
+                    let value = if self.eat(Equals)? {
+                        // TODO this should not be an arbitrary expression. Should
+                        // be a literal only.
+                        Some(self.expr(Precedence::NONE)?)
+                    } else {
+                        None
                     };
                     let variant = ast::Variant {
                         ident,
+                        value,
+                        span: lo.merge(self.span),
                         id: DUMMY_NODE_ID,
-                        span: self.span,
                     };
                     variants.push(variant);
-                    self.eat(Comma)?;
+                    // Commas are not optional, even trailing ones.
+                    // TODO consider supporting optional trailing commas
+                    self.expect(Comma)?;
                 }
                 RCurlyBrace => {
                     break;
                 }
+                // TODO macro for this repetition
                 _ => {
-                    return Err(self.fatal("Enums are not yet supported", "Unsupported", self.span))
+                    self.next_token()?;
+                    return Err(self.fatal(
+                        "Unexpected token when parsing enum",
+                        "Expected an identifier or }",
+                        self.span,
+                    ));
                 }
             }
         }
         let span = lo.merge(self.span);
         Ok(ast::Item {
-            ident: name,
-            id: DUMMY_NODE_ID,
-            kind: ast::ItemKind::Enum(ast::EnumDef { variants }, generics),
+            kind: ast::ItemKind::Enum(ast::EnumDef { name, variants }, generics),
             span,
         })
     }
@@ -327,6 +414,7 @@ impl<T: ParserDatabase> Parser<'_, T> {
         Ok(ty)
     }
 
+
     fn fn_def(&mut self) -> Result<ast::FnDef> {
         self.expect(TokenKind::Reserved(Keyword::Func))?;
         let lo = self.span;
@@ -357,19 +445,50 @@ impl<T: ParserDatabase> Parser<'_, T> {
         })
     }
 
+    fn component_def(&mut self) -> Result<ast::ComponentDef> {
+        self.expect(TokenKind::Reserved(Keyword::Component))?;
+        let lo = self.span;
+        let name = self.ident()?;
+        let generics = self.generics()?;
+        let params = self.parse_fn_params()?;
+        let return_ty = {
+            if self.eat(TokenKind::Colon)? {
+                self.ty()?
+            } else {
+                // No explicit return type annotation means the function
+                // implicitly returns Unit
+                ast::Ty::Unit
+            }
+        };
+        let body = Box::new(self.block()?);
+        let span = lo.merge(self.span);
+        Ok(ast::ComponentDef {
+            name,
+            params,
+            body,
+            return_ty,
+            generics,
+            span,
+        })
+    }
+
     /// Parse a function definition
     fn parse_fn(&mut self) -> Result<ast::Item> {
         let fn_def = self.fn_def()?;
         let span = fn_def.span;
-        let name = fn_def.name.clone();
         let kind = ast::ItemKind::Fn(fn_def);
         Ok(ast::Item {
             // TODO
-            id: DUMMY_NODE_ID,
             kind,
             span,
-            ident: name,
         })
+    }
+
+    fn parse_component(&mut self) -> Result<ast::Item> {
+        let component_def = self.component_def()?;
+        let span = component_def.span;
+        let kind = ast::ItemKind::Component(component_def);
+        Ok(ast::Item { kind, span})
     }
 
     /// Parse a list of function parameters
@@ -466,19 +585,25 @@ impl<T: ParserDatabase> Parser<'_, T> {
             //         self.span,
             //     ));
             // }
-            let mut stmt = self.stmt()?;
-            if self.eat(TokenKind::Semi)? {
-                // If there was a semicolon, extend the statement's
-                // span to include it.
-                stmt.span = stmt.span.merge(self.span);
-                // Whether a statement has a semicolon is important
-                // for implicit function return and evaluating block expressions
-                stmt.has_semi = true;
-            } else {
-                // Only the last item in a statement list can omit the
-                // semicolon. If this loop runs again, we need to throw
-                // terminated = true;
-            }
+            let stmt = self.stmt()?;
+            // Right now semicolons are REQUIRED after each statement. We
+            // might go back to optional semicolons in some cases, but
+            // we don't have a strict enough heurstic to do it now without
+            // getting us in trouble.
+            self.expect(TokenKind::Semi)?;
+
+            // if self.eat(TokenKind::Semi)? {
+            //     // If there was a semicolon, extend the statement's
+            //     // span to include it.
+            //     stmt.span = stmt.span.merge(self.span);
+            //     // Whether a statement has a semicolon is important
+            //     // for implicit function return and evaluating block expressions
+            //     stmt.has_semi = true;
+            // } else {
+            //     // Only the last item in a statement list can omit the
+            //     // semicolon. If this loop runs again, we need to throw
+            //     // terminated = true;
+            // }
             stmts.push(stmt);
         }
         Ok(stmts)
@@ -541,7 +666,6 @@ impl<T: ParserDatabase> Parser<'_, T> {
                 };
                 let catch_block = self.block()?;
                 let span = lo.merge(self.span);
-                self.warn("trycatch", "try", span);
                 stmt(
                     ast::StmtKind::TryCatch(
                         Box::new(try_block),
@@ -650,8 +774,13 @@ impl<T: ParserDatabase> Parser<'_, T> {
             LBrace => self.array_pattern(),
             // ...
             _ => {
-                self.skip()?;
-                Err(self.fatal("Unknown pattern", "unexpected", self.span))
+                let span = self.span;
+                let token = self.next_token().unwrap();
+                Err(self.fatal(
+                    "Syntax error",
+                    &format!("did not expect {}", token.kind),
+                    span,
+                ))
             }
         }
     }
@@ -1024,7 +1153,7 @@ impl<T: ParserDatabase> Parser<'_, T> {
         let kind = ast::ExprKind::If(ast::IfExpr {
             condition: Box::new(condition),
             block: Box::new(block),
-            alt: None,
+            alt,
         });
         ast::expr(kind, span)
     }
@@ -1135,7 +1264,6 @@ impl<T: ParserDatabase> Parser<'_, T> {
         self.expect(TokenKind::QuestionDot)?;
         let property = self.ident()?;
         let span = obj.span.merge(self.span);
-        self.warn("", "", span);
         ast::expr(ast::ExprKind::Member(Box::new(obj), property), span)
     }
 
@@ -1204,7 +1332,7 @@ fn stmt(kind: ast::StmtKind, span: Span) -> Result<ast::Stmt> {
     })
 }
 
-impl<T: ParserDatabase> Iterator for Parser<'_, T> {
+impl Iterator for Parser<'_> {
     type Item = Token;
     fn next(&mut self) -> Option<Self::Item> {
         match self.next_token() {

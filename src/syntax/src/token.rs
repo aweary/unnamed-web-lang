@@ -180,11 +180,13 @@ pub enum Keyword {
     Func,
     If,
     Import,
+    As,
     ImportFrom,
     Let,
     Match,
     Return,
     While,
+    Pub,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]

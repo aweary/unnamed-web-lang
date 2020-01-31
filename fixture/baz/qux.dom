@@ -1,0 +1,3 @@
+pub function shout(words: string) : unit {
+    // ...
+}

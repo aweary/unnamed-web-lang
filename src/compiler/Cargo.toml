@@ -8,6 +8,7 @@ edition = "2018"
 
 [dependencies]
 # rustc-ap-rustc_data_structures = "631.0.0"
+edit-distance = "2.1.0"
 fxhash = "0.2.1"
 notify = "4.0.13"
 id-arena = "2.2.1"

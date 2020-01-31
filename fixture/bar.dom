@@ -1,0 +1,5 @@
+import {shout} from "./baz/qux.dom";
+
+export fn bar() {
+    // ...
+}
