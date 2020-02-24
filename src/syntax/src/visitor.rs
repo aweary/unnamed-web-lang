@@ -37,7 +37,6 @@ pub trait Visitor: Sized {
         // ...
     }
 
-
     fn visit_param(&mut self, Param { ref mut local, .. }: &mut Param) {
         walk_local_pattern(self, local);
         // ...
@@ -122,7 +121,8 @@ pub fn walk_expr<V: Visitor>(visitor: &mut V, Expr { kind, .. }: &mut Expr) {
     };
 }
 
-pub fn walk_block<V: Visitor>(visitor: &mut V, block: &mut Block) { for stmt in block.stmts.iter_mut() {
+pub fn walk_block<V: Visitor>(visitor: &mut V, block: &mut Block) {
+    for stmt in block.stmts.iter_mut() {
         visitor.visit_stmt(stmt)
     }
 }

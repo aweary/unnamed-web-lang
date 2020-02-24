@@ -414,8 +414,7 @@ impl Parser<'_> {
         Ok(ty)
     }
 
-
-    fn fn_def(&mut self) -> Result<ast::FnDef> {
+    pub(crate) fn fn_def(&mut self) -> Result<ast::FnDef> {
         self.expect(TokenKind::Reserved(Keyword::Func))?;
         let lo = self.span;
         let name = self.ident()?;
@@ -488,7 +487,7 @@ impl Parser<'_> {
         let component_def = self.component_def()?;
         let span = component_def.span;
         let kind = ast::ItemKind::Component(component_def);
-        Ok(ast::Item { kind, span})
+        Ok(ast::Item { kind, span })
     }
 
     /// Parse a list of function parameters
@@ -561,7 +560,7 @@ impl Parser<'_> {
         })
     }
 
-    fn block(&mut self) -> Result<ast::Block> {
+    pub(crate) fn block(&mut self) -> Result<ast::Block> {
         self.expect(TokenKind::LCurlyBrace)?;
         let lo = self.span;
         let stmts = self.stmt_list()?;
@@ -609,7 +608,7 @@ impl Parser<'_> {
         Ok(stmts)
     }
 
-    fn stmt(&mut self) -> Result<ast::Stmt> {
+    pub(crate) fn stmt(&mut self) -> Result<ast::Stmt> {
         let token = self.peek().unwrap();
         match token.kind {
             TokenKind::Reserved(Keyword::Let) => {
@@ -621,7 +620,7 @@ impl Parser<'_> {
             TokenKind::Reserved(Keyword::If) => {
                 let expr = self.if_expr()?;
                 let span = expr.span;
-                stmt(ast::StmtKind::Expr(Box::new(expr)), span)
+                stmt(ast::StmtKind::If(expr), span)
             }
             // Return statement
             TokenKind::Reserved(Keyword::Return) => {
@@ -922,7 +921,11 @@ impl Parser<'_> {
                 Ok(expr)
             }
             // If expression
-            TokenKind::Reserved(Keyword::If) => self.if_expr(),
+            TokenKind::Reserved(Keyword::If) => {
+                let if_expr = self.if_expr()?;
+                let span = if_expr.span;
+                ast::expr(ast::ExprKind::If(if_expr), span)
+            }
             // For expression
             TokenKind::Reserved(Keyword::For) => self.for_expr(),
             // Tempalte expression
@@ -1126,7 +1129,7 @@ impl Parser<'_> {
         )
     }
 
-    fn if_expr(&mut self) -> Result<ast::Expr> {
+    fn if_expr(&mut self) -> Result<ast::IfExpr> {
         self.expect(TokenKind::Reserved(Keyword::If))?;
         let lo = self.span;
         let condition = self.expr(Precedence::NONE)?;
@@ -1149,13 +1152,12 @@ impl Parser<'_> {
         } else {
             None
         };
-        let span = lo.merge(self.span);
-        let kind = ast::ExprKind::If(ast::IfExpr {
+        Ok(ast::IfExpr {
+            span: lo.merge(self.span),
             condition: Box::new(condition),
             block: Box::new(block),
             alt,
-        });
-        ast::expr(kind, span)
+        })
     }
 
     fn expect_lit(&mut self) -> Result<token::Lit> {
@@ -1323,7 +1325,7 @@ impl Parser<'_> {
 }
 
 #[inline]
-fn stmt(kind: ast::StmtKind, span: Span) -> Result<ast::Stmt> {
+pub fn stmt(kind: ast::StmtKind, span: Span) -> Result<ast::Stmt> {
     Ok(ast::Stmt {
         has_semi: false,
         id: DUMMY_NODE_ID,

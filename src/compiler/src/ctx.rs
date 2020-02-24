@@ -1,13 +1,12 @@
-use crate::ir::{self, Module, ModuleId, Reference};
+use crate::ir::{self, Module, ModuleId};
+use crate::scope::ScopeTracker;
 
 use codespan::{FileId, Files};
 use codespan_reporting::term::emit;
 use codespan_reporting::term::termcolor::{ColorChoice, StandardStream};
 use diagnostics::Diagnostic;
-use edit_distance::edit_distance;
-use fxhash::{FxHashMap};
+use fxhash::FxHashMap;
 use id_arena::Arena;
-use syntax::symbol::Symbol;
 
 use petgraph::Graph;
 
@@ -24,68 +23,10 @@ pub type LocalArena = Arena<ir::Local>;
 pub type TemplateArena = Arena<ir::Template>;
 pub type ComponentArena = Arena<ir::ComponentDef>;
 
-pub struct ScopeMapList {
-    scope_maps: Vec<FxHashMap<Symbol, Reference>>,
-}
-
-impl ScopeMapList {
-    pub fn new() -> Self {
-        ScopeMapList {
-            scope_maps: Default::default(),
-        }
-    }
-
-    pub fn push_scope(&mut self) {
-        let scope = FxHashMap::default();
-        self.scope_maps.push(scope);
-    }
-
-    pub fn pop_scope(&mut self) {
-        self.scope_maps.pop();
-    }
-
-    pub fn define(&mut self, symbol: Symbol, reference: Reference) {
-        if let Some(scope) = self.scope_maps.last_mut() {
-            scope.insert(symbol, reference);
-        }
-    }
-
-    pub fn resolve(&self, symbol: &Symbol) -> Option<&Reference> {
-        // We want to iterate backwards, as the nearest scope
-        // is at the end of the scopes list.
-        for scope in self.scope_maps.iter().rev() {
-            if let Some(reference) = scope.get(symbol) {
-                return Some(reference);
-            }
-        }
-        None
-    }
-
-    pub fn find_similar(&self, target: &Symbol) -> Option<(&Symbol, &Reference)> {
-        let mut result = None;
-        let mut lowest_distance = std::usize::MAX;
-        for scope in self.scope_maps.iter().rev() {
-            for name in scope.keys() {
-                let distance = edit_distance(target.as_str(), name.as_str());
-                if distance < lowest_distance {
-                    lowest_distance = distance;
-                    result = Some((name, scope.get(name).unwrap()))
-                }
-                // ...
-            }
-        }
-        // Only make a recommendation if the edit distance is low
-        if lowest_distance < 3 {
-            result
-        } else {
-            None
-        }
-    }
-}
-
 /// Compiling context, passed around and populated by different phases
 /// of the compiler.
 pub struct Context {
+    // Suite of arenas used to allocate different IR nodes
     pub module_arena: ModuleArena,
     pub item_arena: ItemAreana,
     pub func_def_arena: FuncDefArena,
@@ -95,13 +36,21 @@ pub struct Context {
     pub local_arena: LocalArena,
     pub template_arena: TemplateArena,
     pub component_arena: ComponentArena,
-    pub scope_map: ScopeMapList,
+    /// Tracks scope during lowering. Not currently persisted after being lowered.
+    pub scope: ScopeTracker,
+    /// Graph mapping dependencies between files
     pub module_graph: Graph<FileId, ()>,
+    /// Tracks metadata about the current sequence of import paths, used  for
+    /// cycle detection.
     pub import_path: Vec<PathBuf>,
+    /// Used alongside import_path, gives us diagnostics when we do find a cycle.
+    /// TODO this should probably be lazily constructed if possible?
     pub import_path_nodes: Vec<diagnostics::Label>,
+    /// A cache that maps absolute file paths to their already-lowered module IR
     pub path_to_module_id: FxHashMap<PathBuf, ModuleId>,
-    // Stopgap solution to getting the module graph ID from the import module ID
+    /// Stopgap solution to getting the module graph ID from the import module ID
     pub module_graph_node_map: FxHashMap<FileId, petgraph::graph::NodeIndex>,
+    /// The set of files read from the file system
     pub files: Files,
 }
 
@@ -117,7 +66,7 @@ impl Context {
             local_arena: Arena::new(),
             template_arena: Arena::new(),
             component_arena: Arena::new(),
-            scope_map: ScopeMapList::new(),
+            scope: ScopeTracker::default(),
             module_graph: Graph::default(),
             import_path: Default::default(),
             import_path_nodes: Default::default(),
@@ -125,6 +74,14 @@ impl Context {
             module_graph_node_map: FxHashMap::default(),
             files: Files::new(),
         }
+    }
+
+    pub fn get_module(&mut self, id: ModuleId) -> Option<&mut Module> {
+        self.module_arena.get_mut(id)
+    }
+
+    pub fn get_item(&mut self, id: ir::ItemId) -> Option<&mut ir::Item> {
+        self.item_arena.get_mut(id)
     }
 
     pub fn add_file(&mut self, path: &PathBuf) -> Result<FileId, String> {

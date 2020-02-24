@@ -1,0 +1,17 @@
+---
+source: src/lib.rs
+expression: fn_hir.graph.graphviz_output()
+---
+digraph {
+    0 [label="Entry"]
+    1 [label="Exit"]
+    2 [label="Block([BranchingCondition])"]
+    3 [label="Block([LocalDefinition])"]
+    4 [label="Block([LocalDefinition, LocalDefinition])"]
+    0 -> 2 [label="Normal"]
+    2 -> 3 [label="ConditionTrue"]
+    3 -> 4 [label="Normal"]
+    2 -> 4 [label="ConditionFalse"]
+    4 -> 1 [label="Normal"]
+}
+

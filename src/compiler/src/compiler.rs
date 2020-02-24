@@ -5,10 +5,17 @@ use parser::Parser;
 use diagnostics::{FileId, ParseResult};
 use std::path::PathBuf;
 
-use crate::lowering::{lower_module};
+use crate::lowering::lower_module;
+use crate::passes::DCEPass;
+
+use hir;
 
 use syntax::ast::*;
 
+// Root compiler instance.
+struct Compiler {
+    // ...
+}
 
 fn parse_module_from_path(ctx: &mut Context, path: &PathBuf) -> ParseResult<(Mod, FileId)> {
     let file_id = ctx.add_file(path).unwrap();
@@ -27,6 +34,8 @@ pub fn run_from_source_root(path: PathBuf) {
     let mut ctx = Context::new();
     match lower_module(&mut ctx, &entry_point) {
         Ok(_) => {
+            // Eliminate dead code
+            // DCEPass::run(&mut ctx, module_id);
             // ...
         }
         Err(diagnostic) => {

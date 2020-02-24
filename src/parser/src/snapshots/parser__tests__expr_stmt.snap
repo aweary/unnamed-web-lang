@@ -1,0 +1,37 @@
+---
+source: src/lib.rs
+expression: "parse_statement(\"500;\")"
+---
+Stmt {
+    id: NodeId(
+        0,
+    ),
+    kind: Expr(
+        Expr {
+            id: NodeId(
+                0,
+            ),
+            kind: Lit(
+                Lit {
+                    span: Span {
+                        start: ByteIndex(0),
+                        end: ByteIndex(3),
+                    },
+                    kind: Number(
+                        500,
+                    ),
+                },
+            ),
+            span: Span {
+                start: ByteIndex(0),
+                end: ByteIndex(3),
+            },
+            ty: None,
+        },
+    ),
+    span: Span {
+        start: ByteIndex(0),
+        end: ByteIndex(3),
+    },
+    has_semi: false,
+}

@@ -1,9 +1,15 @@
-use id_arena::Id;
 use crate::ctx::Context;
-use syntax::{Span, symbol::Symbol};
+use id_arena::Id;
+use syntax::{symbol::Symbol, Span};
 
+pub use crate::scope::{Binding, Reference};
 // Things we reuse from the AST
-pub use syntax::ast::{BinOp, Ident};
+pub use syntax::ast::{
+    BinOp,
+    Ident,
+    // Right now we reuse the Template, probably want to refine this
+    Template,
+};
 
 /// Uniquely identifies a module in the module graph IR
 pub type ModuleId = Id<Module>;
@@ -19,7 +25,7 @@ pub struct Module {
     pub items: Vec<ItemId>,
 }
 
-/// A top-level item contained by a module. 
+/// A top-level item contained by a module.
 #[derive(Debug)]
 pub struct Item {
     /// The type of item
@@ -77,7 +83,6 @@ pub struct ComponentDef {
 
 pub type ComponentDefId = Id<ComponentDef>;
 
-
 /// A block of code, denoted by a pair of curly braces in the source code
 #[derive(Debug)]
 pub struct Block {
@@ -89,7 +94,7 @@ pub type BlockId = Id<Block>;
 
 #[derive(Debug)]
 pub struct Stmt {
-    pub kind: StmtKind
+    pub kind: StmtKind,
 }
 
 #[derive(Debug)]
@@ -117,13 +122,16 @@ pub struct Expr {
 #[derive(Debug)]
 pub enum ExprKind {
     /// Reference to some named value
-    Reference(Reference),
+    Reference(Binding),
     /// Inline literal value
     Literal(Literal),
     /// Binary expression
     Binary(BinOp, ExprId, ExprId),
     /// Call expression
-    Call { callee: ExprId, arguments: Vec<ExprId> },
+    Call {
+        callee: ExprId,
+        arguments: Vec<ExprId>,
+    },
     /// If expression
     If(IfExpr),
     /// Template expression
@@ -140,9 +148,8 @@ pub enum IfExprAlt {
 pub struct IfExpr {
     pub condition: ExprId,
     pub consequent: BlockId,
-    pub alt: Option<IfExprAlt> 
+    pub alt: Option<IfExprAlt>,
 }
-
 
 #[derive(Debug)]
 pub enum Literal {
@@ -151,24 +158,16 @@ pub enum Literal {
     Boolean(Symbol),
 }
 
-
 #[derive(Debug, Clone)]
-pub struct Reference {
-    pub kind: ReferenceKind,
-    pub span: Span,
+pub enum TemplateInstr {
+    CreateElement(Ident),
+    SetAttribute(Ident, ExprId),
+    SetChildText(Symbol),
+    FinishElement,
 }
 
-#[derive(Debug, Clone)]
-pub enum ReferenceKind {
-    Item(ItemId),
-    Local(LocalId),
-    // TODO
-    Param,
-}
-
-
-#[derive(Debug, Clone)]
-pub struct Template {}
+// #[derive(Debug, Clone)]
+// pub struct Template {}
 
 pub type TemplateId = Id<Template>;
 

@@ -1,5 +1,5 @@
 [package]
-name = "parser"
+name = "session"
 version = "0.1.0"
 authors = ["Brandon Dail <brandondail@fb.com>"]
 edition = "2018"
@@ -7,9 +7,3 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-salsa = "0.14.1"
-lexer = { path = "../lexer" }
-syntax = { path = "../syntax" }
-diagnostics = { path = "../diagnostics" }
-source = { path = "../source" }
-insta = "0.13.1"

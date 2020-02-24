@@ -1,33 +1,32 @@
 [package]
-name = "compiler"
+name = "hir"
 version = "0.1.0"
 authors = ["Brandon Dail <brandondail@fb.com>"]
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[dev-dependencies]
+insta = "0.13.1"
+cargo-insta = "0.13.0"
+
 [dependencies]
-# rustc-ap-rustc_data_structures = "631.0.0"
+rand = "0.7.3"
+quickcheck_macros = "0.9.1"
 edit-distance = "2.1.0"
+quickcheck = "0.9.2"
 fxhash = "0.2.1"
 notify = "4.0.13"
 id-arena = "2.2.1"
 rustc-hash = "1.0.1"
-salsa = "0.14.1"
-bincode = "1.2.0"
 codespan = { version = "0.5.0", features = ["serialization"] }
 codespan-reporting = "0.5.0"
 codegen = { path = "../codegen" }
+session = { path = "../session" }
 log = { path = "../log" }
 source = { path = "../source" }
 diagnostics = { path = "../diagnostics" }
-hir = { path = "../hir" }
 generational-arena = { version = "0.2", features = ["serde"] }
-lexer = { path = "../lexer" }
-path-dedot = "1.1.13"
-parser = { path = "../parser" }
-petgraph = "0.4.13"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0.41"
+petgraph = "0.5.0"
 syntax = { path = "../syntax" }
-typecheck = { path = "../typecheck" }
+parser = { path = "../parser" }

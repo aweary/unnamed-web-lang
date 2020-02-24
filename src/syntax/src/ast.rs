@@ -231,6 +231,8 @@ pub enum StmtKind {
     Expr(Box<Expr>),
     // A while loop
     While(Box<Expr>, Box<Block>),
+    // If statement
+    If(IfExpr),
     // Return statement
     Return(Box<Expr>),
     // Try/catch statement
@@ -372,11 +374,12 @@ pub enum Else {
     Block(Box<Block>),
     // TODO this should be IfExpr but our parser types don't
     // work super well for this right now
-    If(Box<Expr>),
+    If(Box<IfExpr>),
 }
 
 #[derive(Hash, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub struct IfExpr {
+    pub span: Span,
     pub condition: Box<Expr>,
     pub block: Box<Block>,
     pub alt: Option<Else>,
