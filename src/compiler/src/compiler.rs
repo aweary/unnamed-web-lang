@@ -5,10 +5,7 @@ use parser::Parser;
 use diagnostics::{FileId, ParseResult};
 use std::path::PathBuf;
 
-use crate::lowering::lower_module;
-use crate::passes::DCEPass;
-
-use hir;
+use lowering::lower_module;
 
 use syntax::ast::*;
 
@@ -32,15 +29,17 @@ pub fn run_from_source_root(path: PathBuf) {
     let entry_point = path.join("main.dom");
     println!("run_from_source_root {:?}", entry_point);
     let mut ctx = Context::new();
-    match lower_module(&mut ctx, &entry_point) {
-        Ok(_) => {
-            // Eliminate dead code
-            // DCEPass::run(&mut ctx, module_id);
-            // ...
-        }
-        Err(diagnostic) => {
-            // ...
-            ctx.emit_diagnostic(diagnostic);
-        }
-    };
+    let (module_ast, _) = parse_module_from_path(&mut ctx, &entry_point).unwrap();
+    lower_module(module_ast);
+    // match lower_module(&mut ctx, &entry_point) {
+    //     Ok(_) => {
+    //         // Eliminate dead code
+    //         // DCEPass::run(&mut ctx, module_id);
+    //         // ...
+    //     }
+    //     Err(diagnostic) => {
+    //         // ...
+    //         ctx.emit_diagnostic(diagnostic);
+    //     }
+    // };
 }

@@ -1,4 +1,3 @@
-use serde::{Deserialize, Serialize};
 
 use crate::symbol::Symbol;
 use codespan::Span;
@@ -8,6 +7,8 @@ use diagnostics::ParseResult as Result;
 
 use std::fmt::{Debug, Error, Formatter};
 use std::path::PathBuf;
+
+use graphql_parser::query::Document;
 
 const DUMMY_NODE_ID: NodeId = NodeId(0);
 
@@ -21,7 +22,7 @@ pub fn expr(kind: ExprKind, span: Span) -> Result<Expr> {
 }
 
 // TODO move these into symbols crate
-#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[derive(Clone)]
 pub struct Ident {
     pub name: Symbol,
     pub span: Span,
@@ -40,26 +41,26 @@ impl Debug for Ident {
 }
 
 // TODO...
-#[derive(Hash, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct NodeId(pub usize);
 
-#[derive(Hash, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct Program {
     pub modules: Vec<Mod>,
 }
 
-#[derive(Hash, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct Mod {
     pub items: Vec<Item>,
 }
 
-#[derive(Hash, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct Item {
     pub kind: ItemKind,
     pub span: Span,
 }
 
-#[derive(Hash, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub enum ItemKind {
     /// A statoc item
     ///
@@ -81,7 +82,7 @@ pub enum ItemKind {
     Export(Box<Item>),
 }
 
-#[derive(Hash, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct Import {
     pub specifiers: Vec<ImportSpecifier>,
     pub span: Span,
@@ -100,7 +101,7 @@ impl Import {
     }
 }
 
-#[derive(Hash, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct ImportSpecifier {
     // The name of the item being imported
     pub ident: Ident,
@@ -109,7 +110,7 @@ pub struct ImportSpecifier {
     pub span: Span,
 }
 
-#[derive(Hash, Eq, PartialEq, Clone, Serialize, Deserialize)]
+#[derive(Clone)]
 pub struct ImportPath {
     pub path: PathBuf,
     pub span: Span,
@@ -121,7 +122,7 @@ impl Debug for ImportPath {
     }
 }
 
-#[derive(Hash, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct TypeDef {
     pub name: Ident,
     pub span: Span,
@@ -129,13 +130,13 @@ pub struct TypeDef {
     pub properties: Vec<TypeProperty>,
 }
 
-#[derive(Hash, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct TypeProperty {
     pub name: Ident,
     pub ty: Ty,
 }
 
-#[derive(Hash, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub enum ParamType {
     // No paramters
     Empty,
@@ -159,7 +160,7 @@ impl IntoIterator for ParamType {
 }
 
 /// A function definition
-#[derive(Hash, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct FnDef {
     pub name: Ident,
     pub params: ParamType,
@@ -170,7 +171,7 @@ pub struct FnDef {
     pub span: Span,
 }
 
-#[derive(Hash, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct ComponentDef {
     pub name: Ident,
     pub params: ParamType,
@@ -180,13 +181,13 @@ pub struct ComponentDef {
     pub span: Span,
 }
 
-#[derive(Hash, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct EnumDef {
     pub name: Ident,
     pub variants: Vec<Variant>,
 }
 
-#[derive(Hash, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct Variant {
     pub ident: Ident,
     pub value: Option<Expr>,
@@ -195,7 +196,7 @@ pub struct Variant {
     // ...
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug)]
 pub struct Generics {
     // We don't currenly support nested generic types
     pub params: Vec<Ident>,
@@ -204,14 +205,14 @@ pub struct Generics {
     // ...
 }
 
-#[derive(Hash, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct Block {
     pub stmts: Vec<Stmt>,
     pub id: NodeId,
     pub span: Span,
 }
 
-#[derive(Hash, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct Stmt {
     pub id: NodeId,
     pub kind: StmtKind,
@@ -220,7 +221,7 @@ pub struct Stmt {
     // ...
 }
 
-#[derive(Hash, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub enum StmtKind {
     // A local, let binding
     Local(Box<Local>),
@@ -239,14 +240,14 @@ pub enum StmtKind {
     TryCatch(Box<Block>, Option<LocalPattern>, Box<Block>),
 }
 
-#[derive(Hash, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct LocalObjectProperty {
     pub key: Ident,
     pub value: LocalPattern,
     pub span: Span,
 }
 
-#[derive(Hash, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub enum LocalPattern {
     Ident(Ident, Span),
     Object(Vec<LocalObjectProperty>, Span),
@@ -262,7 +263,7 @@ impl Into<Symbol> for LocalPattern {
     }
 }
 
-#[derive(Hash, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct Local {
     pub id: NodeId,
     pub name: LocalPattern,
@@ -272,18 +273,18 @@ pub struct Local {
     pub span: Span,
 }
 
-#[derive(Hash, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct FnDecl {
     pub params: Vec<Param>,
     pub output: Box<Option<Ty>>,
 }
 
-#[derive(Hash, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct FnHeader {
     pub is_async: bool,
 }
 
-#[derive(Hash, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct Param {
     pub local: LocalPattern,
     pub ty: Ty,
@@ -301,7 +302,7 @@ impl Param {
     }
 }
 
-// #[derive(Hash, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+// #[derive(Clone, Debug, )]
 // pub struct Ty {
 //     // TODO do we need a name?
 //     pub name: Ident,
@@ -311,13 +312,13 @@ impl Param {
 //     pub generics: Option<Generics>,
 // }
 
-#[derive(Hash, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub enum TyKind {
     /// Placeholder
     Empty,
 }
 
-#[derive(Hash, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct Expr {
     pub id: NodeId,
     pub kind: ExprKind,
@@ -326,7 +327,7 @@ pub struct Expr {
     // ...
 }
 
-#[derive(Hash, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub enum ExprKind {
     Array(Vec<Expr>),
     Object(Vec<(Ident, Expr)>),
@@ -366,10 +367,12 @@ pub enum ExprKind {
     Match(Box<Expr>, Vec<MatchArm>),
     /// Function expression
     Func(Box<FnDef>),
+    /// GraphQL query
+    Query(Box<Document>),
     // ...
 }
 
-#[derive(Hash, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub enum Else {
     Block(Box<Block>),
     // TODO this should be IfExpr but our parser types don't
@@ -377,7 +380,7 @@ pub enum Else {
     If(Box<IfExpr>),
 }
 
-#[derive(Hash, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct IfExpr {
     pub span: Span,
     pub condition: Box<Expr>,
@@ -385,10 +388,10 @@ pub struct IfExpr {
     pub alt: Option<Else>,
 }
 
-#[derive(Hash, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct MatchArm {}
 
-#[derive(Hash, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct Template {
     pub id: NodeId,
     pub open: TemplateOpenTag,
@@ -397,40 +400,40 @@ pub struct Template {
     pub span: Span,
 }
 
-#[derive(Hash, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub enum TemplateChild {
     Text(Symbol),
     Template(Box<Template>),
     Expr(Box<Expr>),
 }
 
-#[derive(Hash, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct TemplateOpenTag {
     pub name: Ident,
     pub attrs: Vec<TemplateAttr>,
     pub span: Span,
 }
 
-#[derive(Hash, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct TemplateCloseTag {
     pub name: Ident,
     pub span: Span,
 }
 
-#[derive(Hash, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct TemplateAttr {
     pub name: Ident,
     pub value: Expr,
     pub span: Span,
 }
 
-#[derive(Hash, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct Lit {
     pub span: Span,
     pub kind: LitKind,
 }
 
-#[derive(Hash, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub enum LitKind {
     Bool(Symbol),
     // A number, interned as a symbol. This will be
@@ -439,7 +442,7 @@ pub enum LitKind {
     Str(Symbol),
 }
 
-#[derive(Hash, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub enum BinOp {
     Equals,
     DblEquals,
@@ -457,7 +460,7 @@ pub enum BinOp {
     // ...
 }
 
-#[derive(Hash, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub enum UnOp {
     Negate,
     Plus,
@@ -465,7 +468,7 @@ pub enum UnOp {
     Increment,
 }
 
-#[derive(Hash, Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub enum AssignOp {
     Equals,
     PlusEquals,

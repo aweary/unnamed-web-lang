@@ -1,10 +1,9 @@
-use crate::control_flow_graph::{Block, BlockExit, BlockIndex, ControlFlowEdge, ControlFlowGraph};
-use crate::hir;
+use data_structures::control_flow_graph::{Block, BlockIndex, ControlFlowEdge, ControlFlowGraph};
+
+use hir;
 
 use fxhash::FxHashSet;
 use syntax::ast;
-
-
 
 macro_rules! branch_block_metadata {
     ($block_indicies: ident, $root_block_indicies: ident, $cfg: ident, $partial_edges: ident) => {
@@ -45,7 +44,6 @@ pub fn lower_module(module: ast::Mod) {
     for item in module.items {
         if let ast::ItemKind::Fn(fn_def) = item.kind {
             lower_fn(fn_def);
-            // ...
         };
     }
     // println!("Lowering module!");
@@ -64,7 +62,8 @@ pub(crate) fn lower_fn(fn_def: ast::FnDef) -> hir::Function {
     }
     // Any queued edges will point to the exit node, as we're done with the graph
     cfg.flush_edge_queue_to_exit_block();
-    // cfg.print();
+    println!("\n{:?}", fn_def.name);
+    cfg.print();
     hir::Function {
         span: fn_def.span,
         name: fn_def.name,
@@ -87,8 +86,8 @@ fn control_flow_graph_for_if_statement(
         ref span,
         ..
     }: &ast::IfExpr,
-    cfg: &mut ControlFlowGraph,
-    mut entry_block: Block,
+    cfg: &mut ControlFlowGraph<hir::Statement>,
+    mut entry_block: Block<hir::Statement>,
 ) -> (Vec<BlockIndex>, FxHashSet<PartialFromEdge>) {
     // The set of partial edges that should be connected with the next node,
     // after this sub-graph is computed.
@@ -109,7 +108,7 @@ fn control_flow_graph_for_if_statement(
 
     let then_block_indicies = lower_block(if_block, cfg);
 
-    let (then_block_entry_node, then_block_exit_node, then_block_has_early_return) = branch_block_metadata!(
+    let (then_block_entry_node, _then_block_exit_node, _then_block_has_early_return) = branch_block_metadata!(
         then_block_indicies,
         block_indicies,
         cfg,
@@ -131,8 +130,7 @@ fn control_flow_graph_for_if_statement(
             ast::Else::Block(ref block) => {
                 let else_block_indicies = lower_block(block, cfg);
 
-                // TODO dedupe with above
-                let (else_block_entry_node, else_block_exit_node, else_block_has_early_return) = branch_block_metadata!(
+                let (else_block_entry_node, _else_block_exit_node, _else_block_has_early_return) = branch_block_metadata!(
                     else_block_indicies,
                     block_indicies,
                     cfg,
@@ -157,7 +155,7 @@ fn control_flow_graph_for_if_statement(
                 // which is what will be processed outside of this sub-graph
                 partial_edges_to_next_node.extend(partial_edges_to_next_node_for_alt.iter());
                 // Get the branch metadata for this alternative block
-                let (alt_block_entry_node, alt_block_exit_node, alt_block_has_early_return) = branch_block_metadata!(
+                let (alt_block_entry_node, _alt_block_exit_node, _alt_block_has_early_return) = branch_block_metadata!(
                     alt_block_indicies,
                     block_indicies,
                     cfg,
@@ -182,7 +180,7 @@ fn control_flow_graph_for_if_statement(
     (block_indicies, partial_edges_to_next_node)
 }
 
-fn lower_block(body: &ast::Block, cfg: &mut ControlFlowGraph) -> Vec<BlockIndex> {
+fn lower_block(body: &ast::Block, cfg: &mut ControlFlowGraph<hir::Statement>) -> Vec<BlockIndex> {
     // Start off by creating a basic block. It's possible this block might be empty,
     // if this syntactic block is empty.
     let mut block_indicies = vec![];
@@ -236,7 +234,7 @@ fn lower_block(body: &ast::Block, cfg: &mut ControlFlowGraph) -> Vec<BlockIndex>
                 let block_before_loop_index = if block_before_loop.is_empty() {
                     match cfg.last_block() {
                         Some(block_index) => block_index,
-                        None => cfg.entry_block
+                        None => cfg.entry_block,
                     }
                 } else {
                     let block_before_loop_index = cfg.add_block(block_before_loop);

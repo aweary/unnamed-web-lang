@@ -1,10 +1,9 @@
 use crate::ast::{Generics, Ident};
-use serde::{Deserialize, Serialize};
 
 use std::fmt;
 
 /// Type definitions
-#[derive(Clone, PartialEq, Eq, Serialize, Deserialize, Hash)]
+#[derive(Clone)]
 pub enum Ty {
     // Types that we want to represent, but don't
     Unimplemented,
@@ -64,7 +63,7 @@ impl fmt::Debug for Ty {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Hash)]
+#[derive(Clone, Debug)]
 pub enum LiteralTy {
     String,
     Number,

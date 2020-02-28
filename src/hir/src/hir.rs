@@ -4,7 +4,7 @@ use syntax::{symbol::Symbol, Span};
 use std::fmt;
 use std::sync::Arc;
 
-use crate::control_flow_graph::ControlFlowGraph;
+use data_structures::{ControlFlowGraph, Blockable};
 // use crate::module_graph::ModuleGraph;
 
 use syntax::ast::Ident;
@@ -54,7 +54,7 @@ pub enum DefinitionKind {
 
 #[derive(Debug, Clone)]
 pub struct Function {
-    pub(crate) graph: ControlFlowGraph,
+    pub graph: ControlFlowGraph<Statement>,
     pub name: Ident,
     pub span: Span,
 }
@@ -74,6 +74,15 @@ pub struct Statement {
     pub kind: StatementKind,
     pub span: Span,
     // ...
+}
+
+impl Blockable for Statement {
+    fn has_early_exit(&self) -> bool {
+        match self.kind {
+            StatementKind::Return => true,
+            _ => false
+        }
+    }
 }
 
 impl fmt::Debug for Statement {

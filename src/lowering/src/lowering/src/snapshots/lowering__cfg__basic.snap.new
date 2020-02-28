@@ -1,0 +1,15 @@
+---
+source: src/lowering/src/lib.rs
+expression: fn_hir.graph.graphviz_output()
+---
+digraph {
+    0 [label="Entry"]
+    1 [label="Exit"]
+    2 [label="Block([BranchingCondition])"]
+    3 [label="Block([LocalDefinition])"]
+    0 -> 2 [label="Normal"]
+    2 -> 3 [label="ConditionTrue"]
+    3 -> 1 [label="Normal"]
+    2 -> 1 [label="ConditionFalse"]
+}
+

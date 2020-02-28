@@ -12,6 +12,7 @@ use std::path::PathBuf;
 use diagnostics::ParseResult as Result;
 use diagnostics::{Diagnostic, FileId, Label};
 
+
 const DUMMY_NODE_ID: ast::NodeId = ast::NodeId(0);
 
 pub struct Parser<'s> {
@@ -414,7 +415,7 @@ impl Parser<'_> {
         Ok(ty)
     }
 
-    pub(crate) fn fn_def(&mut self) -> Result<ast::FnDef> {
+    pub fn fn_def(&mut self) -> Result<ast::FnDef> {
         self.expect(TokenKind::Reserved(Keyword::Func))?;
         let lo = self.span;
         let name = self.ident()?;
@@ -560,7 +561,7 @@ impl Parser<'_> {
         })
     }
 
-    pub(crate) fn block(&mut self) -> Result<ast::Block> {
+    pub fn block(&mut self) -> Result<ast::Block> {
         self.expect(TokenKind::LCurlyBrace)?;
         let lo = self.span;
         let stmts = self.stmt_list()?;
@@ -608,7 +609,7 @@ impl Parser<'_> {
         Ok(stmts)
     }
 
-    pub(crate) fn stmt(&mut self) -> Result<ast::Stmt> {
+    pub fn stmt(&mut self) -> Result<ast::Stmt> {
         let token = self.peek().unwrap();
         match token.kind {
             TokenKind::Reserved(Keyword::Let) => {
@@ -788,6 +789,12 @@ impl Parser<'_> {
         self.expect(TokenKind::Reserved(Keyword::Let))?;
         let lo = self.span;
         let pattern = self.local_pattern()?;
+        // Optional type annotation
+        let ty = if self.eat(TokenKind::Colon)? {
+            Some(Box::new(self.ty()?))
+        } else {
+            None
+        };
         self.expect(TokenKind::Equals)?;
         // TODO init is optional?
         let init = self.expr(Precedence::NONE)?;
@@ -795,8 +802,7 @@ impl Parser<'_> {
         Ok(ast::Local {
             id: DUMMY_NODE_ID,
             name: pattern,
-            // TODO support explicit types
-            ty: None,
+            ty,
             // Optional initializing expression.
             init: Some(Box::new(init)),
             span,

@@ -95,13 +95,14 @@ pub struct CodeFuzzer {
 impl Arbitrary for CodeFuzzer {
     fn arbitrary<G: Gen>(gen: &mut G) -> Self {
         let mut fuzz = CodeFuzzer::default();
-        // fuzz.restrict_stmts(vec![
-        //     FuzzStmtChoice::Local,
-        //     FuzzStmtChoice::If,
-        //     FuzzStmtChoice::While,
-        // ]);
-        let line_count = gen.next_u32() >> 28;
-        fuzz.gen_lines(line_count as usize);
+        fuzz.restrict_stmts(vec![
+            FuzzStmtChoice::Local,
+            FuzzStmtChoice::If,
+            FuzzStmtChoice::While,
+            FuzzStmtChoice::Return,
+        ]);
+        // let line_count = gen.next_u32() >> 27;
+        fuzz.gen_lines(10);
         fuzz
     }
 }
@@ -160,8 +161,19 @@ impl CodeFuzzer {
     }
 
     fn gen_expr(&mut self) -> String {
+        // Number literal
+        if rand::random() {
+          format!("{}", rand::random::<u16>())
+        } else if rand::random() {
+            // String literal
+          format!("\"{}\"", self.gen_ident())
+        } else {
+            // Binary addition
+            let left = self.gen_expr();
+            let right = self.gen_expr();
+            format!("{} + {}", left, right)
+        }
         // TODO we only support number literals now
-        format!("\"{}\"", rand::random::<u16>())
     }
 
     fn gen_local(&mut self) -> String {
@@ -185,19 +197,27 @@ impl CodeFuzzer {
             If => {
                 let condition = self.gen_expr();
                 // Condition and opening block
-                self.commit_seq(vec!["if ", &condition, " {"]);
-                if rand::random() {
-                    self.gen_lines(thread_rng().gen_range(0, 10));
+                self.commit_seq(vec!["if (", &condition, ") {"]);
+                self.tab_depth += 1;
+                let d: f64 = (self.tab_depth as f64) / 150.0;
+                let c = thread_rng().gen_range(0.0, 1.0);
+                if c > d {
+                    self.gen_lines(thread_rng().gen_range(0, 5));
                 }
+                self.tab_depth -= 1;
                 self.commit("}");
                 self.commit(";\n");
             }
             While => {
                 let condition = self.gen_expr();
-                self.commit_seq(vec!["if ", &condition, " {"]);
-                let local = self.gen_local();
-                self.commit(&local);
-                self.commit(";");
+                self.commit_seq(vec!["while (", &condition, ") {"]);
+                self.tab_depth += 1;
+                let d: f64 = (self.tab_depth as f64) / 150.0;
+                let c = thread_rng().gen_range(0.0, 1.0);
+                if c > d {
+                    self.gen_lines(thread_rng().gen_range(0, 5));
+                }
+                self.tab_depth -= 1;
                 self.commit("}");
                 self.commit(";\n");
             }

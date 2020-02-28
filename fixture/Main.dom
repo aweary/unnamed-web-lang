@@ -1,9 +1,21 @@
-fn foo() {
-  while true {
-  let EopcH = yNBum;
-  while true {
-  let SdqWI = jiHGL;
-  return "dFIWW";
+  
+function Counter(initialValue: int) : View {
+
+  state count = data?.viewer?.cached_count || initialValue;
+
+  let styles : Style = {
+    paddingLeft: 4,
+    paddingRight: 4,
   };
-  };return "vxsKJ";
-  }
+
+  if count == 0 {
+    return null;
+  };
+
+  return (
+    <view>
+      <text style={styles}>The count is: {count}</text>
+      <button label="Increment" onPress={onPress} />
+    </view>
+  );
+}

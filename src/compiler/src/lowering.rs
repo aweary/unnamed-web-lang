@@ -1,14 +1,8 @@
 use crate::ctx::Context;
-use crate::ir::*;
-use diagnostics::{Diagnostic, FileId, Label, ParseResult as Result};
+use diagnostics::{FileId, ParseResult as Result};
 use parser::Parser;
-use syntax::ast;
-
-use fxhash::FxHashMap;
 
 use std::path::PathBuf;
-
-use hir::lower;
 
 /// Takes a path, resolves it, parses the module, and attempts to lower it to the IR.
 /// Uses caching to avoid lowering modules that are imported multiple times.
@@ -32,8 +26,8 @@ pub fn lower_module(ctx: &mut Context, path: &PathBuf) -> Result<()> {
     // // Add this path to the import path 'graph' so we can detect cycles
     // ctx.import_path.push(path.clone());
     // Parse the imported module
-    let (import_ast, file_id) = parse_module_from_path(ctx, path)?;
-    lower::lower_module(import_ast);
+    let (_import_ast, _file_id) = parse_module_from_path(ctx, path)?;
+    // lower::lower_module(import_ast);
     // let parent_path = &path.parent().unwrap().to_path_buf();
     // // Lower it to IR so we can reference its locals
     // let module_id = LoweringContext::new(ctx, file_id, parent_path).lower(import_ast)?;

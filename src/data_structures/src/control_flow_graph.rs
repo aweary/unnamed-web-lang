@@ -1,159 +1,25 @@
 use petgraph::dot::Dot;
 use petgraph::stable_graph::{NodeIndex, StableGraph};
-use petgraph::visit::Dfs;
-
-// use petgraph::Direction;
-// use petgraph::algo::{all_simple_paths, astar, dominators, has_path_connecting};
 
 use std::collections::VecDeque;
-use std::fmt;
-
-use quickcheck::{Arbitrary, Gen, TestResult, Testable};
-
-
-use rand::distributions::{Distribution};
-use rand::Rng;
-
-const MAX_MOCK_CFG_CODE_SNIPPET_DEPTH : usize = 500;
+use std::fmt::{self, Debug};
 
 #[derive(Debug)]
 struct IdentDistribution;
 
-impl Distribution<char> for IdentDistribution {
-    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> char {
-        const RANGE: u32 = 26 + 26 + 2;
-        const VALID_ASCII_IDENT_CHARS: &[u8] =
-            b"ABCDEFGHIJKLMNOPQRSTUVWXYZ\
-                abcdefghijklmnopqrstuvwxyz\
-                $_";
-        loop {
-            let var = rng.next_u32() >> (32 - 6);
-            if var < RANGE {
-                return VALID_ASCII_IDENT_CHARS[var as usize] as char
-            }
-        }
-    }
-}
-
-
-/// Generate a random snippet of raw code that should
-/// always give us a well-formed control-flow-graph.
-#[derive(Default, Clone, Debug)]
-pub struct MockControlFlowCodeSnippetBuilder {
-    snippet: String,
-    depth: usize,
-}
-
-impl MockControlFlowCodeSnippetBuilder {
-    pub fn code(&self) -> &str {
-        &self.snippet
-    }
-
-    pub fn build(&mut self) {
-        self.build_block();
-    }
-
-    fn push(&mut self, code: &str) {
-        // for _ in 0..self.depth {
-        //     self.snippet.push(' ');
-        // }
-        self.snippet.push_str(code);
-    }
-
-    fn build_block(&mut self) {
-        self.depth += 1;
-        self.push("{\n");
-        // let block_size : usize = rand::random();
-        let block_size = 5;
-        for _ in 0..block_size {
-            self.build_stmt();
-        }
-        if rand::random() {
-        use rand::{thread_rng, Rng};
-            // Add a return statement
-        let value: String = thread_rng().sample_iter(&IdentDistribution).take(5).collect();   
-        self.push(&format!("return \"{}\";", value));
-        }
-        self.push("\n}");
-        self.depth -= 1;
-    }
-
-    fn build_stmt(&mut self) {
-        if self.snippet.len() >= MAX_MOCK_CFG_CODE_SNIPPET_DEPTH {
-            return;
-        }
-        // Eeach statement has equal random chance
-        if rand::random() {
-            self.build_non_branching_stmt();
-        } else if rand::random() {
-            self.build_if_branch();
-        } else if rand::random() {
-            self.build_while_loop();
-        }
-    }
-
-    fn build_non_branching_stmt(&mut self) {
-        use rand::distributions::Alphanumeric;
-        use rand::{thread_rng, Rng};
-        let name: String = thread_rng().sample_iter(&IdentDistribution).take(5).collect();
-        let value: String = thread_rng().sample_iter(&IdentDistribution).take(5).collect();
-        let code = format!("let {} = \"{}\";\n", name, value);
-        self.push(&code);
-    }
-
-    fn build_if_branch(&mut self) {
-        self.push("if true ");
-        self.build_block();
-        // Else-If chain
-        if rand::random() {
-            // self.push(" else ");
-        }
-        // Else block
-        else if rand::random() {
-            self.push(" else ");
-            self.build_block();
-        }
-        self.push(";");
-    }
-
-    fn build_while_loop(&mut self) {
-        self.push("while true ");
-        self.build_block();
-        self.push(";");
-    }
-}
-
-impl Arbitrary for MockControlFlowCodeSnippetBuilder {
-    fn arbitrary<G: Gen>(g: &mut G) -> Self {
-        let mut builder = MockControlFlowCodeSnippetBuilder::default();
-        builder.build();
-        builder
-    }
-}
-
-impl Arbitrary for ControlFlowGraph {
-    fn arbitrary<G: Gen>(g: &mut G) -> Self {
-        /// Start with an empty graph
-        let mut cfg = ControlFlowGraph::default();
-        // ...
-        cfg
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct BlockIndex(NodeIndex);
 
-use crate::hir;
 
-pub struct SubControlFlowGraph<'cfg> {
-    cfg: &'cfg mut ControlFlowGraph,
+pub trait Blockable : Debug {
+    fn has_early_exit(&self) -> bool;
 }
 
 /// A control flow graph for a single function
 #[derive(Debug, Clone)]
-pub struct ControlFlowGraph {
+pub struct ControlFlowGraph<T: Blockable> {
     /// The graph data structure
-    graph: StableGraph<BasicBlock, ControlFlowEdge>,
+    graph: StableGraph<BasicBlock<T>, ControlFlowEdge>,
     /// The entry block of the graph
     /// TODO make private
     pub entry_block: BlockIndex,
@@ -167,7 +33,7 @@ pub struct ControlFlowGraph {
     edge_queue: VecDeque<(BlockIndex, ControlFlowEdge)>,
 }
 
-impl Default for ControlFlowGraph {
+impl<T: Blockable> Default for ControlFlowGraph<T> {
     fn default() -> Self {
         let mut graph = StableGraph::default();
         // Initialize the special entry and exit blocks
@@ -186,9 +52,9 @@ impl Default for ControlFlowGraph {
     }
 }
 
-impl ControlFlowGraph {
+impl<T : Blockable> ControlFlowGraph<T> {
     /// Add a new basic block to the grapg
-    pub fn add_block(&mut self, block: Block) -> BlockIndex {
+    pub fn add_block(&mut self, block: Block<T>) -> BlockIndex {
         let block_index = BlockIndex(self.graph.add_node(BasicBlock::Block(block)));
         // If this is the first block to be added to the graph, add an edge from the
         // special entry block to this one.
@@ -205,13 +71,6 @@ impl ControlFlowGraph {
         self.edge_queue.clear();
         self.last_block = Some(block_index);
         block_index
-    }
-
-    pub fn dfs(&self) {
-        let mut dfs = Dfs::new(&self.graph, self.entry_block.0);
-        while let Some(index) = dfs.next(&self.graph) {
-            println!("node {:?}", index);
-        }
     }
 
     /// Get the last basic block added to the graph, or `None` if it's empty
@@ -242,11 +101,7 @@ impl ControlFlowGraph {
         match &self.graph[block_index.0] {
             BasicBlock::Block(block) => {
                 if let Some(stmt) = block.statements.last() {
-                    use crate::hir::StatementKind::*;
-                    match stmt.kind {
-                        Return => true,
-                        _ => false,
-                    }
+                    stmt.has_early_exit()
                 } else {
                     false
                 }
@@ -285,26 +140,30 @@ impl ControlFlowGraph {
     pub fn graphviz_output(&self) -> String {
         format!("{:?}", Dot::with_config(&self.graph, &[]))
     }
-
-    // ...
 }
 
-#[derive(Default, Clone)]
-pub struct Block {
+#[derive(Clone)]
+pub struct Block<T: Blockable> {
     // The set of non-branching statements within the block.
-    pub statements: Vec<hir::Statement>,
+    pub statements: Vec<T>,
+}
+
+impl<T: Blockable> Default for Block<T> {
+    fn default() -> Self {
+        Block { statements: vec![] }
+    }
 }
 
 // Only print the number of statements in a block, makes debugging easier for now
-impl fmt::Debug for Block {
+impl<T: Blockable> fmt::Debug for Block<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}", self.statements)
     }
 }
 
-impl Block {
+impl<T : Blockable> Block<T> {
     /// Push a statement into the basic block
-    pub fn push(&mut self, stmt: hir::Statement) {
+    pub fn push(&mut self, stmt: T) {
         self.statements.push(stmt);
     }
 
@@ -313,20 +172,20 @@ impl Block {
         self.statements.is_empty()
     }
 
-    pub fn exit_type(&self) -> BlockExit {
-        match self.statements.last() {
-            Some(stmt) => {
-                use crate::hir::StatementKind;
-                match stmt.kind {
-                    StatementKind::BranchingCondition => BlockExit::BranchCondition,
-                    StatementKind::LoopingCondition => BlockExit::LoopCondition,
-                    StatementKind::Return => BlockExit::Return,
-                    _ => BlockExit::Normal,
-                }
-            }
-            None => BlockExit::Normal,
-        }
-    }
+    // pub fn exit_type(&self) -> BlockExit {
+    //     match self.statements.last() {
+    //         Some(stmt) => {
+    //             use crate::hir::StatementKind;
+    //             match stmt.kind {
+    //                 StatementKind::BranchingCondition => BlockExit::BranchCondition,
+    //                 StatementKind::LoopingCondition => BlockExit::LoopCondition,
+    //                 StatementKind::Return => BlockExit::Return,
+    //                 _ => BlockExit::Normal,
+    //             }
+    //         }
+    //         None => BlockExit::Normal,
+    //     }
+    // }
 }
 
 #[derive(Debug, Clone)]
@@ -346,11 +205,11 @@ pub enum BlockExit {
 }
 
 #[derive(Debug, Clone)]
-pub enum BasicBlock {
+pub enum BasicBlock<T : Blockable> {
     /// A special block denoting the entry-point of the graph.
     Entry,
     /// A basic block.
-    Block(Block),
+    Block(Block<T>),
     // Special block denoting the exit-point of the graph.
     Exit,
 }
