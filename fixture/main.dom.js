@@ -1,25 +1,16 @@
 // DEVELOPMENT BUILD, WebScript v1.23.1591
-import { op } from "@webscript/runtime";
+import {  html } from "@webscript/runtime";
 
-// You need to:
-// - Load CSS styles for this that aren't already
-// - Load JS for rendering
-// - Load data for this instance
-// - 
+const increment = 3;
 
-function $Button($label, $kind, $onPress) {
-  const $program = [
-    op.CreateButtonElement,
-    op.SetAttribute,
-    'aria-label',
-    $label,
-    op.AddListener,
-    $onPress,
-    op.AttachText,
-    $label,
-    op.Close,
-  ];
-  return function $Button_update($runtime) {
-      $runtime.execute($program);
-  }
+function $Counter($ctx) {
+  let count = 0;
+  let onPress = () => {
+    count += 1;
+    $ctx.render();
+  };
+  return () =>
+    html`
+      <button @onClick=${onPress}>${count}</button>
+    `;
 }

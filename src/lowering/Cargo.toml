@@ -7,21 +7,23 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+codespan = { version = "0.5.0", features = ["serialization"] }
+codespan-reporting = "0.5.0"
+data_structures = { path = "../data_structures" }
+diagnostics = { path = "../diagnostics" }
+edit-distance = "2.1.0"
+fxhash = "0.2.1"
+hir = { path = "../hir" }
+id-arena = { version = "2.2.1", features = ["rayon"] }
 insta = "0.13.1"
+log = { path = "../log" }
+parser = { path = "../parser" }
+path-dedot = "1.1.13"
+petgraph = "0.4.13"
 quickcheck = "0.9.2"
 quickcheck_macros = "0.9.1"
 rand = "0.7.3"
-edit-distance = "2.1.0"
-data_structures = { path = "../data_structures" }
-fxhash = "0.2.1"
-id-arena = "2.2.1"
-codespan = { version = "0.5.0", features = ["serialization"] }
-codespan-reporting = "0.5.0"
-log = { path = "../log" }
+rayon = "1.1"
 source = { path = "../source" }
-diagnostics = { path = "../diagnostics" }
-hir = { path = "../hir" }
-path-dedot = "1.1.13"
-parser = { path = "../parser" }
-petgraph = "0.4.13"
+session = { path = "../session" }
 syntax = { path = "../syntax" }

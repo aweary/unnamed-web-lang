@@ -21,5 +21,6 @@ lexer = { path = "../lexer" }
 path-dedot = "1.1.13"
 parser = { path = "../parser" }
 petgraph = "0.4.13"
+session = { path = "../session" }
 syntax = { path = "../syntax" }
 typecheck = { path = "../typecheck" }

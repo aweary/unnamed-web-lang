@@ -24,7 +24,7 @@ impl Token {
         use Precedence::*;
         use TokenKind::*;
         match self.kind {
-            LParen => ASSIGNMENT,
+            LParen => PREFIX,
             Equals => ASSIGNMENT,
             PlusEquals => ASSIGNMENT,
             Dot => ASSIGNMENT,
@@ -183,6 +183,7 @@ pub enum Keyword {
     As,
     ImportFrom,
     Let,
+    State,
     Match,
     Return,
     While,

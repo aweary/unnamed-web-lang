@@ -48,7 +48,7 @@ pub trait Visitor: Sized {
         walk_block(self, block);
     }
 
-    fn visit_mod(&mut self, module: &mut Mod) {
+    fn visit_mod(&mut self, module: &mut Module) {
         walk_mod(self, module);
     }
 
@@ -68,7 +68,7 @@ pub fn walk_program<V: Visitor>(visitor: &mut V, program: &mut Program) {
     }
 }
 
-pub fn walk_mod<V: Visitor>(visitor: &mut V, module: &mut Mod) {
+pub fn walk_mod<V: Visitor>(visitor: &mut V, module: &mut Module) {
     for item in module.items.iter_mut() {
         visitor.visit_item(item)
     }

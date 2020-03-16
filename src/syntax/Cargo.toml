@@ -8,6 +8,7 @@ edition = "2018"
 
 [dependencies]
 graphql-parser = "0.2.3"
+data_structures = { path = "../data_structures" }
 diagnostics = { path = "../diagnostics" }
 codespan = { version = "0.5.0", features = ["serialization"] }
 codespan-reporting = "0.5.0"

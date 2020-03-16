@@ -207,7 +207,8 @@ impl<'a> Lexer<'a> {
                 };
                 Literal(lit)
             }
-            "let" | "state" => Reserved(Let),
+            "state" => Reserved(State),
+            "let" => Reserved(Let),
             "function" | "fn" | "func" => Reserved(Func),
             "component" => Reserved(Component),
             "return" => Reserved(Return),

@@ -15,6 +15,11 @@ pub trait Blockable : Debug {
     fn has_early_exit(&self) -> bool;
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct PartialFromEdge(pub BlockIndex, pub ControlFlowEdge);
+
+// struct PartialToEdge(BlockIndex, ControlFlowEdge);
+
 /// A control flow graph for a single function
 #[derive(Debug, Clone)]
 pub struct ControlFlowGraph<T: Blockable> {

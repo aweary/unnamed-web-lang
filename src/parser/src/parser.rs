@@ -122,13 +122,13 @@ impl Parser<'_> {
 
     /// Parse a single module, i.e., a single file. In the future
     /// we might support defining submodules within a single file.
-    pub fn parse_module(&mut self) -> Result<ast::Mod> {
+    pub fn parse_module(&mut self) -> Result<ast::Module> {
         let mut items: Vec<ast::Item> = vec![];
         while !self.peek()?.follows_item_list() {
             items.push(self.parse_item()?);
             self.eat(TokenKind::Semi)?;
         }
-        Ok(ast::Mod { items })
+        Ok(ast::Module { items })
     }
 
     /// A single item in a list of items
@@ -613,9 +613,16 @@ impl Parser<'_> {
         let token = self.peek().unwrap();
         match token.kind {
             TokenKind::Reserved(Keyword::Let) => {
+                self.skip()?;
                 let local = self.local()?;
                 let span = local.span;
                 stmt(ast::StmtKind::Local(Box::new(local)), span)
+            }
+            TokenKind::Reserved(Keyword::State) => {
+                self.skip()?;
+                let local = self.local()?;
+                let span = local.span;
+                stmt(ast::StmtKind::State(Box::new(local)), span)
             }
             // If statement
             TokenKind::Reserved(Keyword::If) => {
@@ -786,7 +793,6 @@ impl Parser<'_> {
     }
 
     fn local(&mut self) -> Result<ast::Local> {
-        self.expect(TokenKind::Reserved(Keyword::Let))?;
         let lo = self.span;
         let pattern = self.local_pattern()?;
         // Optional type annotation

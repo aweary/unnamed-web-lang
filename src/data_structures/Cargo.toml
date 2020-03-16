@@ -9,7 +9,7 @@ edition = "2018"
 [dependencies]
 edit-distance = "2.1.0"
 fxhash = "0.2.1"
-id-arena = "2.2.1"
+id-arena = { version = "2.2.1", features = ["rayon"] }
 insta = "0.13.1"
 petgraph = "0.5.0"
 quickcheck = "0.9.2"

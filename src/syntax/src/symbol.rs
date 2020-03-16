@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use data_structures::scope_map::{Reference};
 
 use std::fmt::{Debug, Error, Formatter};
 use std::result::Result;
@@ -9,6 +10,8 @@ pub struct Symbol {
     // with a global interner like rustc, but for now this helps debugging
     unstable_source: String,
 }
+
+impl Reference for Symbol {}
 
 impl Symbol {
     pub fn intern(s: &str) -> Symbol {

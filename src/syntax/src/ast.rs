@@ -46,11 +46,11 @@ pub struct NodeId(pub usize);
 
 #[derive(Clone, Debug)]
 pub struct Program {
-    pub modules: Vec<Mod>,
+    pub modules: Vec<Module>,
 }
 
 #[derive(Clone, Debug)]
-pub struct Mod {
+pub struct Module {
     pub items: Vec<Item>,
 }
 
@@ -225,6 +225,8 @@ pub struct Stmt {
 pub enum StmtKind {
     // A local, let binding
     Local(Box<Local>),
+    // A state definition. Like a local binding, but more restricted.
+    State(Box<Local>),
     // An item definition, local to some block
     Item(Box<Item>),
     // Expression statement

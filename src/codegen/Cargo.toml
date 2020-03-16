@@ -8,4 +8,5 @@ edition = "2018"
 
 [dependencies]
 syntax = { path = "../syntax" }
-
+hir = { path = "../hir" }
+diagnostics = { path = "../diagnostics" }
