@@ -4,7 +4,7 @@ use crate::HashMap;
 use std::fmt::Debug;
 use std::hash::Hash;
 
-pub trait Reference: Debug + Eq + Hash {}
+pub trait Reference: Debug + Eq + Hash + Clone {}
 
 pub trait Referant: Debug + Clone {}
 
@@ -66,20 +66,15 @@ impl<K: Reference, V: Referant> ScopeMap<K, V> {
             Some(scope) => scope.define(reference, referant),
             None => panic!(),
         };
-        // ...
     }
 
     pub fn enter_scope(&mut self) {
-        // Create a new scope
         let scope = Scope::default();
-        // Put the scope into the persisted arena.
         let scope_id = self.scope_arena.alloc(scope);
-        // Push the scope ID into the list of active scopes
         self.active_scopes.push(scope_id)
     }
 
     pub fn exit_scope(&mut self) {
-        // Remove the last scope from the list of referencable scopes
         self.active_scopes.pop();
     }
 

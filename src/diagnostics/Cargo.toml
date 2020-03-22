@@ -8,5 +8,4 @@ edition = "2018"
 
 [dependencies]
 serde_json = "1.0.41"
-codespan = { version = "0.5.0", features = ["serialization"] }
-codespan-reporting = "0.5.0"
+source = { path = "../source" }

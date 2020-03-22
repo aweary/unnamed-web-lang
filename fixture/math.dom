@@ -1,0 +1,15 @@
+// import {bar} from "./bar.dom";
+import {log} from "./main.dom";
+
+export function add(a: Number, b: Number : Number {
+   log("add", a);
+   return a + b;
+}
+
+export function sub(a: Number, b: Number) : Number {
+   return a - b;
+}
+
+export function double(x: Number) : Number {
+   return add(x, x);
+}

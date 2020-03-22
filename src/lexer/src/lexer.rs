@@ -1,11 +1,16 @@
 use crate::reader::Reader;
 
-use diagnostics::{Diagnostic, FileId, Label, ParseResult as Result};
+use diagnostics::ParseResult as Result;
+
+use source::diagnostics::{Diagnostic, Label, LabelStyle};
+use source::filesystem::FileId;
+
 use syntax::token::{token, Token, TokenKind};
 use syntax::token::{Keyword, Lit, LitKind};
 // use syntax::span::{ByteIndex, Span};
-use codespan::{ByteIndex, Span};
 use syntax::symbol::Symbol;
+
+use source::diagnostics::{ByteIndex, Span};
 
 use std::collections::VecDeque;
 use std::iter::Iterator;
@@ -366,11 +371,15 @@ impl<'a> Lexer<'a> {
                 let span_start = self.start_span();
                 self.eat(ch);
                 let span = self.end_span(span_start);
+                let label = Label::new(LabelStyle::Primary, self.file_id, span).with_message("Problem!");
                 // TODO move this into a helper function
-                let diagnostic = Diagnostic::new_error(
-                    "Unexpected character",
-                    Label::new(self.file_id, span, ""),
-                );
+                // let diagnostic = Diagnostic::new_error(
+                //     "Unexpected character",
+                //     label,
+                // );
+                let diagnostic = Diagnostic::error()
+                    .with_message("Unexpected character")
+                    .with_labels(vec![label]);
                 Err(diagnostic)
             }
             _ => self.eof(),

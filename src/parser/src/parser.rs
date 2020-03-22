@@ -5,13 +5,15 @@ use syntax::ast;
 use syntax::precedence::Precedence;
 use syntax::token::{self, Keyword, Token, TokenKind};
 use syntax::ty;
-use syntax::Span;
+// use syntax::Span;
 
 use std::path::PathBuf;
 
 use diagnostics::ParseResult as Result;
-use diagnostics::{Diagnostic, FileId, Label};
+// use diagnostics::{Diagnostic, Label};
 
+use source::diagnostics::{Diagnostic, Label, LabelStyle, Span};
+use source::filesystem::FileId;
 
 const DUMMY_NODE_ID: ast::NodeId = ast::NodeId(0);
 
@@ -26,17 +28,19 @@ pub struct Parser<'s> {
 
 /// TODO move to diagnostics crate
 trait DiagnosticReporting {
-    fn fatal(&self, message: &str, label: &str, span: Span) -> Diagnostic;
+    fn fatal(&self, message: &str, label: &str, span: Span) -> Diagnostic<FileId>;
 }
 
 impl DiagnosticReporting for Parser<'_> {
-    fn fatal(&self, message: &str, label: &str, span: Span) -> Diagnostic {
-        Diagnostic::new_error(message, Label::new(self.file_id, span, label))
+    fn fatal(&self, message: &str, label_message: &str, span: Span) -> Diagnostic<FileId> {
+        let label = Label::new(LabelStyle::Primary, self.file_id, span).with_message(label_message);
+        Diagnostic::error().with_message(message).with_labels(vec![label])
+        // Diagnostic::new_error(message, Label::new(self.file_id, span, label))
     }
 }
 
 impl Parser<'_> {
-    pub fn new<'a>(source: &'a str, file_id: FileId) -> Parser<'a> {
+    pub fn new(source: &str, file_id: FileId) -> Parser<'_> {
         // Create a tokenzier/lexer
         let tokenizer = Tokenizer::new(&source, file_id);
         // Start with a dummy span
@@ -72,19 +76,13 @@ impl Parser<'_> {
     fn expect(&mut self, kind: TokenKind) -> Result<Token> {
         // TODO don't unwrap here.
         let prev_span = self.span;
-        let token = self.next_token().unwrap();
+        let token = self.next_token()?;
         if token.kind != kind {
-            Err(self
-                .fatal(
-                    "Unexpceted token",
-                    &format!("Expected {} after this token", kind),
-                    prev_span,
-                )
-                .with_secondary_labels(vec![Label::new(
-                    self.file_id,
-                    self.span,
-                    &format!("But we found this instead"),
-                )]))
+            let diagnostic = Diagnostic::error().with_message("Unexpected token").with_labels(vec![
+                Label::primary(self.file_id, prev_span).with_message(&format!("Expected {} after this token", kind)),
+                Label::secondary(self.file_id, self.span).with_message("But we found this insteasd")
+            ]);
+            Err(diagnostic)
         } else {
             Ok(token)
         }
@@ -101,7 +99,7 @@ impl Parser<'_> {
 
     fn ident(&mut self) -> Result<ast::Ident> {
         // TODO dont unwrap here, maybe next_token should use result
-        let token = self.next_token().unwrap();
+        let token = self.next_token()?;
         match token.kind {
             TokenKind::Ident(symbol) => Ok(ast::Ident {
                 name: symbol,
@@ -156,7 +154,7 @@ impl Parser<'_> {
             }
             // Everything else
             _ => {
-                let token = self.next_token().unwrap();
+                let token = self.next_token()?;
                 Err(self.fatal(
                     "Unexpected token",
                     &format!(
@@ -223,7 +221,7 @@ impl Parser<'_> {
                         }
                         // Fatal
                         _ => {
-                            let token = self.next_token().unwrap();
+                            let token = self.next_token()?;
                             return Err(self.fatal(
                                 "Unexpected token",
                                 &format!("Expexcted a comma, found {:?}", token.kind),
@@ -238,7 +236,7 @@ impl Parser<'_> {
                 }
                 // All other tokens are syntax errors
                 _ => {
-                    let token = self.next_token().unwrap();
+                    let token = self.next_token()?;
                     return Err(self.fatal(
                         "Unexpected token",
                         &format!("Expexcted an identifier, found {:?}", token.kind),
@@ -610,7 +608,7 @@ impl Parser<'_> {
     }
 
     pub fn stmt(&mut self) -> Result<ast::Stmt> {
-        let token = self.peek().unwrap();
+        let token = self.peek()?;
         match token.kind {
             TokenKind::Reserved(Keyword::Let) => {
                 self.skip()?;
@@ -782,7 +780,7 @@ impl Parser<'_> {
             // ...
             _ => {
                 let span = self.span;
-                let token = self.next_token().unwrap();
+                let token = self.next_token()?;
                 Err(self.fatal(
                     "Syntax error",
                     &format!("did not expect {}", token.kind),
@@ -978,7 +976,7 @@ impl Parser<'_> {
         let name = self.ident()?;
         let attrs = self.template_attrs()?;
         let open = ast::TemplateOpenTag {
-            name: name.clone(),
+            name,
             attrs,
             span: lo.merge(self.span),
         };
@@ -1294,7 +1292,7 @@ impl Parser<'_> {
             if self.eat(Comma)? {
                 continue;
             } else {
-                self.expect(terminator.clone())?;
+                self.expect(terminator)?;
                 break;
             }
         }

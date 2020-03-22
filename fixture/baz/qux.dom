@@ -1,3 +1,6 @@
+import {log} from "../main.dom";
+
+
 pub function shout(words: string) : unit {
-    // ...
+    log(words);
 }

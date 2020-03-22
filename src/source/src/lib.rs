@@ -1,1 +1,6 @@
-pub use codespan::{FileId, Files};
+pub mod filesystem;
+pub use filesystem::*;
+
+mod span;
+mod index;
+pub mod diagnostics;

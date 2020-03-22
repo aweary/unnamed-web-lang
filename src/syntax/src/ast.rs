@@ -1,9 +1,9 @@
 
 use crate::symbol::Symbol;
-use codespan::Span;
 
 pub use crate::ty::{LiteralTy, Ty};
 use diagnostics::ParseResult as Result;
+use source::diagnostics::Span;
 
 use std::fmt::{Debug, Error, Formatter};
 use std::path::PathBuf;
@@ -22,7 +22,7 @@ pub fn expr(kind: ExprKind, span: Span) -> Result<Expr> {
 }
 
 // TODO move these into symbols crate
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct Ident {
     pub name: Symbol,
     pub span: Span,
@@ -94,10 +94,11 @@ impl Import {
         self.clone().path.path
     }
 
-    pub fn resolve(&self, base: &PathBuf) -> PathBuf {
+    pub fn resolve(&self, base: &PathBuf) -> Result<PathBuf> {
         use path_dedot::*;
         let path = &self.path.path;
-        base.join(path).parse_dot().unwrap()
+        let path = base.join(path).parse_dot().unwrap();
+        Ok(path)
     }
 }
 

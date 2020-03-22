@@ -1,6 +1,17 @@
-import {add} from "./foo.dom";
+import {add} from "./math.dom";
+import {bar} from "./bar.dom";
 
-component Add(value: Number, increment: Number) : View {
-  let result = add(value, increment);
-  return <text>{result}</text>;
+export function log(input: string) : void {
+  // ...
+}
+
+
+component AddNumbers(value: Number, increment: Number) : View {
+  if value > increment || increment == value {
+    let a = 10;
+    let names = [];
+    return names;
+  };
+  let first = add(value, increment);
+  return first;
 }

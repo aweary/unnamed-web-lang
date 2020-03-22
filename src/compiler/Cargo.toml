@@ -10,9 +10,9 @@ edition = "2018"
 # rustc-ap-rustc_data_structures = "631.0.0"
 lowering = { path = "../lowering" }
 fxhash = "0.2.1"
-codespan = { version = "0.5.0", features = ["serialization"] }
-codespan-reporting = "0.5.0"
 codegen = { path = "../codegen" }
+data_structures = { path = "../data_structures" }
+dashmap = "3.7.0"
 log = { path = "../log" }
 source = { path = "../source" }
 diagnostics = { path = "../diagnostics" }
@@ -21,6 +21,12 @@ lexer = { path = "../lexer" }
 path-dedot = "1.1.13"
 parser = { path = "../parser" }
 petgraph = "0.4.13"
-session = { path = "../session" }
 syntax = { path = "../syntax" }
 typecheck = { path = "../typecheck" }
+crossbeam = "0.7.3"
+crossbeam-utils = "0.7.2"
+tokio = { version = "0.2", features = ["full"] }
+scoped_threadpool = "0.1.9"
+threadpool = "1.7.1"
+rayon = "1.3.0"
+num_cpus = "1.12.0"

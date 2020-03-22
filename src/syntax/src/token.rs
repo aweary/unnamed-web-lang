@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::ast::{AssignOp, BinOp, UnOp};
 use crate::precedence::Precedence;
 use crate::symbol::Symbol;
-use codespan::Span;
+use source::diagnostics::Span;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Token {

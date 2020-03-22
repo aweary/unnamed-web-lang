@@ -1,75 +1,148 @@
 use data_structures::control_flow_graph::{Block, Blockable, ControlFlowEdge, ControlFlowGraph};
+use data_structures::module_graph::ModuleGraphIndex;
 use data_structures::scope_map::ScopeMap;
+
 use diagnostics::ParseResult as Result;
-// use diagnostics::
-use codespan_reporting::diagnostic::{Diagnostic, Label};
+
 use hir;
-use session::Session;
 use source::FileId;
 use std::sync::Arc;
+use std::sync::Mutex;
 use syntax::ast;
 use syntax::symbol::Symbol;
 
-// hmmm
+use source::diagnostics::{Diagnostic, Label, LabelStyle};
+use source::filesystem::FileSystem;
+
+use std::path::PathBuf;
+
+type ImportDescriptorList = Vec<(PathBuf, hir::Ident, ast::ImportPath)>;
 
 #[derive(Debug, Clone)]
-struct CFGStatement(pub Arc<hir::Statement>);
+struct CFGStatement(pub Arc<Mutex<hir::Statement>>);
 
 impl Blockable for CFGStatement {
     fn has_early_exit(&self) -> bool {
-        self.0.has_early_exit()
+        self.0.lock().unwrap().has_early_exit()
     }
 }
 
-pub struct LoweringContext<'sess> {
+pub struct LoweringContext {
+    vfs: Arc<FileSystem>,
     scope: ScopeMap<Symbol, hir::Binding>,
-    sess: &'sess mut Session,
     ignore_next_scope: bool,
-    current_cfg: Option<ControlFlowGraph<CFGStatement>>,
+    imports: ImportDescriptorList,
+    tracked_deps: Vec<(ModuleGraphIndex<hir::Module>, Symbol)>,
     // TODO move these into a shared context so we can share arenas
     // across modules.
     file: FileId,
 }
 
-impl<'sess> LoweringContext<'sess> {
-    pub fn new(sess: &'sess mut Session, file: FileId) -> Self {
+impl LoweringContext {
+    pub fn new(vfs: Arc<FileSystem>, file: FileId) -> Self {
         LoweringContext {
-            sess,
+            vfs,
             file,
             ignore_next_scope: false,
-            current_cfg: None,
+            imports: vec![],
+            tracked_deps: vec![],
             scope: Default::default(),
         }
     }
 
     pub fn lower_module(&mut self, module: ast::Module) -> Result<hir::Module> {
+        // let path = self.sess.resolve_path(self.file);
         // Define the module-level scope
         self.scope.enter_scope();
         let mut definitions = vec![];
+        let mut imports = vec![];
         for item in module.items {
+            // We split definitions and imports here
             match item.kind {
-                ast::ItemKind::Fn(fndef) => {
-                    let fn_def = self.lower_fn(fndef)?;
-                    let def = hir::Definition {
-                        kind: hir::DefinitionKind::Function(fn_def),
-                        visibility: hir::DefinitionVisibility::Private,
-                    };
+                ast::ItemKind::Import(import) => {
+                    let import = self.lower_import(*import)?;
+                    imports.extend(import);
+                }
+                _ => {
+                    let def = self.lower_item(item)?;
                     definitions.push(def);
                 }
-                ast::ItemKind::Component(compdef) => {
-                    let compdef = self.lower_component(compdef)?;
-                    let def = hir::Definition {
-                        kind: hir::DefinitionKind::Component(compdef),
-                        visibility: hir::DefinitionVisibility::Private,
-                    };
-                    definitions.push(def);
-                }
-                _ => unimplemented!(),
-            };
+            }
         }
         self.scope.exit_scope();
-        let module = hir::Module { definitions };
+        let module = hir::Module {
+            // TODO
+            // path: PathBuf::new(),
+            imports,
+            definitions,
+            file: self.file,
+        };
         Ok(module)
+    }
+
+    fn lower_item(&mut self, item: ast::Item) -> Result<hir::Definition> {
+        match item.kind {
+            ast::ItemKind::Fn(fndef) => {
+                let span = fndef.span;
+                let fn_def = self.lower_fn(fndef)?;
+                Ok(hir::Definition {
+                    kind: hir::DefinitionKind::Function(fn_def),
+                    visibility: hir::DefinitionVisibility::Private,
+                    span,
+                })
+            }
+            ast::ItemKind::Component(compdef) => {
+                let span = compdef.span;
+                let compdef = self.lower_component(compdef)?;
+                Ok(hir::Definition {
+                    kind: hir::DefinitionKind::Component(compdef),
+                    visibility: hir::DefinitionVisibility::Private,
+                    span,
+                })
+            }
+            ast::ItemKind::Export(item) => {
+                let mut def = self.lower_item(*item)?;
+                def.visibility = hir::DefinitionVisibility::Public;
+                Ok(def)
+            }
+            _ => unimplemented!(),
+        }
+    }
+
+    fn lower_import(&mut self, import: ast::Import) -> Result<Vec<Arc<Mutex<hir::Import>>>> {
+        let path = self.vfs.path_for_id(&self.file);
+        // Resolve the base path for the current file, which is the path
+        // of the folder this file lives in. This is what relative imports
+        // are resolved reltive to.
+        let base_path = path.parent().unwrap().to_path_buf();
+        // We return a vector because we flatten the imports when lowering
+        let mut imports = vec![];
+        // Resolve the the absolute path for the imported module.k
+        let path = import.resolve(&base_path)?;
+        // When we lower imports we don't immediately resolve the imported file.
+        // Instead, the binding that we add to the local scope contains the resolved
+        // path for the referenced file and the name of the export we're importing.
+        for specifier in import.specifiers {
+            let ident = specifier.ident;
+            let local_ident = specifier.alias.unwrap_or_else(|| ident.clone());
+            // Use the module-local alias if the user defined one, e.g., import {a as b} ...
+            let local_name = local_ident.name;
+            // Track the imports...
+            self.imports
+                .push((path.clone(), ident.clone(), import.path.clone()));
+            let import = Arc::new(Mutex::new(hir::Import {
+                path: hir::ImportPath {
+                    resolved: path.clone(),
+                    span: import.path.span,
+                },
+                name: ident,
+                span: import.span,
+            }));
+            imports.push(import.clone());
+            self.scope
+                .define(local_name, hir::Binding::Import(import.clone()))
+        }
+        Ok(imports)
     }
 
     fn lower_fn_params(&mut self, params: ast::ParamType) -> Result<Vec<Arc<hir::Param>>> {
@@ -113,7 +186,7 @@ impl<'sess> LoweringContext<'sess> {
         Ok(compdef)
     }
 
-    fn lower_fn(&mut self, fndef: ast::FnDef) -> Result<Arc<hir::Function>> {
+    fn lower_fn(&mut self, fndef: ast::FnDef) -> Result<Arc<Mutex<hir::Function>>> {
         // TODO figure out how to fill this out
         let cfg = ControlFlowGraph::default();
         let name = fndef.name.name.clone();
@@ -123,13 +196,13 @@ impl<'sess> LoweringContext<'sess> {
         let params = self.lower_fn_params(fndef.params)?;
         let block = self.lower_block(*fndef.body)?;
         self.scope.exit_scope();
-        let fndef = Arc::new(hir::Function {
+        let fndef = Arc::new(Mutex::new(hir::Function {
             params,
             name: fndef.name,
             span: fndef.span,
             graph: cfg,
             body: block,
-        });
+        }));
         self.scope
             .define(name, hir::Binding::Function(fndef.clone()));
         Ok(fndef)
@@ -163,9 +236,9 @@ impl<'sess> LoweringContext<'sess> {
         let mut statements = vec![];
         for stmt in block.stmts {
             let stmt = self.lower_stmt(stmt)?;
-            let stmt = Arc::new(stmt);
+            let stmt = Arc::new(Mutex::new(stmt));
             // Construct the CFG for the block, following this new statement
-            match stmt.kind {
+            match stmt.lock().unwrap().kind {
                 hir::StatementKind::Return(_) => {
                     // Add to the basic block
                     cfg_block.push(CFGStatement(stmt.clone()));
@@ -179,7 +252,6 @@ impl<'sess> LoweringContext<'sess> {
                 }
                 _ => {
                     cfg_block.push(CFGStatement(stmt.clone()));
-                    // ...
                 }
             };
             statements.push(stmt);
@@ -293,11 +365,12 @@ impl<'sess> LoweringContext<'sess> {
                         // This is where we handle reference errors.
                         // TODO move this logic out into some unified error reporting interface
                         let message = "Unknown reference";
-                        let label = "Cannot find any value with this name";
-                        return Err(Diagnostic::new_error(
-                            message,
-                            Label::new(self.file, ident.span, label),
-                        ));
+                        let label = Label::new(LabelStyle::Primary, self.file, ident.span)
+                            .with_message("Cannot find any value with this name");
+                        let diagnostic = Diagnostic::error()
+                            .with_message(message)
+                            .with_labels(vec![label]);
+                        return Err(diagnostic);
                     }
                 }
             }
@@ -360,15 +433,32 @@ impl<'sess> LoweringContext<'sess> {
                             hir::Binding::Component(component) => {
                                 instrs.push(hir::TemplateInstr::OpenCustomElement(component))
                             }
+                            // hir::Binding::Import(import) => {
+                            //     match def.kind {
+                            //         hir::DefinitionKind::Component(component) => instrs
+                            //             .push(hir::TemplateInstr::OpenCustomElement(component)),
+                            //         _ => {
+                            //             // This is where we handle reference errors.
+                            //             // TODO move this logic out into some unified error reporting interface
+                            //             let message = "Cannot use this value as a component";
+                            //             let label = "Functions and components are not the same";
+                            //             return Err(Diagnostic::new_error(
+                            //                 message,
+                            //                 Label::new(self.file, ident.span, label),
+                            //             ));
+                            //         }
+                            //     }
+                            // }
                             _ => {
                                 // This is where we handle reference errors.
                                 // TODO move this logic out into some unified error reporting interface
                                 let message = "Cannot use this value as a component";
-                                let label = "Functions and components are not the same";
-                                return Err(Diagnostic::new_error(
-                                    message,
-                                    Label::new(self.file, ident.span, label),
-                                ));
+                                let label = Label::new(LabelStyle::Primary, self.file, ident.span)
+                                    .with_message("Functions and components are not the same");
+                                let diagnostic = Diagnostic::error()
+                                    .with_message(message)
+                                    .with_labels(vec![label]);
+                                return Err(diagnostic);
                             }
                         }
                         println!("binding!");
@@ -377,11 +467,12 @@ impl<'sess> LoweringContext<'sess> {
                         // This is where we handle reference errors.
                         // TODO move this logic out into some unified error reporting interface
                         let message = "Unknown reference";
-                        let label = "Cannot find any value with this name";
-                        return Err(Diagnostic::new_error(
-                            message,
-                            Label::new(self.file, ident.span, label),
-                        ));
+                        let label = Label::new(LabelStyle::Primary, self.file, ident.span)
+                            .with_message("Cannot find any value with this name");
+                        let diagnostic = Diagnostic::error()
+                            .with_message(message)
+                            .with_labels(vec![label]);
+                        return Err(diagnostic);
                     }
                 }
             }
@@ -433,7 +524,6 @@ impl<'sess> LoweringContext<'sess> {
     }
 
     fn lower_local(&mut self, local: ast::Local) -> Result<Arc<hir::Local>> {
-        let name: Symbol = local.name.clone().into();
         // Avoiding .map so the ? propagates errors
         let init = if let Some(expr) = local.init {
             Some(Box::new(self.lower_expr(*expr)?))

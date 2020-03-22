@@ -1,16 +1,24 @@
-use syntax::{symbol::Symbol, Span};
+use syntax::{symbol::Symbol};
+
+use source::diagnostics::Span;
 
 use std::fmt;
 use std::sync::Arc;
+use std::sync::Mutex;
 
 use data_structures::arena::Id;
 use data_structures::scope_map::Referant;
 use data_structures::{Blockable, ControlFlowGraph};
+use source::FileId;
 
+use edit_distance::edit_distance;
 
+use std::path::PathBuf;
 
 // Reused from the AST
-pub use syntax::ast::{AssignOp, BinOp, Ident, Lit, LocalPattern, MatchArm, Ty, UnOp};
+pub use syntax::ast::{
+    AssignOp, BinOp, Ident, ImportSpecifier, Lit, LocalPattern, MatchArm, Ty, UnOp,
+};
 
 pub type ModuleId = Id<Module>;
 pub type DefId = Id<Definition>;
@@ -33,9 +41,10 @@ pub struct Package {
 pub enum Binding {
     Local(Arc<Local>),
     State(Arc<Local>),
-    Function(Arc<Function>),
+    Function(Arc<Mutex<Function>>),
     Argument(Arc<Param>),
     Component(Arc<Component>),
+    Import(Arc<Mutex<Import>>),
 }
 
 impl Referant for Binding {}
@@ -54,8 +63,69 @@ pub struct Local {
 /// of definitions.
 #[derive(Debug, Clone)]
 pub struct Module {
+    // The list of imports
+    pub imports: Vec<Arc<Mutex<Import>>>,
     // The collection of definitions in this module
     pub definitions: Vec<Definition>,
+    // The absolute path for this module
+    // pub path: PathBuf,
+    // The unique file ID for accessing this module's source
+    pub file: FileId,
+}
+
+impl Module {
+    pub fn resolve_export(&self, name: &Ident) -> Option<Definition> {
+        for def in &self.definitions {
+            if def.visibility == DefinitionVisibility::Public {
+                match &def.kind {
+                    DefinitionKind::Function(fndef) => {
+                        let fndef = fndef.lock().unwrap();
+                        if fndef.name.name == name.name {
+                            return Some(def.clone());
+                        }
+                    }
+                    DefinitionKind::Component(compdef) => {
+                        if compdef.name.name == name.name {
+                            return Some(def.clone());
+                        }
+                    }
+                    _ => unimplemented!(),
+                }
+            }
+        }
+        None
+    }
+
+    pub fn resolve_similar_export(&self, export_ident: &Ident) -> Option<&Definition> {
+        let mut similar_export = None;
+        let mut max_edit_distance = std::usize::MAX;
+        for def in &self.definitions {
+            let def_ident = def.name();
+            let distance = edit_distance(export_ident.name.as_str(), def_ident.name.as_str());
+            if distance < max_edit_distance {
+                max_edit_distance = distance;
+                similar_export = Some(def);
+            }
+        }
+        if max_edit_distance < 5 {
+            similar_export
+        } else {
+            None
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ImportPath {
+    pub resolved: PathBuf,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub struct Import {
+    pub path: ImportPath,
+    pub name: Ident,
+    pub span: Span,
 }
 
 /// A definition for some nameable item.
@@ -63,12 +133,26 @@ pub struct Module {
 pub struct Definition {
     pub kind: DefinitionKind,
     pub visibility: DefinitionVisibility,
+    pub span: Span,
+}
+
+impl Definition {
+    pub fn name(&self) -> Ident {
+        match &self.kind {
+            DefinitionKind::Function(fndef) => {
+                let fndef = fndef.lock().unwrap();
+                fndef.name.clone()
+            }
+            DefinitionKind::Component(compdef) => compdef.name.clone(),
+            _ => unimplemented!(),
+        }
+    }
 }
 
 /// A definition for some nameable item.
 #[derive(Debug, Clone)]
 pub enum DefinitionKind {
-    Function(Arc<Function>),
+    Function(Arc<Mutex<Function>>),
     Component(Arc<Component>),
     Enum,
     Type,
@@ -103,7 +187,7 @@ pub struct Component {
 /// Private definitions are only visible (referenceable) to other
 /// definitions in the same module. Public definitions can be imported
 /// by any other module.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum DefinitionVisibility {
     Private,
     Public,
@@ -111,7 +195,7 @@ pub enum DefinitionVisibility {
 
 #[derive(Debug, Clone)]
 pub struct Block {
-    pub statements: Vec<Arc<Statement>>,
+    pub statements: Vec<Arc<Mutex<Statement>>>,
 }
 
 #[derive(Clone)]
@@ -150,7 +234,7 @@ pub enum StatementKind {
     // Return some value from the current function
     Return(Expr),
     // If statement
-    If(IfExpr)
+    If(IfExpr),
 }
 
 #[derive(Clone, Debug)]
@@ -248,6 +332,6 @@ pub enum ExprKind {
     /// Match
     Match(Box<Expr>, Vec<MatchArm>),
     // Function expression
-    Func(Arc<Function>),
+    Func(Arc<Mutex<Function>>),
     // ...
 }

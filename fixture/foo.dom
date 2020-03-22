@@ -1,5 +1,0 @@
-import {bar} from "./bar.dom"
-
-export function add(a: Number, b: Number) : Number {
-   let a = 10; 
-}
