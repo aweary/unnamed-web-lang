@@ -1,0 +1,55 @@
+{
+  "name": "webscript-lsp-server",
+  "description": "A language server example",
+  "author": "Brandon dail",
+  "license": "MIT",
+  "version": "0.1.0",
+  "publisher": "aweary",
+  "categories": [],
+  "engines": {
+    "vscode": "^1.43.0"
+  },
+  "activationEvents": [
+    "onLanguage:webscript"
+  ],
+  "main": "./out/extension",
+  "contributes": {
+    "languages": [
+      {
+        "id": "webscript",
+        "aliases": [
+          "webscript",
+          "WebScript"
+        ],
+        "extensions": [
+          ".dom"
+        ],
+        "configuration": "./webscript-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "webscript",
+        "scopeName": "source.webscript",
+        "path": "./syntaxes/webscript.tmLanguage.json"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "tsc -p ./",
+    "compile": "tsc -b",
+    "watch": "tsc -b -w"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^6.1.3"
+  },
+  "devDependencies": {
+    "@types/mocha": "^5.2.7",
+    "mocha": "^6.2.2",
+    "@types/node": "^12.11.7",
+    "@types/vscode": "^1.43.0",
+    "eslint": "^6.4.0",
+    "@typescript-eslint/parser": "^2.3.0",
+    "typescript": "^3.8.3"
+  }
+}

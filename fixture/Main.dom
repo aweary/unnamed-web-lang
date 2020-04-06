@@ -1,17 +1,1 @@
-import {add} from "./math.dom";
-import {bar} from "./bar.dom";
-
-export function log(input: string) : void {
-  // ...
-}
-
-
-component AddNumbers(value: Number, increment: Number) : View {
-  if value > increment || increment == value {
-    let a = 10;
-    let names = [];
-    return names;
-  };
-  let first = add(value, increment);
-  return first;
-}
+a b c

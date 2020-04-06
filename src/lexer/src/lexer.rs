@@ -229,6 +229,7 @@ impl<'a> Lexer<'a> {
             "in" => Reserved(In),
             "try" => Reserved(Try),
             "catch" => Reserved(Catch),
+            "const" => Reserved(Const),
             // Allow `export` for now, not sure what keyword to use
             "pub" | "export" => Reserved(Pub),
             "as" => Reserved(As),

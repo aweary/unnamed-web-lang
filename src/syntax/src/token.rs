@@ -188,6 +188,7 @@ pub enum Keyword {
     Return,
     While,
     Pub,
+    Const,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]

@@ -1,4 +1,4 @@
-use codespan_reporting::files::{Files, SimpleFile};
+pub use codespan_reporting::files::{Files, SimpleFile};
 
 use crate::diagnostics::Diagnostic;
 
@@ -7,11 +7,22 @@ use std::fs;
 use std::ops::Range;
 use std::path::PathBuf;
 
+use lsp_types::Url;
+
 use dashmap::DashMap;
 
 use crossbeam::atomic::AtomicCell;
 
+
+
 pub type Result<T> = std::result::Result<T, Diagnostic<FileId>>;
+
+
+#[derive(Debug, Clone, Hash)]
+pub enum FileIdentifier  {
+    Path(PathBuf),
+    Url(Url),
+}
 
 #[derive(Debug, PartialEq, Clone, Copy, Hash, Eq)]
 pub struct FileId(usize);
@@ -24,6 +35,7 @@ impl Display for FileName {
         write!(f, "{:?}", self.0)
     }
 }
+
 type File = SimpleFile<FileName, String>;
 
 /// The core data structure for interacting with source text from
@@ -58,6 +70,27 @@ impl FileSystem {
             .to_path_buf()
     }
 
+    pub fn update(&self, id: FileId, text: String) {
+        self.files
+            .alter(&id, |_, file| File::new(file.name().clone(), text))
+    }
+
+    pub fn load(&self, path: &PathBuf, text: String) -> Result<FileId> {
+        let name = FileName(path.clone());
+        let file = File::new(name, text);
+        // Atomically increment the file id counter
+        let id = {
+            let id = self.next_id.load();
+            self.next_id.store(id + 1);
+            id
+        };
+        let fileid = FileId(id);
+        self.files.insert(fileid, file);
+        self.ids.insert(path.clone(), fileid);
+        self.paths.insert(fileid, path.clone());
+        Ok(fileid)
+    }
+
     pub fn resolve(&self, path: &PathBuf) -> Result<FileId> {
         if let Some(fileid) = self.id_for_path(path) {
             Ok(fileid)
@@ -72,9 +105,7 @@ impl FileSystem {
             let source = match fs::read_to_string(path) {
                 Ok(source) => source,
                 Err(os_err) => {
-                    use std::error::Error;
-                    return Err(Diagnostic::error().with_message(os_err.description()));
-                    // panic!();
+                    return Err(Diagnostic::error().with_message(os_err.to_string()));
                 }
             };
             let name = FileName(path.clone());

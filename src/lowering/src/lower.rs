@@ -31,6 +31,7 @@ pub struct LoweringContext {
     vfs: Arc<FileSystem>,
     scope: ScopeMap<Symbol, hir::Binding>,
     ignore_next_scope: bool,
+    in_component: bool,
     imports: ImportDescriptorList,
     tracked_deps: Vec<(ModuleGraphIndex<hir::Module>, Symbol)>,
     // TODO move these into a shared context so we can share arenas
@@ -44,6 +45,7 @@ impl LoweringContext {
             vfs,
             file,
             ignore_next_scope: false,
+            in_component: false,
             imports: vec![],
             tracked_deps: vec![],
             scope: Default::default(),
@@ -105,8 +107,51 @@ impl LoweringContext {
                 def.visibility = hir::DefinitionVisibility::Public;
                 Ok(def)
             }
+            ast::ItemKind::Constant(constant) => {
+                let span = constant.span;
+                let constant = self.lower_constant(constant)?;
+                Ok(hir::Definition {
+                    kind: hir::DefinitionKind::Constant(constant),
+                    visibility: hir::DefinitionVisibility::Private,
+                    span,
+                })
+            }
+            ast::ItemKind::Type(typedef) => {
+                let span = typedef.span;
+                let typedef = self.lower_typedef(*typedef)?;
+                Ok(hir::Definition {
+                    kind: hir::DefinitionKind::Type(typedef),
+                    visibility: hir::DefinitionVisibility::Private,
+                    span,
+                })
+            }
             _ => unimplemented!(),
         }
+    }
+
+    fn lower_typedef(&mut self, typedef: ast::TypeDef) -> Result<Arc<hir::TypeDef>> {
+        let name = typedef.name.name.clone();
+        let typedef = Arc::new(typedef);
+        self.scope.define(name, hir::Binding::Type(typedef.clone()));
+        Ok(typedef)
+    }
+
+    fn lower_constant(&mut self, constant: ast::Constant) -> Result<Arc<hir::Constant>> {
+        let span = constant.span;
+        let name = constant.name;
+        let ty = self.lower_ty(constant.ty)?;
+        let value = self.lower_expr(constant.value)?;
+        let constant = Arc::new(hir::Constant {
+            name,
+            ty,
+            value,
+            span,
+        });
+        self.scope.define(
+            constant.name.name.clone(),
+            hir::Binding::Constant(constant.clone()),
+        );
+        Ok(constant)
     }
 
     fn lower_import(&mut self, import: ast::Import) -> Result<Vec<Arc<Mutex<hir::Import>>>> {
@@ -149,10 +194,12 @@ impl LoweringContext {
         let mut hir_params = vec![];
         for param in params {
             let name = param.name();
+            let ty = self.lower_ty(param.ty)?;
+
             let param = Arc::new(hir::Param {
                 local: param.local,
                 span: param.span,
-                ty: param.ty,
+                ty,
             });
             self.scope
                 .define(name, hir::Binding::Argument(param.clone()));
@@ -161,12 +208,69 @@ impl LoweringContext {
         Ok(hir_params)
     }
 
+    fn lower_ty(&mut self, ty: ast::Ty) -> Result<hir::Ty> {
+        match ty {
+            ast::Ty::Variable(ident, type_args) => {
+                let type_args = if let Some(type_args) = type_args {
+                    let mut hir_type_args = vec![];
+                    for arg in type_args {
+                        let ty = self.lower_ty(arg)?;
+                        hir_type_args.push(ty);
+                    }
+                    Some(hir_type_args)
+                } else {
+                    None
+                };
+                match self.scope.resolve(&ident.name) {
+                    Some(binding) => match binding {
+                        hir::Binding::Type(typedef) => {
+                            // Check that the type is getting the right number of arguments
+                            if type_args.is_some() && typedef.generics.is_none() {
+                                return Err(Diagnostic::error()
+                                    .with_message("Type is not generic")
+                                    .with_labels(vec![
+                                        Label::primary(self.file, typedef.name.span)
+                                            .with_message("This type is not generic"),
+                                        Label::secondary(self.file, ident.span).with_message(
+                                            "But this usage tries to pass it type arguments",
+                                        ),
+                                    ]));
+                            }
+
+                            let reference_ty = hir::ReferenceTy {
+                                ident: ident.clone(),
+                                typedef,
+                                type_args,
+                            };
+                            Ok(hir::Ty::Reference(reference_ty))
+                        }
+                        _ => Err(Diagnostic::error()
+                            .with_message("Cannot use non-type as an annotation")
+                            .with_labels(vec![Label::primary(self.file, ident.span)
+                                .with_message(
+                                "This value is being used as a type annotation, but its not a type",
+                            )])),
+                    },
+                    None => Err(Diagnostic::error()
+                        .with_message("Unable to resolve type reference")
+                        .with_labels(vec![Label::primary(self.file, ident.span)
+                            .with_message("Cannot find a type with this name")])),
+                }
+            }
+            ast::Ty::Unit => Ok(hir::Ty::Unit),
+            ast::Ty::Unknown => Ok(hir::Ty::Unknown),
+            ast::Ty::Unimplemented => panic!("Cant lower the unimplemented type"),
+            _ => unimplemented!(),
+        }
+    }
+
     /// Currently identical to lower_fn, except it returns hir::Component instead of hir::Function.
     /// This separate code path will let us add more constraints for components in the future.
     fn lower_component(&mut self, compdef: ast::ComponentDef) -> Result<Arc<hir::Component>> {
         // TODO figure out how to fill this out
         let cfg = ControlFlowGraph::default();
         let name = compdef.name.name.clone();
+        self.in_component = true;
         // Push a new scope before we lower the block, so the params are included
         self.ignore_next_scope = true;
         self.scope.enter_scope();
@@ -174,6 +278,7 @@ impl LoweringContext {
         let block = self.lower_block(*compdef.body)?;
         self.scope.exit_scope();
         self.ignore_next_scope = false;
+        self.in_component = false;
         let compdef = Arc::new(hir::Component {
             params,
             name: compdef.name,
@@ -181,6 +286,7 @@ impl LoweringContext {
             graph: cfg,
             body: block,
         });
+
         self.scope
             .define(name, hir::Binding::Component(compdef.clone()));
         Ok(compdef)
@@ -265,6 +371,27 @@ impl LoweringContext {
     fn lower_expr(&mut self, expr: ast::Expr) -> Result<hir::Expr> {
         use ast::ExprKind;
         let kind = match expr.kind {
+            ExprKind::Lambda(lambda) => {
+                let params = self.lower_fn_params(lambda.params)?;
+                let body = match lambda.body {
+                    ast::LambdaBody::Block(block) => {
+                        let block = self.lower_block(*block)?;
+                        hir::LambdaBody::Block(Box::new(block))
+                    }
+                    ast::LambdaBody::Expr(expr) => {
+                        let expr = self.lower_expr(*expr)?;
+                        hir::LambdaBody::Expr(Box::new(expr))
+                    }
+                };
+                let span = lambda.span;
+                let graph = ControlFlowGraph::default();
+                hir::ExprKind::Lambda(hir::Lambda {
+                    params,
+                    body,
+                    graph,
+                    span,
+                })
+            }
             ExprKind::Array(exprs) => {
                 // Doing it this way so I can use ? on lower_expr
                 let mut hir_exprs = vec![];
@@ -305,12 +432,19 @@ impl LoweringContext {
             }
             // Call expression
             ExprKind::Call(expr, args) => match self.lower_expr(*expr)?.kind {
-                hir::ExprKind::Reference(binding) => {
+                hir::ExprKind::Reference(_, binding) => {
                     let mut hir_args = vec![];
                     for arg in args {
                         hir_args.push(self.lower_expr(arg)?);
                     }
                     hir::ExprKind::Call(binding, hir_args)
+                }
+                hir::ExprKind::Member(expr, ident) => {
+                    let mut hir_args = vec![];
+                    for arg in args {
+                        hir_args.push(self.lower_expr(arg)?);
+                    }
+                    hir::ExprKind::MemberCall(expr, ident, hir_args)
                 }
                 _ => {
                     unimplemented!("Can't call computed functions yet");
@@ -348,8 +482,9 @@ impl LoweringContext {
                 }
             }
             // Object member access
-            ExprKind::Member(_, _) => {
-                unimplemented!("Member expression not implemented");
+            ExprKind::Member(expr, ident) => {
+                let expr = self.lower_expr(*expr)?;
+                hir::ExprKind::Member(Box::new(expr), ident)
             }
             // Object optional member access,
             ExprKind::OptionalMember(_, _) => {
@@ -360,7 +495,7 @@ impl LoweringContext {
             // A variable reference
             ExprKind::Reference(ident) => {
                 match self.scope.resolve(&ident.name) {
-                    Some(binding) => hir::ExprKind::Reference(binding),
+                    Some(binding) => hir::ExprKind::Reference(ident, binding),
                     None => {
                         // This is where we handle reference errors.
                         // TODO move this logic out into some unified error reporting interface
@@ -409,9 +544,15 @@ impl LoweringContext {
                 unimplemented!("Query expression not implemented");
             }
         };
+        let ty = if let Some(ty) = expr.ty {
+            let ty = self.lower_ty(ty)?;
+            Some(ty)
+        } else {
+            None
+        };
         Ok(hir::Expr {
             span: expr.span,
-            ty: expr.ty,
+            ty,
             kind,
         })
     }
@@ -530,10 +671,15 @@ impl LoweringContext {
         } else {
             None
         };
+        let ty = if let Some(ty) = local.ty {
+            Some(self.lower_ty(*ty)?)
+        } else {
+            None
+        };
         let local = hir::Local {
             name: local.name,
             span: local.span,
-            ty: local.ty,
+            ty,
             init,
         };
         let local = Arc::new(local);
@@ -582,6 +728,12 @@ impl LoweringContext {
                 hir::StatementKind::Local(local)
             }
             StmtKind::State(local) => {
+                // State is only allowed in components right now.
+                if !self.in_component {
+                    return Err(Diagnostic::error()
+                        .with_message("State can only be used in components")
+                        .with_labels(vec![Label::primary(self.file, local.span)]));
+                }
                 let local = self.lower_local(*local)?;
                 let name: Symbol = local.name.clone().into();
                 self.scope.define(name, hir::Binding::State(local.clone()));

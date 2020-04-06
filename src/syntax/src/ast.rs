@@ -62,10 +62,7 @@ pub struct Item {
 
 #[derive(Clone, Debug)]
 pub enum ItemKind {
-    /// A statoc item
-    ///
-    /// e.g., `static STATIC_NUM : number = 42`
-    Static(Box<Ty>, Box<Expr>),
+    Constant(Constant),
     /// A function declaration
     ///
     /// e.g., `fn add(a: number, b: number) : number { ... }
@@ -80,6 +77,14 @@ pub enum ItemKind {
     Import(Box<Import>),
     /// Exported declaration
     Export(Box<Item>),
+}
+
+#[derive(Clone, Debug)]
+pub struct Constant {
+    pub name: Ident,
+    pub ty: Ty,
+    pub value: Expr,
+    pub span: Span,
 }
 
 #[derive(Clone, Debug)]
@@ -169,6 +174,19 @@ pub struct FnDef {
     pub return_ty: Ty,
     pub is_async: bool,
     pub generics: Option<Generics>,
+    pub span: Span,
+}
+
+#[derive(Clone, Debug)]
+pub enum LambdaBody {
+    Block(Box<Block>),
+    Expr(Box<Expr>),
+}
+
+#[derive(Clone, Debug)]
+pub struct Lambda {
+    pub body: LambdaBody,
+    pub params: ParamType,
     pub span: Span,
 }
 
@@ -370,6 +388,8 @@ pub enum ExprKind {
     Match(Box<Expr>, Vec<MatchArm>),
     /// Function expression
     Func(Box<FnDef>),
+    /// Lambda function expression
+    Lambda(Lambda),
     /// GraphQL query
     Query(Box<Document>),
     // ...

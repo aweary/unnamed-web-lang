@@ -34,7 +34,9 @@ trait DiagnosticReporting {
 impl DiagnosticReporting for Parser<'_> {
     fn fatal(&self, message: &str, label_message: &str, span: Span) -> Diagnostic<FileId> {
         let label = Label::new(LabelStyle::Primary, self.file_id, span).with_message(label_message);
-        Diagnostic::error().with_message(message).with_labels(vec![label])
+        Diagnostic::error()
+            .with_message(message)
+            .with_labels(vec![label])
         // Diagnostic::new_error(message, Label::new(self.file_id, span, label))
     }
 }
@@ -78,10 +80,14 @@ impl Parser<'_> {
         let prev_span = self.span;
         let token = self.next_token()?;
         if token.kind != kind {
-            let diagnostic = Diagnostic::error().with_message("Unexpected token").with_labels(vec![
-                Label::primary(self.file_id, prev_span).with_message(&format!("Expected {} after this token", kind)),
-                Label::secondary(self.file_id, self.span).with_message("But we found this insteasd")
-            ]);
+            let diagnostic = Diagnostic::error()
+                .with_message("Unexpected token")
+                .with_labels(vec![
+                    Label::primary(self.file_id, prev_span)
+                        .with_message(&format!("Expected {} after this token", kind)),
+                    Label::secondary(self.file_id, self.span)
+                        .with_message("But we found this insteasd"),
+                ]);
             Err(diagnostic)
         } else {
             Ok(token)
@@ -142,6 +148,8 @@ impl Parser<'_> {
             TokenKind::Reserved(Keyword::Type) => self.parse_type(),
             // Import declaration
             TokenKind::Reserved(Keyword::Import) => self.import(),
+            // Constant declaration
+            TokenKind::Reserved(Keyword::Const) => self.constant(),
             // Item declaration, but public
             TokenKind::Reserved(Keyword::Pub) => {
                 self.expect(TokenKind::Reserved(Keyword::Pub))?;
@@ -165,6 +173,27 @@ impl Parser<'_> {
                 ))
             }
         }
+    }
+
+    fn constant(&mut self) -> Result<ast::Item> {
+        self.expect(TokenKind::Reserved(Keyword::Const))?;
+        let lo = self.span;
+        let name = self.ident()?;
+        self.expect(TokenKind::Colon)?;
+        let ty = self.ty()?;
+        self.expect(TokenKind::Equals)?;
+        let value = self.expr(Precedence::NONE)?;
+        let span = lo.merge(self.span);
+        let constant = ast::Constant {
+            name,
+            ty,
+            value,
+            span,
+        };
+        Ok(ast::Item {
+            span,
+            kind: ast::ItemKind::Constant(constant),
+        })
     }
 
     fn import(&mut self) -> Result<ast::Item> {
@@ -393,24 +422,24 @@ impl Parser<'_> {
 
     fn ty(&mut self) -> Result<ast::Ty> {
         use ty::{LiteralTy, Ty};
+        use TokenKind::{Comma, GreaterThan, LessThan};
         let ty_name = self.ident()?;
-        let generics = self.generics()?;
-        // TODO move this out somewhere. This maps tokens to the
-        // built-in types that cannot be redefined.
-        let ty = match ty_name.to_str() {
-            // I haven't decided what kind of casing I want to use...
-            // accept everything for now.
-            "number" | "Number" => Ty::Literal(LiteralTy::Number),
-            "string" | "String" => Ty::Literal(LiteralTy::String),
-            "bool" | "Bool" | "boolean" | "Boolean" => Ty::Literal(LiteralTy::Bool),
-            "Array" => {
-                // We expect generics here.
-                Ty::Array(Ty::Literal(LiteralTy::String).into())
+        if self.eat(LessThan)? {
+            let mut params = vec![];
+            // Start parsing the list of generic parameters here
+            loop {
+                let param = self.ty()?;
+                params.push(param);
+                // If we don't see a comma next, we should exist
+                if !self.eat(Comma)? {
+                    break;
+                }
             }
-            "Unit" => Ty::Unit,
-            _ => Ty::Variable(ty_name, generics),
-        };
-        Ok(ty)
+            self.expect(GreaterThan)?;
+            Ok(Ty::Variable(ty_name, Some(params)))
+        } else {
+            Ok(Ty::Variable(ty_name, None))
+        }
     }
 
     pub fn fn_def(&mut self) -> Result<ast::FnDef> {
@@ -547,7 +576,7 @@ impl Parser<'_> {
                 }
                 // If no annotation is provided we assume the type
                 // must be inferred.
-                _ => ast::Ty::Existential,
+                _ => ast::Ty::Unknown,
             }
         };
         let span = lo.merge(self.span);
@@ -950,10 +979,16 @@ impl Parser<'_> {
                 let span = fn_def.span;
                 ast::expr(ast::ExprKind::Func(Box::new(fn_def)), span)
             }
+            // Lambda function expression
+            TokenKind::BinOr | TokenKind::Or => {
+                let lambda = self.lambda()?;
+                let span = lambda.span;
+                ast::expr(ast::ExprKind::Lambda(lambda), span)
+            }
             // Match expression
             TokenKind::Reserved(Keyword::Match) => self.match_expr(),
             _ => {
-                self.skip()?;
+                println!("Token was: {:?}", self.next_token()?);
                 Err(self.fatal(
                     "Failed to parse an expression",
                     "We expected an expression here",
@@ -961,6 +996,71 @@ impl Parser<'_> {
                 ))
             }
         }
+    }
+
+    fn lambda_params(&mut self) -> Result<(ast::ParamType, Span)> {
+        use TokenKind::{BinOr, Comma, Ident, Or};
+        if self.eat(Or)? {
+            Ok((ast::ParamType::Empty, self.span))
+        } else {
+            self.expect(BinOr)?;
+            let span = self.span;
+            let mut params = vec![];
+            loop {
+                match self.peek()?.kind {
+                    // End of param list
+                    BinOr => {
+                        break;
+                    }
+                    Ident(_) => {
+                        let param = self.parse_fn_param()?;
+                        params.push(param);
+                        if !self.eat(Comma)? {
+                            break;
+                        }
+                    }
+                    _ => {
+                        self.next_token()?;
+                        return Err(self.fatal(
+                            "Expected a funciton paramter",
+                            "Found this shit",
+                            self.span,
+                        ));
+                    }
+                }
+            }
+            self.expect(BinOr)?;
+            let params = match params.len() {
+                0 => ast::ParamType::Empty,
+                1 => {
+                    let param = params.get(0).expect("proven");
+                    // TODO move memory out of params so we dont clone?
+                    ast::ParamType::Single(param.clone())
+                }
+                _ => ast::ParamType::Multi(params),
+            };
+            Ok((params, span))
+        }
+    }
+
+    fn lambda(&mut self) -> Result<ast::Lambda> {
+        let (params, lo) = self.lambda_params()?;
+        let (body, span) = match self.peek()?.kind {
+            TokenKind::LCurlyBrace => {
+                let block = self.block()?;
+                let span = block.span;
+                let block = Box::new(block);
+                (ast::LambdaBody::Block(block), span)
+            }
+            _ => {
+                let expr = self.expr(Precedence::NONE)?;
+                let span = expr.span;
+                let expr = Box::new(expr);
+                (ast::LambdaBody::Expr(expr), span)
+            }
+        };
+        let span = lo.merge(span);
+        Ok(ast::Lambda { body, params, span })
     }
 
     fn template(&mut self) -> Result<ast::Template> {

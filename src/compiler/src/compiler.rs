@@ -11,6 +11,8 @@ use diagnostics::ParseResult;
 use lowering::LoweringContext;
 use parser::Parser;
 
+use typecheck::TyCtx;
+
 use crossbeam::deque::{Injector, Worker};
 
 use hir;
@@ -183,12 +185,13 @@ fn parse_and_lower_module_from_file(
     Ok(hir)
 }
 
-fn run_from_source_root_impl(path: PathBuf, vfs: Arc<FileSystem>) -> ParseResult<()> {
+
+pub fn run_on_file(vfs: Arc<FileSystem>, root_file: FileId) -> ParseResult<()> {
     let start = std::time::Instant::now();
     // Resolve the path assuming main.dom is the entry point.
-    let path = &path.join("main.dom");
+    // let path = &path.join("main.dom");
     // Read the file out of the shared file system
-    let root_file = vfs.resolve(&path)?;
+    // let root_file = vfs.resolve(&path)?;
     let hir = parse_and_lower_module_from_file(root_file, vfs.clone())?;
     // Get the initial set of imports
     let imports = ImportResolver::new(root_file).populate_module_graph(&hir)?;
@@ -241,7 +244,6 @@ fn run_from_source_root_impl(path: PathBuf, vfs: Arc<FileSystem>) -> ParseResult
                 let imports = ImportResolver::new(file).populate_module_graph(&hir)?;
                 // TODO
                 let _module_id = module_graph.lock().unwrap().add(hir);
-                // TODO validate imports...
                 for import in imports {
                     if !seen_modules.contains_key(&import) {
                         seen_modules.insert(import.clone(), ());
@@ -265,6 +267,11 @@ fn run_from_source_root_impl(path: PathBuf, vfs: Arc<FileSystem>) -> ParseResult
         }
     }
 
+    let mut tyctx = TyCtx::new(root_file, module_graph);
+
+    tyctx.check_from_root(&hir)?;
+    
+
     println!(
         "Completed parsing, name, and crawling imports for {} modules in {}μs",
         seen_modules.len(),
@@ -284,16 +291,7 @@ fn report_diagnostic(diagnostic: Diagnostic<FileId>, files: &FileSystem) {
     emit(&mut writer.lock(), &config, &*files, &diagnostic).expect("Emitting");
 }
 
-/// Run the compiler, pointing at a directory. We expect
-/// to resolve {dir}/main.dom as the entrypoint.  
-pub fn run_from_source_root(path: PathBuf) -> ParseResult<()> {
-    // The shared in-memory file system
-    let files = Arc::new(FileSystem::new());
-    match run_from_source_root_impl(path, files.clone()) {
-        Ok(_) => {
-            // Successful run, we can exit
-        }
-        Err(diagnostic) =>report_diagnostic(diagnostic, &files) 
-    };
-    Ok(())
-}
+// pub fn run_from_source_root(path: PathBuf, files: Arc<FileSystem>) -> ParseResult<Arc<FileSystem>> {
+//     run_from_source_root_impl(path, files.clone())?;
+//     Ok(files)
+// }

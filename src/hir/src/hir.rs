@@ -17,7 +17,7 @@ use std::path::PathBuf;
 
 // Reused from the AST
 pub use syntax::ast::{
-    AssignOp, BinOp, Ident, ImportSpecifier, Lit, LocalPattern, MatchArm, Ty, UnOp,
+    AssignOp, BinOp, Ident, ImportSpecifier, Lit, LitKind, LocalPattern, MatchArm, UnOp, TypeDef,
 };
 
 pub type ModuleId = Id<Module>;
@@ -45,6 +45,8 @@ pub enum Binding {
     Argument(Arc<Param>),
     Component(Arc<Component>),
     Import(Arc<Mutex<Import>>),
+    Constant(Arc<Constant>),
+    Type(Arc<TypeDef>),
 }
 
 impl Referant for Binding {}
@@ -52,7 +54,7 @@ impl Referant for Binding {}
 #[derive(Clone, Debug)]
 pub struct Local {
     pub name: LocalPattern,
-    pub ty: Option<Box<Ty>>,
+    pub ty: Option<Ty>,
     pub init: Option<Box<Expr>>,
     pub span: Span,
 }
@@ -89,6 +91,11 @@ impl Module {
                             return Some(def.clone());
                         }
                     }
+                    DefinitionKind::Constant(constant)  => {
+                        if constant.name.name == name.name {
+                            return Some(def.clone());
+                        }
+                    }
                     _ => unimplemented!(),
                 }
             }
@@ -122,6 +129,24 @@ pub struct ImportPath {
 }
 
 #[derive(Debug, Clone)]
+pub struct ReferenceTy {
+    pub ident: Ident,
+    pub typedef: Arc<TypeDef>,
+    pub type_args: Option<Vec<Ty>>,
+}
+
+#[derive(Debug, Clone)]
+pub enum Ty {
+    // A reference to some user-defined definition
+    Reference(ReferenceTy),
+    // A placeholder for a type that we don't have information about.
+    // This will need to be inferred during type checking.
+    Unknown,
+    // The empty type
+    Unit,
+}
+
+#[derive(Debug, Clone)]
 pub struct Import {
     pub path: ImportPath,
     pub name: Ident,
@@ -144,6 +169,7 @@ impl Definition {
                 fndef.name.clone()
             }
             DefinitionKind::Component(compdef) => compdef.name.clone(),
+            DefinitionKind::Constant(constant) => constant.name.clone(),
             _ => unimplemented!(),
         }
     }
@@ -154,8 +180,17 @@ impl Definition {
 pub enum DefinitionKind {
     Function(Arc<Mutex<Function>>),
     Component(Arc<Component>),
+    Constant(Arc<Constant>),
     Enum,
-    Type,
+    Type(Arc<TypeDef>),
+}
+
+#[derive(Clone, Debug)]
+pub struct Constant {
+    pub name: Ident,
+    pub ty: Ty,
+    pub value: Expr,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone)]
@@ -172,6 +207,20 @@ pub struct Function {
     pub name: Ident,
     pub span: Span,
     pub body: Block,
+}
+
+#[derive(Debug, Clone)]
+pub enum LambdaBody {
+    Block(Box<Block>),
+    Expr(Box<Expr>),
+}
+
+#[derive(Debug, Clone)]
+pub struct Lambda {
+    pub params: Vec<Arc<Param>>,
+    pub graph: ControlFlowGraph<Statement>,
+    pub body: LambdaBody,
+    pub span: Span, 
 }
 
 #[derive(Debug, Clone)]
@@ -306,6 +355,8 @@ pub enum ExprKind {
     Cond(Box<Expr>, Box<Expr>, Box<Expr>),
     /// Call expression
     Call(Binding, Vec<Expr>),
+    /// Member call expression
+    MemberCall(Box<Expr>, Ident, Vec<Expr>),
     /// Assignment expression
     // TODO the left hand side should be a LeftExpr or something
     Assign(AssignOp, Arc<Local>, Box<Expr>),
@@ -318,7 +369,7 @@ pub enum ExprKind {
     /// A literal
     Lit(Lit),
     /// A variable reference
-    Reference(Binding),
+    Reference(Ident, Binding),
     /// An `if` block with optional `else` block
     If(IfExpr),
     /// For expression
@@ -333,5 +384,7 @@ pub enum ExprKind {
     Match(Box<Expr>, Vec<MatchArm>),
     // Function expression
     Func(Arc<Mutex<Function>>),
+    // Lamda expression
+    Lambda(Lambda),
     // ...
 }

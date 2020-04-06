@@ -1,4 +1,4 @@
 import {shout} from "./baz/qux.dom";
 
-xport fn bar() {
+export fn basdfsdfr() {
 }
