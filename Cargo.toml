@@ -1,10 +1,18 @@
-[package]
-name = "web_script"
-version = "0.1.0"
-authors = ["Brandon Dail <brandon@dail.family>"]
-edition = "2018"
+[workspace]
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[dependencies]
-compiler = { path = "./src/compiler" }
+members = [
+    "codegen",
+    "compiler",
+    "data_structures",
+    "diagnostics",
+    "fixtures",
+    "fuzzer",
+    "hir",
+    "lexer",
+    "log",
+    "lowering",
+    "lsp",
+    "parser",
+    "source",
+    "typecheck",
+]
