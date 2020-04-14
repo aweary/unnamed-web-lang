@@ -154,7 +154,7 @@ pub struct ReferenceTy {
 
 #[derive(Debug, Clone)]
 pub enum Ty {
-    // Built-in types, with optional type arguments
+    // Built-in types, with optional type arguments.
     BuiltIn(BuiltInType, Option<Vec<Ty>>),
     // A reference to some user-defined definition
     Reference(ReferenceTy),
