@@ -3,7 +3,6 @@ use crate::reader::Reader;
 use diagnostics::ParseResult as Result;
 
 use source::diagnostics::{Diagnostic, Label};
-use source::filesystem::FileId;
 
 use syntax::token::{token, Token, TokenKind};
 use syntax::token::{Keyword, Lit, LitKind};
@@ -60,7 +59,6 @@ pub struct Lexer<'a> {
     pub source: &'a str,
     pub mode: LexMode,
     pub lookahead: VecDeque<Token>,
-    pub file_id: FileId,
 }
 
 macro_rules! symbol {
@@ -70,14 +68,13 @@ macro_rules! symbol {
 }
 
 impl<'a> Lexer<'a> {
-    pub fn new(source: &'a str, file_id: FileId) -> Self {
+    pub fn new(source: &'a str) -> Self {
         let reader = Reader::new(&source);
         Lexer {
             reader,
             source,
             mode: LexMode::Normal,
             lookahead: VecDeque::with_capacity(4),
-            file_id,
         }
     }
 

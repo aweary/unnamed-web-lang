@@ -41,6 +41,30 @@ pub struct LoweringContext {
 
 impl LoweringContext {
     pub fn new(vfs: Arc<FileSystem>, file: FileId) -> Self {
+        // Populate the global scope. TODO this should go somewhere else?
+        let mut scope_map = ScopeMap::default();
+        scope_map.enter_scope();
+        // The empty binding symbol, `_`. Used for unused variables and
+        // in pattern matching.
+        scope_map.define(
+            Symbol::intern("_"),
+            hir::Binding::BuiltIn(hir::BuiltIn::EmptyBinding),
+        );
+        // Built-in types
+        scope_map.define(
+            Symbol::intern("number"),
+            hir::Binding::BuiltIn(hir::BuiltIn::Type(hir::BuiltInType::Number)),
+        );
+        scope_map.define(
+            Symbol::intern("string"),
+            hir::Binding::BuiltIn(hir::BuiltIn::Type(hir::BuiltInType::Boolean)),
+        );
+        scope_map.define(
+            Symbol::intern("Array"),
+            hir::Binding::BuiltIn(hir::BuiltIn::Type(hir::BuiltInType::Array)),
+        );
+
+        // ...
         LoweringContext {
             vfs,
             file,
@@ -48,7 +72,7 @@ impl LoweringContext {
             in_component: false,
             imports: vec![],
             tracked_deps: vec![],
-            scope: Default::default(),
+            scope: scope_map,
         }
     }
 
@@ -223,6 +247,7 @@ impl LoweringContext {
                 };
                 match self.scope.resolve(&ident.name) {
                     Some(binding) => match binding {
+                        // User defined types
                         hir::Binding::Type(typedef) => {
                             // Check that the type is getting the right number of arguments
                             if type_args.is_some() && typedef.generics.is_none() {
@@ -244,10 +269,12 @@ impl LoweringContext {
                             };
                             Ok(hir::Ty::Reference(reference_ty))
                         }
+                        hir::Binding::BuiltIn(hir::BuiltIn::Type(ty)) => {
+                            Ok(hir::Ty::BuiltIn(ty, type_args))
+                        }
                         _ => Err(Diagnostic::error()
                             .with_message("Cannot use non-type as an annotation")
-                            .with_labels(vec![Label::primary(ident.span)
-                                .with_message(
+                            .with_labels(vec![Label::primary(ident.span).with_message(
                                 "This value is being used as a type annotation, but its not a type",
                             )])),
                     },
@@ -332,7 +359,6 @@ impl LoweringContext {
     // }
 
     fn lower_block(&mut self, block: ast::Block) -> Result<hir::Block> {
-        // TODO move this out
         let mut cfg = ControlFlowGraph::default();
         let mut cfg_block = Block::default();
         let mut block_indicies = vec![];
@@ -495,7 +521,17 @@ impl LoweringContext {
             // A variable reference
             ExprKind::Reference(ident) => {
                 match self.scope.resolve(&ident.name) {
-                    Some(binding) => hir::ExprKind::Reference(ident, binding),
+                    Some(binding) => {
+                        // You can't reference the empty binding in expressions, outside of
+                        // match expressions
+                        println!("Binding {:?}", binding);
+                        if let hir::Binding::BuiltIn(hir::BuiltIn::EmptyBinding) = binding {
+                            return Err(Diagnostic::error()
+                                .with_message("Cannot reference empty binding in expression")
+                                .with_labels(vec![Label::primary(ident.span)]));
+                        }
+                        hir::ExprKind::Reference(ident, binding)
+                    }
                     None => {
                         // This is where we handle reference errors.
                         // TODO move this logic out into some unified error reporting interface
@@ -531,8 +567,10 @@ impl LoweringContext {
                 hir::ExprKind::Template(template)
             }
             // Match
-            ExprKind::Match(_, _) => {
-                unimplemented!("Match expression not implemented");
+            ExprKind::Match(expr, arms) => {
+                let expr = self.lower_expr(*expr)?;
+                let arms = self.lower_match_arms(arms)?;
+                hir::ExprKind::Match(Box::new(expr), arms)
             }
             // Function expression
             ExprKind::Func(fndef) => {
@@ -555,6 +593,25 @@ impl LoweringContext {
             ty,
             kind,
         })
+    }
+
+    fn lower_match_arms(&mut self, arms: Vec<ast::MatchArm>) -> Result<Vec<hir::MatchArm>> {
+        let mut lowered_arms = vec![];
+        for ast::MatchArm {
+            test,
+            consequent,
+            span,
+        } in arms
+        {
+            let test = self.lower_expr(test)?;
+            let consequent = self.lower_expr(consequent)?;
+            lowered_arms.push(hir::MatchArm {
+                test,
+                consequent,
+                span,
+            })
+        }
+        Ok(lowered_arms)
     }
 
     fn lower_template(&mut self, template: ast::Template) -> Result<hir::Template> {
@@ -724,7 +781,15 @@ impl LoweringContext {
             StmtKind::Local(local) => {
                 let local = self.lower_local(*local)?;
                 let name: Symbol = local.name.clone().into();
-                self.scope.define(name, hir::Binding::Local(local.clone()));
+                // Don't add reserved identifiers like `_` to the scope map
+                match name.as_str() {
+                    "_" => {
+                        // Ignore
+                    }
+                    _ => {
+                        self.scope.define(name, hir::Binding::Local(local.clone()));
+                    }
+                };
                 hir::StatementKind::Local(local)
             }
             StmtKind::State(local) => {

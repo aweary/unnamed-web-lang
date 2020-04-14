@@ -1,0 +1,4 @@
+// import {add} from "./math.dom";
+
+fn main(a: number, b: Array<string>) {
+}

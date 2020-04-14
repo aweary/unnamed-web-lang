@@ -1,24 +1,20 @@
-use codespan_lsp::byte_span_to_range;
 use log::info;
-use lsp_server::{Connection, IoThreads, Message, Notification};
+use lsp_server::{Connection, Message, Notification};
 use lsp_types::{
     notification::{
         DidChangeTextDocument, DidCloseTextDocument, DidOpenTextDocument,
         Notification as LSPNotification, PublishDiagnostics,
     },
-    Diagnostic, DiagnosticSeverity, DidChangeTextDocumentParams, DidCloseTextDocumentParams,
-    DidOpenTextDocumentParams, InitializeParams, Position, PublishDiagnosticsParams,
-    Range as LspRange, ServerCapabilities, TextDocumentItem, TextDocumentSyncCapability,
-    TextDocumentSyncKind, Url, TextDocumentIdentifier 
+    DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
+    PublishDiagnosticsParams, ServerCapabilities, TextDocumentItem, TextDocumentSyncCapability,
+    TextDocumentSyncKind, Url,
 };
 use serde_json;
 use std::error::Error;
 use std::sync::Arc;
 
-use diagnostics::ParseResult as CompilerResult;
 use source::diagnostics::Diagnostic as CompilerDiagnostic;
-use source::diagnostics::{ByteIndex, Span};
-use source::filesystem::{FileId, FileSystem, Files};
+use source::filesystem::{FileId, FileSystem};
 
 use compiler;
 
@@ -78,17 +74,18 @@ impl LSPServer {
                     DidOpenTextDocument::METHOD => {
                         let params: DidOpenTextDocumentParams =
                             notif.extract(DidOpenTextDocument::METHOD).unwrap();
-                        self.on_open_text_document(params, connection);
+                        self.on_open_text_document(params, connection)?;
                     }
                     DidChangeTextDocument::METHOD => {
+                        info!("Change event!");
                         let params: DidChangeTextDocumentParams =
                             notif.extract(DidChangeTextDocument::METHOD).unwrap();
-                        self.on_change_text_document(params);
+                        self.on_change_text_document(params, connection)?;
                     }
                     DidCloseTextDocument::METHOD => {
                         let params: DidCloseTextDocumentParams =
                             notif.extract(DidCloseTextDocument::METHOD).unwrap();
-                        self.on_close_text_document(params, connection);
+                        self.on_close_text_document(params, connection)?;
                     }
                     _ => {}
                 },
@@ -97,10 +94,45 @@ impl LSPServer {
         Ok(())
     }
 
-    fn on_change_text_document(&mut self, params: DidChangeTextDocumentParams) {
+    fn on_change_text_document(
+        &mut self,
+        params: DidChangeTextDocumentParams,
+        connection: &Connection,
+    ) -> GenericResult<()> {
         info!("text document change: {:#?}", params);
-        let text = params.text_document;
-        // ...
+        let text_document = params.text_document;
+        let uri = text_document.uri;
+        let path = uri.to_file_path().unwrap();
+        let content_changes = params.content_changes;
+        // Resolve the content changes. From what I can tell, VSCode is just sending
+        // the entire document's text in the change, so last one wins here.
+        let text: String = content_changes
+            .iter()
+            .last()
+            .map(|change| change.text.clone())
+            .unwrap();
+        let file = self.vfs.load(&path, text).unwrap();
+        // Compile the module and report any errors
+        match compiler::run_on_file(self.vfs.clone(), file) {
+            Ok(_) => {
+                // Clear out the errors by reporting an empty list of diagnostics
+                let params = PublishDiagnosticsParams::new(uri, vec![], None);
+                // Notification to send to the LSP client
+                let notification = Notification::new(
+                    PublishDiagnostics::METHOD.to_owned(),
+                    serde_json::to_value(&params).unwrap(),
+                );
+                connection
+                    .sender
+                    .send(Message::Notification(notification))?;
+            }
+            Err(diagnostic) => {
+                info!("Reporting an error for a change event!");
+                self.report_diagnostic(connection, diagnostic, uri, self.vfs.clone(), file)?;
+                // ...
+            }
+        }
+        Ok(())
     }
 
     fn on_open_text_document(
@@ -117,10 +149,20 @@ impl LSPServer {
         let file = self.vfs.load(&path, text).unwrap();
         // Compile the module and report any errors
         match compiler::run_on_file(self.vfs.clone(), file) {
-            Ok(_) => {}
+            Ok(_) => {
+                // Clear out the errors by reporting an empty list of diagnostics
+                let params = PublishDiagnosticsParams::new(uri, vec![], None);
+                // Notification to send to the LSP client
+                let notification = Notification::new(
+                    PublishDiagnostics::METHOD.to_owned(),
+                    serde_json::to_value(&params).unwrap(),
+                );
+                connection
+                    .sender
+                    .send(Message::Notification(notification))?;
+            }
             Err(diagnostic) => {
                 self.report_diagnostic(connection, diagnostic, uri, self.vfs.clone(), file)?;
-                // ...
             }
         }
         Ok(())
@@ -130,33 +172,12 @@ impl LSPServer {
         &self,
         connection: &Connection,
         diagnostic: CompilerDiagnostic,
-        url: Url,
+        _url: Url,
         vfs: Arc<FileSystem>,
-        file: FileId,
+        _file: FileId,
     ) -> GenericResult<()> {
-        let mut lsp_diagnostics = vec![];
-        let labels = diagnostic.labels;
-
-        // Build up the set of LSP diagnostics from the codespan diagnostic struct
-        for label in labels {
-            let range = {
-                let start_location = vfs.location(file, label.range.start).unwrap();
-                let end_location = vfs.location(file, label.range.end).unwrap();
-                let start_position = Position {
-                    line: start_location.line_number as u64 - 1,
-                    character: start_location.column_number as u64 - 1,
-                };
-                let end_position = Position {
-                    line: end_location.line_number as u64 - 1,
-                    character: end_location.column_number as u64 - 1,
-                };
-                LspRange::new(start_position, end_position)
-            };
-            let message = label.message;
-            let lsp_diagnostic = Diagnostic::new_simple(range, message);
-            lsp_diagnostics.push(lsp_diagnostic);
-        }
-
+        let (diagnostic, url) = diagnostic.into_lsp(&*vfs);
+        let lsp_diagnostics = vec![diagnostic];
         // Parameters for the "textDocument/publishDiagnostics" notification
         let params = PublishDiagnosticsParams::new(url, lsp_diagnostics, None);
         // Notification to send to the LSP client
@@ -168,7 +189,6 @@ impl LSPServer {
             .sender
             .send(Message::Notification(notification))?;
         Ok(())
-        // Send the notification
     }
 
     fn on_close_text_document(
@@ -176,24 +196,9 @@ impl LSPServer {
         params: DidCloseTextDocumentParams,
         connection: &Connection,
     ) -> GenericResult<()> {
-        let TextDocumentIdentifier { uri } = params.text_document;
-        // Parameters for the "textDocument/publishDiagnostics" notification
-        let params = PublishDiagnosticsParams::new(uri, vec![], None);
-        // Notification to send to the LSP client
-        let notification = Notification::new(
-            PublishDiagnostics::METHOD.to_owned(),
-            serde_json::to_value(&params).unwrap(),
-        );
-        connection
-            .sender
-            .send(Message::Notification(notification))?;
         info!("text document close: {:#?}", params);
         Ok(())
     }
-}
-
-fn compile_document(text: &str) {
-    // ...
 }
 
 fn cast_notif<N>(notif: Notification) -> Result<N::Params, Notification>

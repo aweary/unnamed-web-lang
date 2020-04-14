@@ -1,35 +1,25 @@
-use std::path::PathBuf;
-
-use diagnostics::ParseResult as Result;
-
-use source::diagnostics::{Diagnostic, Label};
-use source::filesystem::FileId;
-
+use crossbeam::deque::{Injector, Worker};
 use data_structures::module_graph::ModuleGraph;
 use data_structures::HashSet;
+use diagnostics::ParseResult as Result;
 use diagnostics::ParseResult;
-use lowering::LoweringContext;
-use parser::Parser;
-
-use typecheck::TyCtx;
-
-use crossbeam::deque::{Injector, Worker};
-
 use hir;
 use hir::visit::{walk_module, Visitor};
+use lowering::LoweringContext;
+use parser::Parser;
+use source::diagnostics::{Diagnostic, DiagnosticSet, Label};
+use source::filesystem::FileId;
+use source::FileSystem;
+use std::hash::{Hash, Hasher};
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::Mutex;
 use syntax::ast;
 use syntax::symbol::Symbol;
-
-use std::sync::Arc;
-
-use std::hash::{Hash, Hasher};
-
-use source::FileSystem;
+use typecheck::TyCtx;
 
 type ImportDescriptorList = Vec<(PathBuf, hir::Ident, ast::ImportPath)>;
-
 type DashSet<T> = dashmap::DashMap<T, ()>;
-
 type HirModuleGraph = ModuleGraph<hir::Module, Symbol>;
 
 #[derive(Clone, Debug)]
@@ -117,7 +107,6 @@ impl ImportResolver {
 
 impl Visitor for ImportResolver {
     fn visit_module(&mut self, module: &hir::Module) -> Result<()> {
-        // println!("Visiting module {:?}", module.file);
         // Reset the imported modules list
         self.imported_modules = HashSet::default();
         self.root_file = module.file;
@@ -132,10 +121,6 @@ impl Visitor for ImportResolver {
         // of the value being imported, and we add that to a set of of imports
         // that will be processed separately. That way we can do the I/O and lowering
         // work for each module concurrently, rather than doing that here.
-        // println!(
-        //     "Visiting import: {:?} from {:?}",
-        //     import.name, import.path.resolved
-        // );
         let unique_import = GloballyUniqueImport::new(&import, self.root_file);
         self.imported_modules.insert(unique_import);
         Ok(())
@@ -167,21 +152,23 @@ fn parse_and_lower_module_from_file(
     vfs: Arc<FileSystem>,
 ) -> ParseResult<hir::Module> {
     let ast = vfs.with_source(&file, |source| -> ParseResult<ast::Module> {
-        let mut parser = Parser::new(source, file);
-        let ast = parser.parse_module()?;
+        let mut parser = Parser::new(source);
+        let ast = parser.parse_module().map_err(|err| err.for_file(file))?;
         Ok(ast)
     })?;
     let hir = LoweringContext::new(vfs, file).lower_module(ast)?;
     Ok(hir)
 }
 
+pub fn run_on_single_file(vfs: Arc<FileSystem>, file: FileId) -> ParseResult<()> {
+    parse_and_lower_module_from_file(file, vfs).map_err(|diagnostic| diagnostic.for_file(file))?;
+    Ok(())
+}
+
 pub fn run_on_file(vfs: Arc<FileSystem>, root_file: FileId) -> ParseResult<()> {
-    let start = std::time::Instant::now();
-    // Resolve the path assuming main.dom is the entry point.
-    // let path = &path.join("main.dom");
-    // Read the file out of the shared file system
-    // let root_file = vfs.resolve(&path)?;
-    let hir = parse_and_lower_module_from_file(root_file, vfs.clone())?;
+    let _start = std::time::Instant::now();
+    let hir = parse_and_lower_module_from_file(root_file, vfs.clone())
+        .map_err(|err| err.for_file(root_file))?;
     // Get the initial set of imports
     let imports = ImportResolver::new(root_file).populate_module_graph(&hir)?;
     let seen_modules = Arc::new(DashSet::new());
@@ -196,8 +183,6 @@ pub fn run_on_file(vfs: Arc<FileSystem>, root_file: FileId) -> ParseResult<()> {
         }
         Arc::new(injector)
     };
-
-    use std::sync::Mutex;
 
     let module_graph = Arc::new(Mutex::new(HirModuleGraph::default()));
 
@@ -244,46 +229,38 @@ pub fn run_on_file(vfs: Arc<FileSystem>, root_file: FileId) -> ParseResult<()> {
         handles.push(handle);
     }
 
+    let mut err = None;
+
     for handle in handles {
         match handle.join().unwrap() {
             Ok(_) => {}
             Err(diagnostic) => {
-                report_diagnostic(diagnostic, &*vfs);
+                // TODO return a DiagnosticBuilder or something
+                err = Some(diagnostic);
             }
         }
+    }
+
+    // Hacky way to report errors in LSP for other files right now.
+    if let Some(diagnostic) = err {
+        return Err(diagnostic);
     }
 
     let mut tyctx = TyCtx::new(root_file, module_graph);
 
     tyctx.check_from_root(&hir)?;
-
-    println!(
-        "Completed parsing, name, and crawling imports for {} modules in {}μs",
-        seen_modules.len(),
-        start.elapsed().as_micros()
-    );
+    // println!(
+    //     "Completed parsing, name, and crawling imports for {} modules in {}μs",
+    //     seen_modules.len(),
+    //     start.elapsed().as_micros()
+    // );
     Ok(())
 }
 
-fn report_diagnostic(diagnostic: Diagnostic, files: &FileSystem) {
-    use source::diagnostics::{
-        emit,
-        termcolor::{ColorChoice, StandardStream},
-        Config,
-    };
-    let writer = StandardStream::stderr(ColorChoice::Auto);
-    let config = Config::default();
-    // emit(&mut writer.lock(), &config, &*files, &diagnostic).expect("Emitting");
-}
-
-pub fn run_from_path(path: PathBuf) -> ParseResult<()> {
+pub fn run_from_path(path: PathBuf) {
     let vfs = Arc::new(FileSystem::new());
-    let root_file = vfs.resolve(&path)?;
-    run_on_file(vfs, root_file)?;
-    Ok(())
+    let root_file = vfs.resolve(&path).unwrap();
+    if let Err(err) = run_on_file(vfs.clone(), root_file) {
+        err.emit_to_terminal(&*vfs);
+    }
 }
-
-// pub fn run_from_source_root(path: PathBuf, files: Arc<FileSystem>) -> ParseResult<Arc<FileSystem>> {
-//     run_from_source_root_impl(path, files.clone())?;
-//     Ok(files)
-// }

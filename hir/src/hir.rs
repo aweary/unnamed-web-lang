@@ -17,7 +17,7 @@ use std::path::PathBuf;
 
 // Reused from the AST
 pub use syntax::ast::{
-    AssignOp, BinOp, Ident, ImportSpecifier, Lit, LitKind, LocalPattern, MatchArm, UnOp, TypeDef,
+    AssignOp, BinOp, Ident, ImportSpecifier, Lit, LitKind, LocalPattern, UnOp, TypeDef,
 };
 
 pub type ModuleId = Id<Module>;
@@ -37,8 +37,25 @@ pub struct Package {
     modules: Vec<ModuleId>,
 }
 
+
+#[derive(Debug, Clone)]
+pub enum BuiltInType {
+    String,
+    Number,
+    Boolean,
+    Array,
+}
+
+#[derive(Debug, Clone)]
+pub enum BuiltIn {
+    /// The `_` identifier, which has special semantics
+    EmptyBinding,
+    Type(BuiltInType),
+}
+
 #[derive(Debug, Clone)]
 pub enum Binding {
+    BuiltIn(BuiltIn),
     Local(Arc<Local>),
     State(Arc<Local>),
     Function(Arc<Mutex<Function>>),
@@ -137,6 +154,8 @@ pub struct ReferenceTy {
 
 #[derive(Debug, Clone)]
 pub enum Ty {
+    // Built-in types, with optional type arguments
+    BuiltIn(BuiltInType, Option<Vec<Ty>>),
     // A reference to some user-defined definition
     Reference(ReferenceTy),
     // A placeholder for a type that we don't have information about.
@@ -327,8 +346,6 @@ pub enum TemplateInstr {
 #[derive(Clone, Debug)]
 pub enum Else {
     Block(Box<Block>),
-    // TODO this should be IfExpr but our parser types don't
-    // work super well for this right now
     If(Box<IfExpr>),
 }
 
@@ -338,6 +355,13 @@ pub struct IfExpr {
     pub condition: Box<Expr>,
     pub block: Box<Block>,
     pub alt: Option<Else>,
+}
+
+#[derive(Clone, Debug)]
+pub struct MatchArm {
+    pub test: Expr,
+    pub consequent: Expr,
+    pub span: Span,
 }
 
 #[derive(Clone, Debug)]

@@ -12,7 +12,7 @@ let client: LanguageClient;
 
 export function activate(context: ExtensionContext) {
   // TODO read this from config
-  const serverPath = path.resolve("src", "lsp", "target", "debug", "lsp");
+  const serverPath = path.resolve("/Users/brandondail/Code/webscript/target/debug/lsp");
 
   // The debug options for the server
   // --inspect=6009: runs the server in Node's Inspector mode so VS Code can attach to the server for debugging

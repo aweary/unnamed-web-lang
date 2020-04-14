@@ -25,7 +25,7 @@ impl Visitor for TyCtx {
     fn visit_function(&mut self, func: &Function) -> Result<()> {
         let name = &func.name;
         let params = &func.params;
-        println!("Visiting function! {:#?}", params);
+        // println!("Visiting function! {:#?}", params);
         Ok(())
         // ...
     }

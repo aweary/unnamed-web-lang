@@ -13,7 +13,6 @@ use diagnostics::ParseResult as Result;
 // use diagnostics::{Diagnostic, Label};
 
 use source::diagnostics::{Diagnostic, Label, Span};
-use source::filesystem::FileId;
 
 const DUMMY_NODE_ID: ast::NodeId = ast::NodeId(0);
 
@@ -22,8 +21,6 @@ pub struct Parser<'s> {
     tokenizer: Tokenizer<'s>,
     /// The span of the current token
     span: Span,
-    /// The file ID for the file being parsed. Used for diagnostic reporting
-    file_id: FileId,
 }
 
 /// TODO move to diagnostics crate
@@ -42,15 +39,14 @@ impl DiagnosticReporting for Parser<'_> {
 }
 
 impl Parser<'_> {
-    pub fn new(source: &str, file_id: FileId) -> Parser<'_> {
+    pub fn new(source: &str) -> Parser<'_> {
         // Create a tokenzier/lexer
-        let tokenizer = Tokenizer::new(&source, file_id);
+        let tokenizer = Tokenizer::new(&source);
         // Start with a dummy span
         let span = Span::new(0, 0);
         Parser {
             tokenizer,
             span,
-            file_id,
         }
     }
 
@@ -76,7 +72,6 @@ impl Parser<'_> {
     }
 
     fn expect(&mut self, kind: TokenKind) -> Result<Token> {
-        // TODO don't unwrap here.
         let prev_span = self.span;
         let token = self.next_token()?;
         if token.kind != kind {
@@ -988,7 +983,6 @@ impl Parser<'_> {
             // Match expression
             TokenKind::Reserved(Keyword::Match) => self.match_expr(),
             _ => {
-                println!("Token was: {:?}", self.next_token()?);
                 Err(self.fatal(
                     "Failed to parse an expression",
                     "We expected an expression here",
@@ -1358,11 +1352,14 @@ impl Parser<'_> {
             }
         }
         self.expect(TokenKind::Arrow)?;
-        // TODO
-        let _consequent = self.expr(Precedence::NONE)?;
-        let _span = test.span.merge(self.span);
+        let consequent = self.expr(Precedence::NONE)?;
+        let span = test.span.merge(self.span);
         self.eat(TokenKind::Comma)?;
-        Ok(ast::MatchArm {})
+        Ok(ast::MatchArm {
+            test,
+            consequent,
+            span
+        })
     }
 
     fn member_expr(&mut self, obj: ast::Expr) -> Result<ast::Expr> {

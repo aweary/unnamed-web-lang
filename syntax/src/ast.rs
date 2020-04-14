@@ -412,7 +412,11 @@ pub struct IfExpr {
 }
 
 #[derive(Clone, Debug)]
-pub struct MatchArm {}
+pub struct MatchArm {
+    pub test: Expr,
+    pub consequent: Expr,
+    pub span: Span,
+}
 
 #[derive(Clone, Debug)]
 pub struct Template {

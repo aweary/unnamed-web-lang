@@ -4,7 +4,7 @@
 #[cfg(test)]
 extern crate quickcheck;
 #[cfg(test)]
-#[macro_use(quickcheck)]
+// #[macro_use(quickcheck)]
 extern crate quickcheck_macros;
 
 pub mod control_flow_graph;

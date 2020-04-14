@@ -51,6 +51,7 @@ pub struct ScopeMap<K: Reference, V: Referant> {
 
 impl<K: Reference, V: Referant> Default for ScopeMap<K, V> {
     fn default() -> Self {
+        // The global scope.
         ScopeMap {
             scope_arena: Arena::new(),
             active_scopes: vec![],
