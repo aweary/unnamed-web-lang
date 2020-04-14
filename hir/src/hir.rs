@@ -1,4 +1,4 @@
-use syntax::{symbol::Symbol};
+use syntax::symbol::Symbol;
 
 use source::diagnostics::Span;
 
@@ -17,7 +17,7 @@ use std::path::PathBuf;
 
 // Reused from the AST
 pub use syntax::ast::{
-    AssignOp, BinOp, Ident, ImportSpecifier, Lit, LitKind, LocalPattern, UnOp, TypeDef,
+    AssignOp, BinOp, Ident, ImportSpecifier, Lit, LitKind, LocalPattern, TypeDef, UnOp,
 };
 
 pub type ModuleId = Id<Module>;
@@ -37,41 +37,70 @@ pub struct Package {
     modules: Vec<ModuleId>,
 }
 
-
+/// A type paramter defines an input type for a polymorphic type
 #[derive(Debug, Clone)]
-pub enum BuiltInType {
-    String,
-    Number,
-    Boolean,
-    Array,
-}
-
-#[derive(Debug, Clone)]
-pub enum BuiltIn {
-    /// The `_` identifier, which has special semantics
-    EmptyBinding,
-    Type(BuiltInType),
-}
+pub struct TypeParameter(
+    /// TIdenthe referencable name of the parameter
+    Symbol,
+    // In the future we can add constraints to generic type parameters here
+);
 
 #[derive(Debug, Clone)]
 pub enum Binding {
-    BuiltIn(BuiltIn),
+    /// A local variable definition
     Local(Arc<Local>),
+    /// A state cell definition, only allowed in components
     State(Arc<Local>),
+    /// A function definition
     Function(Arc<Mutex<Function>>),
+    /// An argument to a function, only allowed inside functions/components
     Argument(Arc<Param>),
+    /// A component definition
     Component(Arc<Component>),
+    /// An imported value
     Import(Arc<Mutex<Import>>),
+    /// A constant definition
     Constant(Arc<Constant>),
-    Type(Arc<TypeDef>),
+    /// A type definition, either primtive or compound
+    Type(Type),
+    /// A special identifier, denoted by `_`, for unused values and catch-all case
+    /// in pattern matching.
+    Wildcard,
 }
 
 impl Referant for Binding {}
 
+/// The set of possible types that can be referenced.
+#[derive(Debug, Clone)]
+pub enum Type {
+    /// The primitive number type, referenced as `number`. Includes all integers and floating point numbers.
+    Number,
+    /// The primitive string type, referenced as `string`.
+    String,
+    /// The primitive boolean type, includes `true` and `false` only.
+    Boolean,
+    /// The primitive array/list type, which is polymorphic for a single type
+    Array,
+    /// A type parameter, used in some polymorphic context
+    Parameter(Ident),
+    /// A user defined enum type
+    Enum(Arc<EnumDef>),
+    /// A user defined record type
+    Record(Arc<TypeDef>),
+}
+
+/// A reference to a type, including any type arguments that
+/// might be applied at the usage site.
+#[derive(Clone, Debug)]
+pub struct TypeReference {
+    pub ty: Type,
+    pub arguments: Option<Vec<TypeReference>>
+}
+
 #[derive(Clone, Debug)]
 pub struct Local {
     pub name: LocalPattern,
-    pub ty: Option<Ty>,
+    pub ty: Option<TypeReference>,
     pub init: Option<Box<Expr>>,
     pub span: Span,
 }
@@ -108,7 +137,7 @@ impl Module {
                             return Some(def.clone());
                         }
                     }
-                    DefinitionKind::Constant(constant)  => {
+                    DefinitionKind::Constant(constant) => {
                         if constant.name.name == name.name {
                             return Some(def.clone());
                         }
@@ -143,26 +172,6 @@ impl Module {
 pub struct ImportPath {
     pub resolved: PathBuf,
     pub span: Span,
-}
-
-#[derive(Debug, Clone)]
-pub struct ReferenceTy {
-    pub ident: Ident,
-    pub typedef: Arc<TypeDef>,
-    pub type_args: Option<Vec<Ty>>,
-}
-
-#[derive(Debug, Clone)]
-pub enum Ty {
-    // Built-in types, with optional type arguments.
-    BuiltIn(BuiltInType, Option<Vec<Ty>>),
-    // A reference to some user-defined definition
-    Reference(ReferenceTy),
-    // A placeholder for a type that we don't have information about.
-    // This will need to be inferred during type checking.
-    Unknown,
-    // The empty type
-    Unit,
 }
 
 #[derive(Debug, Clone)]
@@ -207,7 +216,7 @@ pub enum DefinitionKind {
 #[derive(Clone, Debug)]
 pub struct Constant {
     pub name: Ident,
-    pub ty: Ty,
+    pub ty: TypeReference,
     pub value: Expr,
     pub span: Span,
 }
@@ -215,7 +224,7 @@ pub struct Constant {
 #[derive(Debug, Clone)]
 pub struct Param {
     pub span: Span,
-    pub ty: Ty,
+    pub ty: TypeReference,
     pub local: LocalPattern,
 }
 
@@ -239,7 +248,7 @@ pub struct Lambda {
     pub params: Vec<Arc<Param>>,
     pub graph: ControlFlowGraph<Statement>,
     pub body: LambdaBody,
-    pub span: Span, 
+    pub span: Span,
 }
 
 #[derive(Debug, Clone)]
@@ -255,6 +264,9 @@ pub struct Component {
 pub struct EnumDef {
     pub name: Ident,
     pub variants: Vec<Variant>,
+    // TODO a better data structure for parameter lists
+    pub parameters: Option<Vec<Ident>>,
+    pub span: Span,
 }
 
 #[derive(Clone, Debug)]
@@ -262,7 +274,7 @@ pub struct Variant {
     // The name of the variant
     pub ident: Ident,
     // The input types for tuple variants
-    pub fields: Option<Vec<Ty>>,
+    pub fields: Option<Vec<TypeReference>>,
     // TODO discriminants should be restricted to simple types like numbers and strings
     pub discriminant: Option<Expr>,
     pub span: Span,
@@ -326,7 +338,7 @@ pub enum StatementKind {
 pub struct Expr {
     pub kind: ExprKind,
     pub span: Span,
-    pub ty: Option<Ty>,
+    pub ty: Option<TypeReference>,
 }
 
 #[derive(Clone, Debug)]

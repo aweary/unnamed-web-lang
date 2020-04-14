@@ -46,23 +46,24 @@ impl LoweringContext {
         scope_map.enter_scope();
         // The empty binding symbol, `_`. Used for unused variables and
         // in pattern matching.
+        use hir::{Binding, Type};
         scope_map.define(
             Symbol::intern("_"),
-            hir::Binding::BuiltIn(hir::BuiltIn::EmptyBinding),
+            Binding::Wildcard, // hir::Binding::BuiltIn(hir::BuiltIn::EmptyBinding),
         );
         // Built-in types
-        scope_map.define(
-            Symbol::intern("number"),
-            hir::Binding::BuiltIn(hir::BuiltIn::Type(hir::BuiltInType::Number)),
-        );
-        scope_map.define(
-            Symbol::intern("string"),
-            hir::Binding::BuiltIn(hir::BuiltIn::Type(hir::BuiltInType::Boolean)),
-        );
-        scope_map.define(
-            Symbol::intern("Array"),
-            hir::Binding::BuiltIn(hir::BuiltIn::Type(hir::BuiltInType::Array)),
-        );
+
+        scope_map.define(Symbol::intern("number"), Binding::Type(Type::Number));
+
+        scope_map.define(Symbol::intern("string"), Binding::Type(Type::String));
+
+        scope_map.define(Symbol::intern("Array"), Binding::Type(Type::Array));
+
+        // Symbol::intern("Array"),
+        // hir::Binding::Type(
+        //   // ...
+        // )
+        // )
 
         // ...
         LoweringContext {
@@ -149,14 +150,14 @@ impl LoweringContext {
                     span,
                 })
             }
-            ast::ItemKind::Enum(enumdef, _) => {
+            ast::ItemKind::Enum(enumdef) => {
                 let span = enumdef.span;
                 // TODO generics
                 let enumdef = self.lower_enum(enumdef)?;
                 Ok(hir::Definition {
                     kind: hir::DefinitionKind::Enum(enumdef),
                     visibility: hir::DefinitionVisibility::Private,
-                    span
+                    span,
                 })
             }
             ast::ItemKind::Import(_) => {
@@ -167,12 +168,31 @@ impl LoweringContext {
     }
 
     fn lower_enum(&mut self, enumdef: ast::EnumDef) -> Result<Arc<hir::EnumDef>> {
-        let ast::EnumDef { name, variants, .. } = enumdef;
+        let ast::EnumDef {
+            name,
+            variants,
+            parameters,
+            span,
+        } = enumdef;
+        if let Some(parameters) = &parameters {
+            for parameter in parameters {
+                self.scope.define(
+                    parameter.name.clone(),
+                    hir::Binding::Type(hir::Type::Parameter(parameter.clone())),
+                )
+            }
+        }
         let mut hir_variants = vec![];
         for variant in variants {
             hir_variants.push(self.lower_enum_variant(variant)?);
         }
-        Ok(Arc::new(hir::EnumDef { name, variants: hir_variants }))
+
+        Ok(Arc::new(hir::EnumDef {
+            name,
+            variants: hir_variants,
+            span,
+            parameters,
+        }))
     }
 
     fn lower_enum_variant(&mut self, variant: ast::Variant) -> Result<hir::Variant> {
@@ -210,7 +230,8 @@ impl LoweringContext {
     fn lower_typedef(&mut self, typedef: ast::TypeDef) -> Result<Arc<hir::TypeDef>> {
         let name = typedef.name.name.clone();
         let typedef = Arc::new(typedef);
-        self.scope.define(name, hir::Binding::Type(typedef.clone()));
+        self.scope
+            .define(name, hir::Binding::Type(hir::Type::Record(typedef.clone())));
         Ok(typedef)
     }
 
@@ -286,10 +307,11 @@ impl LoweringContext {
         Ok(hir_params)
     }
 
-    fn lower_ty(&mut self, ty: ast::Ty) -> Result<hir::Ty> {
+    fn lower_ty(&mut self, ty: ast::Ty) -> Result<hir::TypeReference> {
         match ty {
+            // Referencing some named type
             ast::Ty::Variable(ident, type_args) => {
-                let type_args = if let Some(type_args) = type_args {
+                let arguments = if let Some(type_args) = type_args {
                     let mut hir_type_args = vec![];
                     for arg in type_args {
                         let ty = self.lower_ty(arg)?;
@@ -299,49 +321,45 @@ impl LoweringContext {
                 } else {
                     None
                 };
-                match self.scope.resolve(&ident.name) {
+                let ty = match self.scope.resolve(&ident.name) {
                     Some(binding) => match binding {
-                        // User defined types
-                        hir::Binding::Type(typedef) => {
-                            // Check that the type is getting the right number of arguments
-                            if type_args.is_some() && typedef.generics.is_none() {
-                                return Err(Diagnostic::error()
-                                    .with_message("Type is not generic")
-                                    .with_labels(vec![
-                                        Label::primary(typedef.name.span)
-                                            .with_message("This type is not generic"),
-                                        Label::secondary(ident.span).with_message(
-                                            "But this usage tries to pass it type arguments",
-                                        ),
-                                    ]));
-                            }
-
-                            let reference_ty = hir::ReferenceTy {
-                                ident: ident.clone(),
-                                typedef,
-                                type_args,
-                            };
-                            Ok(hir::Ty::Reference(reference_ty))
-                        }
-                        hir::Binding::BuiltIn(hir::BuiltIn::Type(ty)) => {
-                            Ok(hir::Ty::BuiltIn(ty, type_args))
-                        }
-                        _ => Err(Diagnostic::error()
-                            .with_message("Cannot use non-type as an annotation")
-                            .with_labels(vec![Label::primary(ident.span).with_message(
+                        // Referencing some type
+                        hir::Binding::Type(ty) => ty.clone(),
+                        _ => {
+                            return Err(Diagnostic::error()
+                                .with_message("Cannot use non-type as an annotation")
+                                .with_labels(vec![Label::primary(ident.span).with_message(
                                 "This value is being used as a type annotation, but its not a type",
-                            )])),
+                            )]))
+                        }
                     },
-                    None => Err(Diagnostic::error()
-                        .with_message("Unable to resolve type reference")
-                        .with_labels(vec![Label::primary(ident.span)
-                            .with_message("Cannot find a type with this name")])),
-                }
+                    None => {
+                        return Err(Diagnostic::error()
+                            .with_message("Unable to resolve type reference")
+                            .with_labels(vec![Label::primary(ident.span)
+                                .with_message("Cannot find a type with this name")]))
+                    }
+                };
+                Ok(hir::TypeReference { ty, arguments })
             }
-            ast::Ty::Unit => Ok(hir::Ty::Unit),
-            ast::Ty::Unknown => Ok(hir::Ty::Unknown),
-            ast::Ty::Unimplemented => panic!("Cant lower the unimplemented type"),
-            _ => unimplemented!(),
+            ast::Ty::Unknown => {
+                unimplemented!("Unknown");
+            }
+            ast::Ty::Unimplemented => {
+                unimplemented!("Unimplemented");
+            }
+            ast::Ty::Unit => {
+                unimplemented!("Unit");
+            }
+            ast::Ty::Literal(_) => {
+                unimplemented!("Literal");
+            }
+            ast::Ty::Array(_) => {
+                unimplemented!("Array");
+            }
+            ast::Ty::Existential => {
+                unimplemented!("Existential");
+            }
         }
     }
 
@@ -380,6 +398,17 @@ impl LoweringContext {
         // Push a new scope before we lower the block, so the params are included
         self.ignore_next_scope = true;
         self.scope.enter_scope();
+
+        // Lower the generics, adding them to the function scope
+        if let Some(generics) = fndef.generics {
+            for ty in &generics.params {
+                self.scope.define(
+                    ty.name.clone(),
+                    hir::Binding::Type(hir::Type::Parameter(ty.clone())),
+                )
+            }
+        }
+
         let params = self.lower_fn_params(fndef.params)?;
         let block = self.lower_block(*fndef.body)?;
         self.scope.exit_scope();
@@ -581,14 +610,13 @@ impl LoweringContext {
                         println!("Binding {:?}", binding);
                         match binding {
                             // Cannot reference types as values
-                            hir::Binding::Type(_)
-                            | hir::Binding::BuiltIn(hir::BuiltIn::Type(_)) => {
+                            hir::Binding::Type(_) => {
                                 return Err(Diagnostic::error()
                                     .with_message("Cannot reference a type as a value")
                                     .with_labels(vec![Label::primary(ident.span)]));
                             }
                             // Cannot reference the reserved empty identifier
-                            hir::Binding::BuiltIn(hir::BuiltIn::EmptyBinding) => {
+                            hir::Binding::Wildcard => {
                                 return Err(Diagnostic::error()
                                     .with_message("Cannot reference empty binding in expression")
                                     .with_labels(vec![Label::primary(ident.span)]));

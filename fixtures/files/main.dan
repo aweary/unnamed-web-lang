@@ -1,4 +1,4 @@
-enum Result {
-    Ok(string, number),
-    Error(number),
+enum Result<T> {
+    Ok(T),
 }
+

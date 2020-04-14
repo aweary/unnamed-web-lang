@@ -187,7 +187,7 @@ pub fn walk_item<V: Visitor>(visitor: &mut V, item: &mut Item) {
     use ItemKind::*;
     // visitor.visit_ident(&mut item.ident);
     match item.kind {
-        Enum(ref _enum_def, ref _generics) => {
+        Enum(ref _enum_def) => {
             // ...
         }
         Fn(ref mut fn_def) => {

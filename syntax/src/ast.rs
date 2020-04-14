@@ -70,7 +70,7 @@ pub enum ItemKind {
     /// A component definition
     Component(ComponentDef),
     /// An enum definition
-    Enum(EnumDef, Option<Generics>),
+    Enum(EnumDef),
     /// Type definition for records
     Type(Box<TypeDef>),
     /// Import declaration
@@ -204,6 +204,7 @@ pub struct ComponentDef {
 pub struct EnumDef {
     pub name: Ident,
     pub variants: Vec<Variant>,
+    pub parameters: Option<Vec<Ident>>,
     pub span: Span,
 }
 

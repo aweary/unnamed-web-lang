@@ -331,7 +331,8 @@ impl Parser<'_> {
         let lo = self.span;
         // TODO support polymorphic names, self.type_ident()
         let name = self.ident()?;
-        let generics = self.generics()?;
+        // let generics = self.generics()?;
+        let parameters = self.type_parameter_list()?;
         let mut variants = vec![];
         self.expect(LCurlyBrace)?;
         let mut has_discriminant = false;
@@ -400,8 +401,43 @@ impl Parser<'_> {
         }
         let span = lo.merge(self.span);
         Ok(ast::Item {
-            kind: ast::ItemKind::Enum(ast::EnumDef { name, variants, span }, generics),
+            kind: ast::ItemKind::Enum(
+                ast::EnumDef {
+                    name,
+                    variants,
+                    span,
+                    parameters,
+                }
+            ),
             span,
+        })
+    }
+
+    /// TODO dedupe with generics
+    fn type_parameter_list(&mut self) -> Result<Option<Vec<ast::Ident>>> {
+        Ok(match self.peek()?.kind {
+            // This function has a generic
+            TokenKind::LessThan => {
+                self.expect(TokenKind::LessThan)?;
+                let mut params = vec![];
+                loop {
+                    match self.peek()?.kind {
+                        TokenKind::Ident(_) => {
+                            let ident = self.ident()?;
+                            params.push(ident);
+                        }
+                        TokenKind::Comma => {
+                            self.eat(TokenKind::Comma)?;
+                            continue;
+                        }
+                        _ => break,
+                    }
+                }
+                self.expect(TokenKind::GreaterThan)?;
+                // ast::Generics
+                Some(params)
+            }
+            _ => None,
         })
     }
 
