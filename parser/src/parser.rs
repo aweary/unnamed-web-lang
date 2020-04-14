@@ -400,7 +400,7 @@ impl Parser<'_> {
         }
         let span = lo.merge(self.span);
         Ok(ast::Item {
-            kind: ast::ItemKind::Enum(ast::EnumDef { name, variants }, generics),
+            kind: ast::ItemKind::Enum(ast::EnumDef { name, variants, span }, generics),
             span,
         })
     }

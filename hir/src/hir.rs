@@ -200,7 +200,7 @@ pub enum DefinitionKind {
     Function(Arc<Mutex<Function>>),
     Component(Arc<Component>),
     Constant(Arc<Constant>),
-    Enum,
+    Enum(Arc<EnumDef>),
     Type(Arc<TypeDef>),
 }
 
@@ -249,6 +249,23 @@ pub struct Component {
     pub name: Ident,
     pub span: Span,
     pub body: Block,
+}
+
+#[derive(Clone, Debug)]
+pub struct EnumDef {
+    pub name: Ident,
+    pub variants: Vec<Variant>,
+}
+
+#[derive(Clone, Debug)]
+pub struct Variant {
+    // The name of the variant
+    pub ident: Ident,
+    // The input types for tuple variants
+    pub fields: Option<Vec<Ty>>,
+    // TODO discriminants should be restricted to simple types like numbers and strings
+    pub discriminant: Option<Expr>,
+    pub span: Span,
 }
 
 /// The visibility of a definition, relative to other definitions.

@@ -149,8 +149,62 @@ impl LoweringContext {
                     span,
                 })
             }
-            _ => unimplemented!(),
+            ast::ItemKind::Enum(enumdef, _) => {
+                let span = enumdef.span;
+                // TODO generics
+                let enumdef = self.lower_enum(enumdef)?;
+                Ok(hir::Definition {
+                    kind: hir::DefinitionKind::Enum(enumdef),
+                    visibility: hir::DefinitionVisibility::Private,
+                    span
+                })
+            }
+            ast::ItemKind::Import(_) => {
+                panic!();
+                // Ignore
+            }
         }
+    }
+
+    fn lower_enum(&mut self, enumdef: ast::EnumDef) -> Result<Arc<hir::EnumDef>> {
+        let ast::EnumDef { name, variants, .. } = enumdef;
+        let mut hir_variants = vec![];
+        for variant in variants {
+            hir_variants.push(self.lower_enum_variant(variant)?);
+        }
+        Ok(Arc::new(hir::EnumDef { name, variants: hir_variants }))
+    }
+
+    fn lower_enum_variant(&mut self, variant: ast::Variant) -> Result<hir::Variant> {
+        let ast::Variant {
+            ident,
+            fields,
+            discriminant,
+            span,
+        } = variant;
+
+        let fields = if let Some(fields) = fields {
+            let mut hir_ty = vec![];
+            for ty in fields {
+                hir_ty.push(self.lower_ty(ty)?);
+            }
+            Some(hir_ty)
+        } else {
+            None
+        };
+
+        let discriminant = if let Some(expr) = discriminant {
+            Some(self.lower_expr(expr)?)
+        } else {
+            None
+        };
+
+        Ok(hir::Variant {
+            ident,
+            fields,
+            discriminant,
+            span,
+        })
     }
 
     fn lower_typedef(&mut self, typedef: ast::TypeDef) -> Result<Arc<hir::TypeDef>> {

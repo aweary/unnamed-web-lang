@@ -204,6 +204,7 @@ pub struct ComponentDef {
 pub struct EnumDef {
     pub name: Ident,
     pub variants: Vec<Variant>,
+    pub span: Span,
 }
 
 #[derive(Clone, Debug)]
