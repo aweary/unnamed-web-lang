@@ -525,12 +525,22 @@ impl LoweringContext {
                         // You can't reference the empty binding in expressions, outside of
                         // match expressions
                         println!("Binding {:?}", binding);
-                        if let hir::Binding::BuiltIn(hir::BuiltIn::EmptyBinding) = binding {
-                            return Err(Diagnostic::error()
-                                .with_message("Cannot reference empty binding in expression")
-                                .with_labels(vec![Label::primary(ident.span)]));
+                        match binding {
+                            // Cannot reference types as values
+                            hir::Binding::Type(_)
+                            | hir::Binding::BuiltIn(hir::BuiltIn::Type(_)) => {
+                                return Err(Diagnostic::error()
+                                    .with_message("Cannot reference a type as a value")
+                                    .with_labels(vec![Label::primary(ident.span)]));
+                            }
+                            // Cannot reference the reserved empty identifier
+                            hir::Binding::BuiltIn(hir::BuiltIn::EmptyBinding) => {
+                                return Err(Diagnostic::error()
+                                    .with_message("Cannot reference empty binding in expression")
+                                    .with_labels(vec![Label::primary(ident.span)]));
+                            }
+                            _ => hir::ExprKind::Reference(ident, binding),
                         }
-                        hir::ExprKind::Reference(ident, binding)
                     }
                     None => {
                         // This is where we handle reference errors.
