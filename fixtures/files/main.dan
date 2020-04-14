@@ -1,4 +1,4 @@
-// import {add} from "./math.dom";
-
-fn main(a: number, b: number) : number {
+enum Result {
+    Ok(string, number),
+    Error(number),
 }

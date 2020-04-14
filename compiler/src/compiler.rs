@@ -73,16 +73,21 @@ fn report_import_error(
             if similar_def.name().name == import.name.name {
                 "An item with this name exists, but it isn't exported."
             } else {
-                "This export looks similar, maybe you have a typo? It's also private, so make sure to export it."
+                "This definitions looks similar, maybe you have a typo? It's also private, so make sure to export it."
             }
         } else {
             "This export looks similar, maybe you have a typo?"
         };
-        labels.push(Label::secondary(similar_def.name().span).with_message(message));
+        labels.push(
+            Label::secondary(similar_def.name().span)
+                .with_message(message)
+                .for_file(import_module.file),
+        );
     }
     Diagnostic::error()
         .with_message("Cannot resolve_import")
         .with_labels(labels)
+        .for_file(unique_import.file)
 }
 
 impl ImportResolver {
@@ -207,10 +212,12 @@ pub fn run_on_file(vfs: Arc<FileSystem>, root_file: FileId) -> ParseResult<()> {
                     err.with_labels(vec![
                         Label::primary(unique_import.import.path.span).with_message(message)
                     ])
+                    .for_file(unique_import.file)
                 })?;
                 // TODO add file id to new Diagnostic structure here
                 // let file = vfs.resolve(path).unwrap();
-                let hir = parse_and_lower_module_from_file(file, vfs.clone())?;
+                let hir = parse_and_lower_module_from_file(file, vfs.clone())
+                    .map_err(|err| err.for_file(file))?;
                 if hir.resolve_export(&unique_import.import.name).is_none() {
                     return Err(report_import_error(&hir, &unique_import));
                 }

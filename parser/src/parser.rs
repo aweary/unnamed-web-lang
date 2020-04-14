@@ -44,10 +44,7 @@ impl Parser<'_> {
         let tokenizer = Tokenizer::new(&source);
         // Start with a dummy span
         let span = Span::new(0, 0);
-        Parser {
-            tokenizer,
-            span,
-        }
+        Parser { tokenizer, span }
     }
 
     /// Returns the next token from the tokenizer.
@@ -80,8 +77,7 @@ impl Parser<'_> {
                 .with_labels(vec![
                     Label::primary(prev_span)
                         .with_message(&format!("Expected {} after this token", kind)),
-                    Label::secondary(self.span)
-                        .with_message("But we found this insteasd"),
+                    Label::secondary(self.span).with_message("But we found this insteasd"),
                 ]);
             Err(diagnostic)
         } else {
@@ -330,7 +326,7 @@ impl Parser<'_> {
     }
 
     fn parse_enum(&mut self) -> Result<ast::Item> {
-        use TokenKind::{Comma, Equals, Ident, LCurlyBrace, RCurlyBrace, Reserved};
+        use TokenKind::{Comma, Equals, Ident, LCurlyBrace, LParen, RCurlyBrace, RParen, Reserved};
         self.expect(Reserved(Keyword::Enum))?;
         let lo = self.span;
         // TODO support polymorphic names, self.type_ident()
@@ -338,24 +334,50 @@ impl Parser<'_> {
         let generics = self.generics()?;
         let mut variants = vec![];
         self.expect(LCurlyBrace)?;
+        let mut has_discriminant = false;
         loop {
             match self.peek()?.kind {
                 Ident(_) => {
                     let ident = self.ident()?;
                     let lo = self.span;
                     // Enum variants allow initializers to provide runtime values
-                    let value = if self.eat(Equals)? {
+                    let discriminant = if self.eat(Equals)? {
+                        // Track that this enum uses a discriminant in at least one of the
+                        // variants.
+                        has_discriminant = true;
                         // TODO this should not be an arbitrary expression. Should
                         // be a literal only.
                         Some(self.expr(Precedence::NONE)?)
                     } else {
                         None
                     };
+
+                    let fields = if self.eat(LParen)? {
+                        let mut fields = vec![];
+                        loop {
+                            match self.peek()?.kind {
+                                Ident(_) => {
+                                    let ty = self.ty()?;
+                                    fields.push(ty);
+                                }
+                                Comma => {
+                                    self.eat(Comma)?;
+                                }
+                                _ => break,
+                            }
+                        }
+                        self.expect(RParen)?;
+                        // A tuple variant
+                        Some(fields)
+                    } else {
+                        None
+                    };
+
                     let variant = ast::Variant {
                         ident,
-                        value,
+                        discriminant,
+                        fields,
                         span: lo.merge(self.span),
-                        id: DUMMY_NODE_ID,
                     };
                     variants.push(variant);
                     // Commas are not optional, even trailing ones.
@@ -982,13 +1004,11 @@ impl Parser<'_> {
             }
             // Match expression
             TokenKind::Reserved(Keyword::Match) => self.match_expr(),
-            _ => {
-                Err(self.fatal(
-                    "Failed to parse an expression",
-                    "We expected an expression here",
-                    self.span,
-                ))
-            }
+            _ => Err(self.fatal(
+                "Failed to parse an expression",
+                "We expected an expression here",
+                self.span,
+            )),
         }
     }
 
@@ -1358,7 +1378,7 @@ impl Parser<'_> {
         Ok(ast::MatchArm {
             test,
             consequent,
-            span
+            span,
         })
     }
 

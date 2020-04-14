@@ -208,11 +208,13 @@ pub struct EnumDef {
 
 #[derive(Clone, Debug)]
 pub struct Variant {
+    // The name of the variant
     pub ident: Ident,
-    pub value: Option<Expr>,
-    pub id: NodeId,
+    // The input types for tuple variants
+    pub fields: Option<Vec<Ty>>,
+    // TODO discriminants should be restricted to simple types like numbers and strings
+    pub discriminant: Option<Expr>,
     pub span: Span,
-    // ...
 }
 
 #[derive(Clone, Debug)]
