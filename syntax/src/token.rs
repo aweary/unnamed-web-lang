@@ -32,7 +32,7 @@ impl Token {
             Question => CONDITIONAL,
             Plus => SUM,
             // TODO idk if this is the right precedence
-            Or | And | Pipeline => CONDITIONAL,
+            Or | And | Pipeline | BinOr  => CONDITIONAL,
             Minus => SUM,
             Mul => PRODUCT,
             Div => PRODUCT,
@@ -58,6 +58,7 @@ impl Token {
             TokenKind::GreaterThan => Some(GreaterThan),
             TokenKind::LessThan => Some(LessThan),
             TokenKind::Pipeline => Some(Pipeline),
+            TokenKind::BinOr => Some(BinOr),
             _ => None,
         }
     }

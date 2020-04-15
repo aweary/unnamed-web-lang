@@ -488,6 +488,8 @@ pub enum BinOp {
     GreaterThan,
     LessThan,
     Pipeline,
+    BinOr,
+    BinAdd,
     // ...
 }
 

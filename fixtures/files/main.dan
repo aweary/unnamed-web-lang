@@ -1,4 +1,18 @@
-enum Result<T> {
-    Ok(T),
+enum InteractionState {
+    Idle,
+    Open,
+    Navigating,
+    Dragging,
+    Interacting,
 }
+
+component DragBox() {
+    state interaction : InteractionState = InteractionState.Idle;
+
+}
+
+
+
+
+
 

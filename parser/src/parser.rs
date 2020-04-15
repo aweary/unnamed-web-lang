@@ -399,16 +399,15 @@ impl Parser<'_> {
                 }
             }
         }
+        self.expect(RCurlyBrace)?;
         let span = lo.merge(self.span);
         Ok(ast::Item {
-            kind: ast::ItemKind::Enum(
-                ast::EnumDef {
-                    name,
-                    variants,
-                    span,
-                    parameters,
-                }
-            ),
+            kind: ast::ItemKind::Enum(ast::EnumDef {
+                name,
+                variants,
+                span,
+                parameters,
+            }),
             span,
         })
     }
@@ -1353,9 +1352,8 @@ impl Parser<'_> {
         use TokenKind::*;
         match self.peek()?.kind {
             // Binary
-            Plus | Minus | Div | Mul | LessThan | GreaterThan | DblEquals | And | Or | Pipeline => {
-                self.binary_expr(left)
-            }
+            Plus | Minus | Div | Mul | LessThan | GreaterThan | DblEquals | And | Or | Pipeline
+            | BinOr => self.binary_expr(left),
             // Assignment
             Equals | PlusEquals => self.assign_expr(left),
             // Conditional
@@ -1396,6 +1394,23 @@ impl Parser<'_> {
         let test = self.expr(Precedence::NONE)?;
         // Match arm test expression are restricted.
         match test.kind {
+            // Use binary or expressions for case discriminator `|` syntax
+            ExprKind::Binary(ref binop, _, _) => {
+                match binop {
+                    ast::BinOp::BinOr => {
+                        // Allowd
+                    }
+                    _ => {
+                        return Err(self.fatal(
+                            "Binary expressions aren't allowed in match arms",
+                            "",
+                            test.span,
+                        ));
+                        // Not allowed
+                    }
+                }
+                // allowed
+            }
             ExprKind::Lit(_) | ExprKind::Member(..) | ExprKind::Reference(_) => {
                 // All allowed
             }

@@ -52,20 +52,10 @@ impl LoweringContext {
             Binding::Wildcard, // hir::Binding::BuiltIn(hir::BuiltIn::EmptyBinding),
         );
         // Built-in types
-
         scope_map.define(Symbol::intern("number"), Binding::Type(Type::Number));
-
         scope_map.define(Symbol::intern("string"), Binding::Type(Type::String));
-
         scope_map.define(Symbol::intern("Array"), Binding::Type(Type::Array));
 
-        // Symbol::intern("Array"),
-        // hir::Binding::Type(
-        //   // ...
-        // )
-        // )
-
-        // ...
         LoweringContext {
             vfs,
             file,
@@ -187,12 +177,17 @@ impl LoweringContext {
             hir_variants.push(self.lower_enum_variant(variant)?);
         }
 
-        Ok(Arc::new(hir::EnumDef {
+        let enumdef = Arc::new(hir::EnumDef {
             name,
             variants: hir_variants,
-            span,
             parameters,
-        }))
+            span,
+        });
+        self.scope.define(
+            enumdef.name.name.clone(),
+            hir::Binding::Type(hir::Type::Enum(enumdef.clone())),
+        );
+        Ok(enumdef)
     }
 
     fn lower_enum_variant(&mut self, variant: ast::Variant) -> Result<hir::Variant> {
@@ -607,13 +602,21 @@ impl LoweringContext {
                     Some(binding) => {
                         // You can't reference the empty binding in expressions, outside of
                         // match expressions
-                        println!("Binding {:?}", binding);
                         match binding {
                             // Cannot reference types as values
-                            hir::Binding::Type(_) => {
-                                return Err(Diagnostic::error()
-                                    .with_message("Cannot reference a type as a value")
-                                    .with_labels(vec![Label::primary(ident.span)]));
+                            hir::Binding::Type(ref ty) => {
+                                // Enums can be referenced. We'll need to validate that we're referncing it
+                                // to access one of its variants at some point.
+                                match ty {
+                                    hir::Type::Enum(enumdef) => {
+                                        hir::ExprKind::Reference(ident, binding)
+                                    }
+                                    _ => {
+                                        return Err(Diagnostic::error()
+                                            .with_message("Cannot reference a type as a value")
+                                            .with_labels(vec![Label::primary(ident.span)]));
+                                    }
+                                }
                             }
                             // Cannot reference the reserved empty identifier
                             hir::Binding::Wildcard => {
@@ -751,7 +754,6 @@ impl LoweringContext {
                                 return Err(diagnostic);
                             }
                         }
-                        println!("binding!");
                     }
                     None => {
                         // This is where we handle reference errors.
