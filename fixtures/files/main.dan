@@ -1,16 +1,7 @@
-enum InteractionState {
-    Idle,
-    Open,
-    Navigating,
-    Dragging,
-    Interacting,
+fn add(a, b) {
+    let result = a / b;
+    return result;
 }
-
-component DragBox() {
-    state interaction : InteractionState = InteractionState.Idle;
-
-}
-
 
 
 

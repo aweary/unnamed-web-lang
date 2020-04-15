@@ -628,7 +628,7 @@ impl Parser<'_> {
                 }
                 // If no annotation is provided we assume the type
                 // must be inferred.
-                _ => ast::Ty::Unknown,
+                _ => ast::Ty::Existential,
             }
         };
         let span = lo.merge(self.span);

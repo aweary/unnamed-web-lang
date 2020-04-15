@@ -306,6 +306,7 @@ impl LoweringContext {
         match ty {
             // Referencing some named type
             ast::Ty::Variable(ident, type_args) => {
+                // Map the type arguments to HIR if they exist
                 let arguments = if let Some(type_args) = type_args {
                     let mut hir_type_args = vec![];
                     for arg in type_args {
@@ -337,6 +338,10 @@ impl LoweringContext {
                 };
                 Ok(hir::TypeReference { ty, arguments })
             }
+            ast::Ty::Existential => Ok(hir::TypeReference {
+                ty: hir::Type::Existential,
+                arguments: None,
+            }),
             ast::Ty::Unknown => {
                 unimplemented!("Unknown");
             }
@@ -351,9 +356,6 @@ impl LoweringContext {
             }
             ast::Ty::Array(_) => {
                 unimplemented!("Array");
-            }
-            ast::Ty::Existential => {
-                unimplemented!("Existential");
             }
         }
     }

@@ -87,6 +87,8 @@ pub enum Type {
     Enum(Arc<EnumDef>),
     /// A user defined record type
     Record(Arc<TypeDef>),
+    /// An unknown type that will need to be inferred
+    Existential
 }
 
 /// A reference to a type, including any type arguments that
