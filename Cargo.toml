@@ -14,5 +14,6 @@ members = [
     "lsp",
     "parser",
     "source",
+    "ty",
     "typecheck",
 ]

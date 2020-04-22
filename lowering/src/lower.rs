@@ -46,15 +46,15 @@ impl LoweringContext {
         scope_map.enter_scope();
         // The empty binding symbol, `_`. Used for unused variables and
         // in pattern matching.
-        use hir::{Binding, Type};
+        use hir::{Binding, Type, LiteralType};
         scope_map.define(
             Symbol::intern("_"),
             Binding::Wildcard, // hir::Binding::BuiltIn(hir::BuiltIn::EmptyBinding),
         );
         // Built-in types
-        scope_map.define(Symbol::intern("number"), Binding::Type(Type::Number));
-        scope_map.define(Symbol::intern("string"), Binding::Type(Type::String));
-        scope_map.define(Symbol::intern("Array"), Binding::Type(Type::Array));
+        scope_map.define(Symbol::intern("number"), Binding::Type(Type::Literal(LiteralType::Number)));
+        scope_map.define(Symbol::intern("string"), Binding::Type(Type::Literal(LiteralType::String)));
+        // scope_map.define(Symbol::intern("Array"), Binding::Type(Type::Array));
 
         LoweringContext {
             vfs,
@@ -168,7 +168,9 @@ impl LoweringContext {
             for parameter in parameters {
                 self.scope.define(
                     parameter.name.clone(),
-                    hir::Binding::Type(hir::Type::Parameter(parameter.clone())),
+                    // TODO track the parameter name
+                    // hir::Binding::Type(hir::Type::Parameter(parameter.clone())),
+                    hir::Binding::Type(hir::Type::Parameter),
                 )
             }
         }
@@ -185,7 +187,9 @@ impl LoweringContext {
         });
         self.scope.define(
             enumdef.name.name.clone(),
-            hir::Binding::Type(hir::Type::Enum(enumdef.clone())),
+            // TODO track enum definition
+            // hir::Binding::Type(hir::Type::Enum(enumdef.clone())),
+            hir::Binding::Type(hir::Type::Enum),
         );
         Ok(enumdef)
     }
@@ -226,7 +230,10 @@ impl LoweringContext {
         let name = typedef.name.name.clone();
         let typedef = Arc::new(typedef);
         self.scope
-            .define(name, hir::Binding::Type(hir::Type::Record(typedef.clone())));
+            .define(
+                name,
+                // hir::Binding::Type(hir::Type::Record(typedef.clone())));
+                hir::Binding::Type(hir::Type::Record));
         Ok(typedef)
     }
 
@@ -299,10 +306,11 @@ impl LoweringContext {
                 .define(name, hir::Binding::Argument(param.clone()));
             hir_params.push(param);
         }
+
         Ok(hir_params)
     }
 
-    fn lower_ty(&mut self, ty: ast::Ty) -> Result<hir::TypeReference> {
+    fn lower_ty(&mut self, ty: ast::Ty) -> Result<hir::Type> {
         match ty {
             // Referencing some named type
             ast::Ty::Variable(ident, type_args) => {
@@ -336,12 +344,9 @@ impl LoweringContext {
                                 .with_message("Cannot find a type with this name")]))
                     }
                 };
-                Ok(hir::TypeReference { ty, arguments })
+                Ok(ty)
             }
-            ast::Ty::Existential => Ok(hir::TypeReference {
-                ty: hir::Type::Existential,
-                arguments: None,
-            }),
+            ast::Ty::Existential => Ok(hir::Type::UnknownExistential_DO_NOT_USE),
             ast::Ty::Unknown => {
                 unimplemented!("Unknown");
             }
@@ -401,13 +406,21 @@ impl LoweringContext {
             for ty in &generics.params {
                 self.scope.define(
                     ty.name.clone(),
-                    hir::Binding::Type(hir::Type::Parameter(ty.clone())),
+                    hir::Binding::Type(hir::Type::Parameter),
+                    // TODO track param
+                    // hir::Binding::Type(hir::Type::Parameter(ty.clone())),
                 )
             }
         }
 
+        // Parameters
         let params = self.lower_fn_params(fndef.params)?;
+        // Function body
         let block = self.lower_block(*fndef.body)?;
+        // Function return type
+        let mut return_ty = self.lower_ty(fndef.return_ty)?;
+
+        
         self.scope.exit_scope();
         let fndef = Arc::new(Mutex::new(hir::Function {
             params,
@@ -415,6 +428,7 @@ impl LoweringContext {
             span: fndef.span,
             graph: cfg,
             body: block,
+            ty: return_ty,
         }));
         self.scope
             .define(name, hir::Binding::Function(fndef.clone()));
@@ -610,7 +624,7 @@ impl LoweringContext {
                                 // Enums can be referenced. We'll need to validate that we're referncing it
                                 // to access one of its variants at some point.
                                 match ty {
-                                    hir::Type::Enum(enumdef) => {
+                                    hir::Type::Enum => {
                                         hir::ExprKind::Reference(ident, binding)
                                     }
                                     _ => {

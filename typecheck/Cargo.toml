@@ -10,3 +10,4 @@ source = { path = "../source" }
 diagnostics = { path = "../diagnostics" }
 data_structures = { path = "../data_structures" }
 syntax = { path = "../syntax" }
+ty = { path = "../ty" }

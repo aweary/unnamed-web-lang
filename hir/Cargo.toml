@@ -27,3 +27,4 @@ generational-arena = { version = "0.2", features = ["serde"] }
 petgraph = "0.5.0"
 syntax = { path = "../syntax" }
 parser = { path = "../parser" }
+ty = { path = "../ty" }

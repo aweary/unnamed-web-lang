@@ -255,7 +255,7 @@ pub fn run_on_file(vfs: Arc<FileSystem>, root_file: FileId) -> ParseResult<()> {
 
     let mut tyctx = TyCtx::new(root_file, module_graph);
 
-    tyctx.check_from_root(&hir)?;
+    tyctx.check_from_root(&hir).map_err(|err| err.for_file(root_file))?;
     // println!(
     //     "Completed parsing, name, and crawling imports for {} modules in {}μs",
     //     seen_modules.len(),

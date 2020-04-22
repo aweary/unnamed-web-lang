@@ -504,9 +504,8 @@ impl Parser<'_> {
             if self.eat(TokenKind::Colon)? {
                 self.ty()?
             } else {
-                // No explicit return type annotation means the function
-                // implicitly returns Unit
-                ast::Ty::Unit
+                // No annotation means that we'll need to infer it
+                ast::Ty::Existential
             }
         };
         let body = Box::new(self.block()?);

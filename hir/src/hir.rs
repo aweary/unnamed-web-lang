@@ -6,6 +6,7 @@ use std::fmt;
 use std::sync::Arc;
 use std::sync::Mutex;
 
+
 use data_structures::arena::Id;
 use data_structures::scope_map::Referant;
 use data_structures::{Blockable, ControlFlowGraph};
@@ -15,6 +16,9 @@ use edit_distance::edit_distance;
 
 use std::path::PathBuf;
 
+
+// Shared with the typecheck module
+pub use ty::{Type, LiteralType};
 // Reused from the AST
 pub use syntax::ast::{
     AssignOp, BinOp, Ident, ImportSpecifier, Lit, LitKind, LocalPattern, TypeDef, UnOp,
@@ -25,6 +29,12 @@ pub type DefId = Id<Definition>;
 pub type StatementId = Id<Statement>;
 pub type BlockId = Id<Block>;
 pub type ExprId = Id<Expr>;
+
+// As part of the lowering step, we "rename" local variables so they are
+// totally unique within their scope.
+pub struct UniqueName {
+    
+}
 
 /// The top-level container for the entire module graph.
 #[derive(Debug, Clone)]
@@ -70,39 +80,10 @@ pub enum Binding {
 
 impl Referant for Binding {}
 
-/// The set of possible types that can be referenced.
-#[derive(Debug, Clone)]
-pub enum Type {
-    /// The primitive number type, referenced as `number`. Includes all integers and floating point numbers.
-    Number,
-    /// The primitive string type, referenced as `string`.
-    String,
-    /// The primitive boolean type, includes `true` and `false` only.
-    Boolean,
-    /// The primitive array/list type, which is polymorphic for a single type
-    Array,
-    /// A type parameter, used in some polymorphic context
-    Parameter(Ident),
-    /// A user defined enum type
-    Enum(Arc<EnumDef>),
-    /// A user defined record type
-    Record(Arc<TypeDef>),
-    /// An unknown type that will need to be inferred
-    Existential
-}
-
-/// A reference to a type, including any type arguments that
-/// might be applied at the usage site.
-#[derive(Clone, Debug)]
-pub struct TypeReference {
-    pub ty: Type,
-    pub arguments: Option<Vec<TypeReference>>
-}
-
 #[derive(Clone, Debug)]
 pub struct Local {
     pub name: LocalPattern,
-    pub ty: Option<TypeReference>,
+    pub ty: Option<Type>,
     pub init: Option<Box<Expr>>,
     pub span: Span,
 }
@@ -218,7 +199,7 @@ pub enum DefinitionKind {
 #[derive(Clone, Debug)]
 pub struct Constant {
     pub name: Ident,
-    pub ty: TypeReference,
+    pub ty: Type,
     pub value: Expr,
     pub span: Span,
 }
@@ -226,7 +207,7 @@ pub struct Constant {
 #[derive(Debug, Clone)]
 pub struct Param {
     pub span: Span,
-    pub ty: TypeReference,
+    pub ty: Type,
     pub local: LocalPattern,
 }
 
@@ -237,6 +218,7 @@ pub struct Function {
     pub name: Ident,
     pub span: Span,
     pub body: Block,
+    pub ty: Type,
 }
 
 #[derive(Debug, Clone)]
@@ -276,7 +258,7 @@ pub struct Variant {
     // The name of the variant
     pub ident: Ident,
     // The input types for tuple variants
-    pub fields: Option<Vec<TypeReference>>,
+    pub fields: Option<Vec<Type>>,
     // TODO discriminants should be restricted to simple types like numbers and strings
     pub discriminant: Option<Expr>,
     pub span: Span,
@@ -340,7 +322,7 @@ pub enum StatementKind {
 pub struct Expr {
     pub kind: ExprKind,
     pub span: Span,
-    pub ty: Option<TypeReference>,
+    pub ty: Option<Type>,
 }
 
 #[derive(Clone, Debug)]

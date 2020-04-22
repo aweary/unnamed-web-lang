@@ -29,8 +29,8 @@ pub trait Visitor: Sized {
         // ...
     }
 
-    fn visit_block(&mut self, _block: &Block) -> Result<()> {
-        Ok(())
+    fn visit_block(&mut self, block: &Block) -> Result<()> {
+        walk_block(self, block)
     }
 
     fn visit_statement(&mut self, statement: &Statement) -> Result<()> {
