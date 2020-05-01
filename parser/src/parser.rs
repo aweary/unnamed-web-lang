@@ -14,6 +14,8 @@ use diagnostics::ParseResult as Result;
 
 use source::diagnostics::{Diagnostic, Label, Span};
 
+use log::{debug, info, trace};
+
 const DUMMY_NODE_ID: ast::NodeId = ast::NodeId(0);
 
 pub struct Parser<'s> {
@@ -21,6 +23,8 @@ pub struct Parser<'s> {
     tokenizer: Tokenizer<'s>,
     /// The span of the current token
     span: Span,
+    /// Whether parsing a trailing closure is allowed
+    allow_trailing_closure: bool,
 }
 
 /// TODO move to diagnostics crate
@@ -40,16 +44,22 @@ impl DiagnosticReporting for Parser<'_> {
 
 impl Parser<'_> {
     pub fn new(source: &str) -> Parser<'_> {
+        debug!("Parser::new");
         // Create a tokenzier/lexer
         let tokenizer = Tokenizer::new(&source);
         // Start with a dummy span
         let span = Span::new(0, 0);
-        Parser { tokenizer, span }
+        Parser {
+            tokenizer,
+            span,
+            allow_trailing_closure: true,
+        }
     }
 
     /// Returns the next token from the tokenizer.
     fn next_token(&mut self) -> Result<Token> {
         let token = self.tokenizer.next_token()?;
+        debug!("next_token: {:?}", token.kind);
         self.span = token.span;
         Ok(token)
     }
@@ -69,6 +79,7 @@ impl Parser<'_> {
     }
 
     fn expect(&mut self, kind: TokenKind) -> Result<Token> {
+        debug!("expect {:?}", kind);
         let prev_span = self.span;
         let token = self.next_token()?;
         if token.kind != kind {
@@ -90,8 +101,21 @@ impl Parser<'_> {
     }
 
     fn peek_precedence(&mut self) -> Result<Precedence> {
+        debug!("peek_precedence");
+        let allow_trailing_closure = self.allow_trailing_closure;
+        debug!("allow_trailing_closure: {}", allow_trailing_closure);
         let token = self.peek()?;
-        Ok(token.precedence())
+        match token.kind {
+            // Check if trailing closures are allowed
+            TokenKind::LCurlyBrace => {
+                if allow_trailing_closure {
+                    Ok(token.precedence())
+                } else {
+                    Ok(Precedence::NONE)
+                }
+            }
+            _ => Ok(token.precedence()),
+        }
     }
 
     fn ident(&mut self) -> Result<ast::Ident> {
@@ -654,7 +678,7 @@ impl Parser<'_> {
 
     fn stmt_list(&mut self) -> Result<Vec<ast::Stmt>> {
         let mut stmts = vec![];
-        // let mut terminated = false;
+        let mut terminated = false;
         while !self.peek()?.follows_item_list() {
             // if terminated {
             //     return Err(self.fatal(
@@ -663,25 +687,25 @@ impl Parser<'_> {
             //         self.span,
             //     ));
             // }
-            let stmt = self.stmt()?;
+            let mut stmt = self.stmt()?;
             // Right now semicolons are REQUIRED after each statement. We
             // might go back to optional semicolons in some cases, but
             // we don't have a strict enough heurstic to do it now without
             // getting us in trouble.
-            self.expect(TokenKind::Semi)?;
+            // self.expect(TokenKind::Semi)?;
 
-            // if self.eat(TokenKind::Semi)? {
-            //     // If there was a semicolon, extend the statement's
-            //     // span to include it.
-            //     stmt.span = stmt.span.merge(self.span);
-            //     // Whether a statement has a semicolon is important
-            //     // for implicit function return and evaluating block expressions
-            //     stmt.has_semi = true;
-            // } else {
-            //     // Only the last item in a statement list can omit the
-            //     // semicolon. If this loop runs again, we need to throw
-            //     // terminated = true;
-            // }
+            if self.eat(TokenKind::Semi)? {
+                // If there was a semicolon, extend the statement's
+                // span to include it.
+                stmt.span = stmt.span.merge(self.span);
+                // Whether a statement has a semicolon is important
+                // for implicit function return and evaluating block expressions
+                // stmt.has_semi = true;
+            } else {
+                // Only the last item in a statement list can omit the
+                // semicolon. If this loop runs again, we need to throw
+                terminated = true;
+            }
             stmts.push(stmt);
         }
         Ok(stmts)
@@ -894,6 +918,7 @@ impl Parser<'_> {
     }
 
     fn expr(&mut self, precedence: Precedence) -> Result<ast::Expr> {
+        debug!("expr (precedence: {:?})", precedence);
         let mut expr = self.prefix_expr()?;
         while precedence < self.peek_precedence()? {
             expr = self.infix_expr(expr)?;
@@ -962,7 +987,9 @@ impl Parser<'_> {
     }
 
     fn prefix_expr(&mut self) -> Result<ast::Expr> {
-        match self.peek()?.kind {
+        let token = self.peek()?;
+        debug!("prefix_expr: {:?}", token);
+        match token.kind {
             // Literal values such as numbers, strings, booleans
             TokenKind::Literal(_) => {
                 let lit = self.parse_lit()?;
@@ -1288,9 +1315,15 @@ impl Parser<'_> {
     }
 
     fn if_expr(&mut self) -> Result<ast::IfExpr> {
+        debug!("if_expr");
         self.expect(TokenKind::Reserved(Keyword::If))?;
         let lo = self.span;
+        // Disallow trailing closures in the condition
+        let allow_trailing_closure = self.allow_trailing_closure;
+        debug!("allow_trailing_closure: {}", allow_trailing_closure);
+        self.allow_trailing_closure = false;
         let condition = self.expr(Precedence::NONE)?;
+        self.allow_trailing_closure = allow_trailing_closure;
         let block = self.block()?;
         let alt = if self.eat(TokenKind::Reserved(Keyword::Else))? {
             // We have an alternative and it could either be a simple
@@ -1347,6 +1380,13 @@ impl Parser<'_> {
         }
     }
 
+    fn trailing_closure(&mut self, left: ast::Expr) -> Result<ast::Expr> {
+        let block = self.block()?;
+        let span = left.span.merge(block.span);
+        let kind = ast::ExprKind::TrailingClosure(left.into(), block);
+        ast::expr(kind, span)
+    }
+
     fn infix_expr(&mut self, left: ast::Expr) -> Result<ast::Expr> {
         use TokenKind::*;
         match self.peek()?.kind {
@@ -1359,6 +1399,8 @@ impl Parser<'_> {
             Question => self.cond_expr(left),
             // Call
             LParen => self.call_expr(left),
+            // Trailing closure
+            LCurlyBrace => self.trailing_closure(left),
             // Member
             Dot => self.member_expr(left),
             QuestionDot => self.optional_member_expr(left),
@@ -1370,9 +1412,13 @@ impl Parser<'_> {
     }
 
     fn match_expr(&mut self) -> Result<ast::Expr> {
+        debug!("match_expr");
         self.expect(TokenKind::Reserved(Keyword::Match))?;
         let lo = self.span;
+        let allow_trailing_closure = self.allow_trailing_closure;
+        self.allow_trailing_closure = false;
         let cond = self.expr(Precedence::NONE)?;
+        self.allow_trailing_closure = allow_trailing_closure;
         self.expect(TokenKind::LCurlyBrace)?;
         let mut cases = vec![];
         loop {
@@ -1390,6 +1436,7 @@ impl Parser<'_> {
 
     fn match_arm_expr(&mut self) -> Result<ast::MatchArm> {
         use ast::ExprKind;
+        debug!("match_arm_expr");
         let test = self.expr(Precedence::NONE)?;
         // Match arm test expression are restricted.
         match test.kind {

@@ -1,11 +1,20 @@
+type Landmark {}
 
+component View() {}
+component HStack() {}
+component VStack() {}
+component Text() {}
 
-fn math_stuff(a) {
-    let b = a / 1;
-    return b;
+component LandmarkRow(landmark: Landmark) {
+    let body = View {
+        match landmark.name {
+            "foo" => HStack {
+                Text("Hello there")
+            }
+            _ => VStack {
+                Text("Hello there!")
+            }
+        }
+    }
+    return body
 }
-
-
-
-
-

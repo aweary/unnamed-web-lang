@@ -5,23 +5,22 @@ use source::diagnostics::Span;
 use std::fmt;
 use std::sync::Arc;
 use std::sync::Mutex;
-
+use std::path::PathBuf;
 
 use data_structures::arena::Id;
-use data_structures::scope_map::Referant;
+use data_structures::scope_map::{Referant, Reference};
+use data_structures::HashMap;
 use data_structures::{Blockable, ControlFlowGraph};
 use source::FileId;
 
 use edit_distance::edit_distance;
 
-use std::path::PathBuf;
-
-
 // Shared with the typecheck module
-pub use ty::{Type, LiteralType};
+pub use ty::{LiteralType, Type};
+
 // Reused from the AST
 pub use syntax::ast::{
-    AssignOp, BinOp, Ident, ImportSpecifier, Lit, LitKind, LocalPattern, TypeDef, UnOp,
+    AssignOp, BinOp, Generics, Ident, ImportSpecifier, Lit, LitKind, LocalPattern, TypeDef, UnOp,
 };
 
 pub type ModuleId = Id<Module>;
@@ -30,11 +29,22 @@ pub type StatementId = Id<Statement>;
 pub type BlockId = Id<Block>;
 pub type ExprId = Id<Expr>;
 
-// As part of the lowering step, we "rename" local variables so they are
-// totally unique within their scope.
-pub struct UniqueName {
-    
+#[derive(Clone, Copy, PartialOrd, Ord, PartialEq, Eq, Hash)]
+pub struct UniqueName(u32);
+
+impl UniqueName {
+    pub fn new(id: u32) -> Self {
+        UniqueName(id)
+    }
 }
+
+impl fmt::Debug for UniqueName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:x}", self.0)
+     }
+}
+
+impl Reference for UniqueName {}
 
 /// The top-level container for the entire module graph.
 #[derive(Debug, Clone)]
@@ -83,6 +93,7 @@ impl Referant for Binding {}
 #[derive(Clone, Debug)]
 pub struct Local {
     pub name: LocalPattern,
+    pub unique_name: UniqueName,
     pub ty: Option<Type>,
     pub init: Option<Box<Expr>>,
     pub span: Span,
@@ -209,10 +220,12 @@ pub struct Param {
     pub span: Span,
     pub ty: Type,
     pub local: LocalPattern,
+    pub unique_name: UniqueName,
 }
 
 #[derive(Debug, Clone)]
 pub struct Function {
+    pub generics: Option<Generics>,
     pub params: Vec<Arc<Param>>,
     pub graph: ControlFlowGraph<Statement>,
     pub name: Ident,
@@ -423,5 +436,7 @@ pub enum ExprKind {
     Func(Arc<Mutex<Function>>),
     // Lamda expression
     Lambda(Lambda),
+    // Trailing closure
+    TrailingClosure(Box<Expr>, Block),
     // ...
 }

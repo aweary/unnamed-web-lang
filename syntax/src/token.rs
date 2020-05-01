@@ -24,7 +24,7 @@ impl Token {
         use Precedence::*;
         use TokenKind::*;
         match self.kind {
-            LParen => PREFIX,
+            LCurlyBrace | LParen => PREFIX,
             Equals => ASSIGNMENT,
             PlusEquals => ASSIGNMENT,
             Dot => ASSIGNMENT,

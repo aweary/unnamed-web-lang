@@ -37,6 +37,9 @@ pub struct LoweringContext {
     // TODO move these into a shared context so we can share arenas
     // across modules.
     file: FileId,
+    // Used for generating unique names
+    unique_name_id: u32,
+    allow_wildcard_reference: bool,
 }
 
 impl LoweringContext {
@@ -46,14 +49,20 @@ impl LoweringContext {
         scope_map.enter_scope();
         // The empty binding symbol, `_`. Used for unused variables and
         // in pattern matching.
-        use hir::{Binding, Type, LiteralType};
+        use hir::{Binding, LiteralType, Type};
         scope_map.define(
             Symbol::intern("_"),
             Binding::Wildcard, // hir::Binding::BuiltIn(hir::BuiltIn::EmptyBinding),
         );
         // Built-in types
-        scope_map.define(Symbol::intern("number"), Binding::Type(Type::Literal(LiteralType::Number)));
-        scope_map.define(Symbol::intern("string"), Binding::Type(Type::Literal(LiteralType::String)));
+        scope_map.define(
+            Symbol::intern("number"),
+            Binding::Type(Type::Literal(LiteralType::Number)),
+        );
+        scope_map.define(
+            Symbol::intern("string"),
+            Binding::Type(Type::Literal(LiteralType::String)),
+        );
         // scope_map.define(Symbol::intern("Array"), Binding::Type(Type::Array));
 
         LoweringContext {
@@ -64,6 +73,8 @@ impl LoweringContext {
             imports: vec![],
             tracked_deps: vec![],
             scope: scope_map,
+            unique_name_id: 0,
+            allow_wildcard_reference: false,
         }
     }
 
@@ -169,9 +180,10 @@ impl LoweringContext {
                 self.scope.define(
                     parameter.name.clone(),
                     // TODO track the parameter name
-                    // hir::Binding::Type(hir::Type::Parameter(parameter.clone())),
-                    hir::Binding::Type(hir::Type::Parameter),
-                )
+                    // hir::Binding::Type(hir::Type::Parameter(parameter.clone()
+                    // TODO I DONT THINK THIS IS RIGHT
+                    hir::Binding::Type(hir::Type::Variable(parameter.name.clone())),
+                );
             }
         }
         let mut hir_variants = vec![];
@@ -229,11 +241,11 @@ impl LoweringContext {
     fn lower_typedef(&mut self, typedef: ast::TypeDef) -> Result<Arc<hir::TypeDef>> {
         let name = typedef.name.name.clone();
         let typedef = Arc::new(typedef);
-        self.scope
-            .define(
-                name,
-                // hir::Binding::Type(hir::Type::Record(typedef.clone())));
-                hir::Binding::Type(hir::Type::Record));
+        self.scope.define(
+            name,
+            // hir::Binding::Type(hir::Type::Record(typedef.clone())));
+            hir::Binding::Type(hir::Type::Record),
+        );
         Ok(typedef)
     }
 
@@ -286,7 +298,7 @@ impl LoweringContext {
             }));
             imports.push(import.clone());
             self.scope
-                .define(local_name, hir::Binding::Import(import.clone()))
+                .define(local_name, hir::Binding::Import(import.clone()));
         }
         Ok(imports)
     }
@@ -297,8 +309,12 @@ impl LoweringContext {
             let name = param.name();
             let ty = self.lower_ty(param.ty)?;
 
+            // TODO maybe scope.define should return a unique name?
+            let unique_name = self.unique_name(&param.local);
+
             let param = Arc::new(hir::Param {
                 local: param.local,
+                unique_name,
                 span: param.span,
                 ty,
             });
@@ -326,7 +342,7 @@ impl LoweringContext {
                     None
                 };
                 let ty = match self.scope.resolve(&ident.name) {
-                    Some(binding) => match binding {
+                    Some((binding, unique_name)) => match binding {
                         // Referencing some type
                         hir::Binding::Type(ty) => ty.clone(),
                         _ => {
@@ -373,7 +389,7 @@ impl LoweringContext {
         let name = compdef.name.name.clone();
         self.in_component = true;
         // Push a new scope before we lower the block, so the params are included
-        self.ignore_next_scope = true;
+        // self.ignore_next_scope = true;
         self.scope.enter_scope();
         let params = self.lower_fn_params(compdef.params)?;
         let block = self.lower_block(*compdef.body)?;
@@ -398,20 +414,22 @@ impl LoweringContext {
         let cfg = ControlFlowGraph::default();
         let name = fndef.name.name.clone();
         // Push a new scope before we lower the block, so the params are included
-        self.ignore_next_scope = true;
+        // self.ignore_next_scope = true;
         self.scope.enter_scope();
 
         // Lower the generics, adding them to the function scope
-        if let Some(generics) = fndef.generics {
+        let generics = fndef.generics.map(|generics| {
             for ty in &generics.params {
                 self.scope.define(
                     ty.name.clone(),
-                    hir::Binding::Type(hir::Type::Parameter),
+                    // TODO THIS ISNT RIGHT
+                    hir::Binding::Type(hir::Type::Variable(ty.name.clone())),
                     // TODO track param
                     // hir::Binding::Type(hir::Type::Parameter(ty.clone())),
-                )
+                );
             }
-        }
+            generics
+        });
 
         // Parameters
         let params = self.lower_fn_params(fndef.params)?;
@@ -420,7 +438,6 @@ impl LoweringContext {
         // Function return type
         let mut return_ty = self.lower_ty(fndef.return_ty)?;
 
-        
         self.scope.exit_scope();
         let fndef = Arc::new(Mutex::new(hir::Function {
             params,
@@ -429,6 +446,7 @@ impl LoweringContext {
             graph: cfg,
             body: block,
             ty: return_ty,
+            generics: generics,
         }));
         self.scope
             .define(name, hir::Binding::Function(fndef.clone()));
@@ -448,7 +466,6 @@ impl LoweringContext {
     //     }
     //     // Any queued edges will point to the exit node, as we're done with the graph
     //     cfg.flush_edge_queue_to_exit_block();
-    //     // println!("\n{:?}", fn_def.name);
     //     cfg.print();
     // }
 
@@ -491,6 +508,11 @@ impl LoweringContext {
     fn lower_expr(&mut self, expr: ast::Expr) -> Result<hir::Expr> {
         use ast::ExprKind;
         let kind = match expr.kind {
+            ExprKind::TrailingClosure(expr, block) => {
+                let expr = self.lower_expr(*expr)?;
+                let block = self.lower_block(block)?;
+                hir::ExprKind::TrailingClosure(expr.into(), block)
+            }
             ExprKind::Lambda(lambda) => {
                 let params = self.lower_fn_params(lambda.params)?;
                 let body = match lambda.body {
@@ -575,7 +597,7 @@ impl LoweringContext {
             ExprKind::Assign(op, reference, value) => {
                 if let ast::ExprKind::Reference(reference) = reference.kind {
                     match self.scope.resolve(&reference.name) {
-                        Some(binding) => match binding {
+                        Some((binding, unique_name)) => match binding {
                             hir::Binding::Local(local) => {
                                 let value = self.lower_expr(*value)?;
                                 hir::ExprKind::Assign(op, local, Box::new(value))
@@ -585,6 +607,9 @@ impl LoweringContext {
                             hir::Binding::State(local) => {
                                 let value = self.lower_expr(*value)?;
                                 hir::ExprKind::StateUpdate(op, local, Box::new(value))
+                            }
+                            hir::Binding::Argument(param) => {
+                                panic!("Cant assign to parameters");
                             }
                             _ => {
                                 panic!("Cant reassign functions or types!");
@@ -615,7 +640,7 @@ impl LoweringContext {
             // A variable reference
             ExprKind::Reference(ident) => {
                 match self.scope.resolve(&ident.name) {
-                    Some(binding) => {
+                    Some((binding, unique_name)) => {
                         // You can't reference the empty binding in expressions, outside of
                         // match expressions
                         match binding {
@@ -624,9 +649,7 @@ impl LoweringContext {
                                 // Enums can be referenced. We'll need to validate that we're referncing it
                                 // to access one of its variants at some point.
                                 match ty {
-                                    hir::Type::Enum => {
-                                        hir::ExprKind::Reference(ident, binding)
-                                    }
+                                    hir::Type::Enum => hir::ExprKind::Reference(ident, binding),
                                     _ => {
                                         return Err(Diagnostic::error()
                                             .with_message("Cannot reference a type as a value")
@@ -636,9 +659,15 @@ impl LoweringContext {
                             }
                             // Cannot reference the reserved empty identifier
                             hir::Binding::Wildcard => {
-                                return Err(Diagnostic::error()
-                                    .with_message("Cannot reference empty binding in expression")
-                                    .with_labels(vec![Label::primary(ident.span)]));
+                                if self.allow_wildcard_reference {
+                                    hir::ExprKind::Reference(ident, binding)
+                                } else {
+                                    return Err(Diagnostic::error()
+                                        .with_message(
+                                            "Cannot reference empty binding in expression",
+                                        )
+                                        .with_labels(vec![Label::primary(ident.span)]));
+                                }
                             }
                             _ => hir::ExprKind::Reference(ident, binding),
                         }
@@ -714,7 +743,10 @@ impl LoweringContext {
             span,
         } in arms
         {
+            let allow_wildcard_reference = self.allow_wildcard_reference;
+            self.allow_wildcard_reference = true;
             let test = self.lower_expr(test)?;
+            self.allow_wildcard_reference = allow_wildcard_reference;
             let consequent = self.lower_expr(consequent)?;
             lowered_arms.push(hir::MatchArm {
                 test,
@@ -737,7 +769,7 @@ impl LoweringContext {
         match &ident.name.as_str().chars().nth(0).unwrap() {
             'A'..='Z' => {
                 match self.scope.resolve(&ident.name) {
-                    Some(binding) => {
+                    Some((binding, unique_name)) => {
                         match binding {
                             hir::Binding::Component(component) => {
                                 instrs.push(hir::TemplateInstr::OpenCustomElement(component))
@@ -831,6 +863,12 @@ impl LoweringContext {
         Ok(hir::Template { instrs, kind })
     }
 
+    fn unique_name(&mut self, _ident: &impl Into<hir::Ident>) -> hir::UniqueName {
+        let id = self.unique_name_id;
+        self.unique_name_id += 1;
+        hir::UniqueName::new(id)
+    }
+
     fn lower_local(&mut self, local: ast::Local) -> Result<Arc<hir::Local>> {
         // Avoiding .map so the ? propagates errors
         let init = if let Some(expr) = local.init {
@@ -843,12 +881,18 @@ impl LoweringContext {
         } else {
             None
         };
+
+        let unique_name = self.unique_name(&local.name);
+
+
         let local = hir::Local {
             name: local.name,
+            unique_name,
             span: local.span,
             ty,
             init,
         };
+
         let local = Arc::new(local);
         Ok(local)
     }
@@ -1034,7 +1078,6 @@ impl LoweringContext {
         //             // Lower the syntactic block for the loop
 
         //             let loop_body_indicies = self.lower_block_cfg(loop_block, cfg);
-        //             // println!("enqueued edge {:?}", cfg.edge_queue);
         //             // The loop body has been graphed, so any queued edges will point back
         //             // to the loop condition, as that's where normal control flow will continue
         //             cfg.flush_edge_queue(loop_condition_block_index);

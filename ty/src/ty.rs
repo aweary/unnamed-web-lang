@@ -4,7 +4,9 @@
 
 use syntax::symbol::Symbol;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+use std::fmt;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Existential(pub u16);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -29,6 +31,9 @@ pub enum Type {
     Unit,
     /// Function abstraction.
     Function(Box<Type>, Box<Type>),
+    /// Function abstraction, multiple arguments
+    VariadicFunction(Vec<Type>, Box<Type>),
+    VariadicQuantification(Vec<Symbol>, Box<Type>),
     // A 2-tuple of types
     Pair(Box<Type>, Box<Type>),
     /// An array of T items
@@ -38,8 +43,28 @@ pub enum Type {
     // TODO need to fill these out later. Have to figure out how to represent them
     Enum,
     Record,
-    Parameter,
 }
+
+// impl fmt::Debug for Type {
+//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+//         let debug = match self {
+//             Type::Literal(lit) => {}
+//             Type::Existential(_) => {}
+//             Type::SolvableExistential(_, _) => {}
+//             Type::UnknownExistential_DO_NOT_USE => {}
+//             Type::Unit => {}
+//             Type::Function(_, _) => {}
+//             Type::VariadicFunction(_, _) => {}
+//             Type::VariadicQuantification(_, _) => {}
+//             Type::Pair(_, _) => {}
+//             Type::List(_) => {}
+//             Type::Quantification(_, _) => {}
+//             Type::Variable(_) => {}
+//             Type::Enum => {}
+//             Type::Record => {}
+//         }
+//     }
+// }
 
 impl Type {
     pub fn function(input: Type, output: Type) -> Self {

@@ -288,6 +288,15 @@ impl Into<Symbol> for LocalPattern {
     }
 }
 
+impl Into<Ident> for LocalPattern {
+    fn into(self) -> Ident {
+        match self {
+            LocalPattern::Ident(ident, _) => ident,
+            _ => todo!("Cannot make destructured LocalPattern into Symbol"),
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct Local {
     pub id: NodeId,
@@ -396,6 +405,8 @@ pub enum ExprKind {
     Lambda(Lambda),
     /// GraphQL query
     Query(Box<Document>),
+    /// Trailing closure function call
+    TrailingClosure(Box<Expr>, Block),
     // ...
 }
 

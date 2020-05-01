@@ -11,3 +11,8 @@ ucd = "0.1.1"
 syntax = { path = "../syntax" }
 diagnostics = { path = "../diagnostics" }
 source = { path = "../source" }
+criterion = "0.3"
+
+[[bench]]
+name = "bench_lexer"
+harness = false

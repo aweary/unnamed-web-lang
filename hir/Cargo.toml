@@ -28,3 +28,4 @@ petgraph = "0.5.0"
 syntax = { path = "../syntax" }
 parser = { path = "../parser" }
 ty = { path = "../ty" }
+lazy_static = "1.4.0"

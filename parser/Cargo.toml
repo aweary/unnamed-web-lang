@@ -14,3 +14,4 @@ syntax = { path = "../syntax" }
 diagnostics = { path = "../diagnostics" }
 source = { path = "../source" }
 insta = "0.13.1"
+log = "0.4.8"
