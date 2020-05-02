@@ -3,6 +3,7 @@
 //! can resolve some basic type information.
 
 use syntax::symbol::Symbol;
+use serde::{Serialize, Deserialize};
 
 use std::fmt;
 

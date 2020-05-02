@@ -717,10 +717,6 @@ impl LoweringContext {
                 let fndef = self.lower_fn(*fndef)?;
                 hir::ExprKind::Func(fndef)
             }
-            // GraphQL query
-            ExprKind::Query(_) => {
-                unimplemented!("Query expression not implemented");
-            }
         };
         let ty = if let Some(ty) = expr.ty {
             let ty = self.lower_ty(ty)?;

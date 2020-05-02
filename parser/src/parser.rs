@@ -676,7 +676,7 @@ impl Parser<'_> {
         })
     }
 
-    fn stmt_list(&mut self) -> Result<Vec<ast::Stmt>> {
+    pub(crate) fn stmt_list(&mut self) -> Result<Vec<ast::Stmt>> {
         let mut stmts = vec![];
         let mut terminated = false;
         while !self.peek()?.follows_item_list() {
@@ -711,7 +711,7 @@ impl Parser<'_> {
         Ok(stmts)
     }
 
-    pub fn stmt(&mut self) -> Result<ast::Stmt> {
+    pub(crate) fn stmt(&mut self) -> Result<ast::Stmt> {
         let token = self.peek()?;
         match token.kind {
             TokenKind::Reserved(Keyword::Let) => {
@@ -917,7 +917,7 @@ impl Parser<'_> {
         })
     }
 
-    fn expr(&mut self, precedence: Precedence) -> Result<ast::Expr> {
+    pub(crate) fn expr(&mut self, precedence: Precedence) -> Result<ast::Expr> {
         debug!("expr (precedence: {:?})", precedence);
         let mut expr = self.prefix_expr()?;
         while precedence < self.peek_precedence()? {

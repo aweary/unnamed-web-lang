@@ -8,3 +8,4 @@ edition = "2018"
 
 [dependencies]
 syntax = { path = "../syntax" }
+serde = { version = "1.0", features = ["derive"] }

@@ -1,9 +1,10 @@
 use crate::ast::{Generics, Ident};
 
 use std::fmt;
+use serde::{Serialize, Deserialize};
 
 /// Type definitions
-#[derive(Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum Ty {
     Unknown,
     // Types that we want to represent, but don't
@@ -34,7 +35,7 @@ pub enum Ty {
 //     }
 // }
 
-#[derive(Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum LiteralTy {
     String,
     Number,

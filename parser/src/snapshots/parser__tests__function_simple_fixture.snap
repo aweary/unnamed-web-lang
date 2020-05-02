@@ -1,0 +1,251 @@
+---
+source: parser/src/lib.rs
+expression: parse_module(input)
+---
+{
+  "items": [
+    {
+      "kind": {
+        "Fn": {
+          "name": {
+            "name": {
+              "unstable_source": "add"
+            },
+            "span": {
+              "start": 24,
+              "end": 27
+            }
+          },
+          "params": {
+            "Multi": [
+              {
+                "local": {
+                  "Ident": [
+                    {
+                      "name": {
+                        "unstable_source": "a"
+                      },
+                      "span": {
+                        "start": 28,
+                        "end": 29
+                      }
+                    },
+                    {
+                      "start": 28,
+                      "end": 29
+                    }
+                  ]
+                },
+                "ty": {
+                  "Variable": [
+                    {
+                      "name": {
+                        "unstable_source": "number"
+                      },
+                      "span": {
+                        "start": 31,
+                        "end": 37
+                      }
+                    },
+                    null
+                  ]
+                },
+                "id": 0,
+                "span": {
+                  "start": 28,
+                  "end": 37
+                }
+              },
+              {
+                "local": {
+                  "Ident": [
+                    {
+                      "name": {
+                        "unstable_source": "b"
+                      },
+                      "span": {
+                        "start": 39,
+                        "end": 40
+                      }
+                    },
+                    {
+                      "start": 39,
+                      "end": 40
+                    }
+                  ]
+                },
+                "ty": {
+                  "Variable": [
+                    {
+                      "name": {
+                        "unstable_source": "number"
+                      },
+                      "span": {
+                        "start": 42,
+                        "end": 48
+                      }
+                    },
+                    null
+                  ]
+                },
+                "id": 0,
+                "span": {
+                  "start": 39,
+                  "end": 48
+                }
+              }
+            ]
+          },
+          "body": {
+            "stmts": [
+              {
+                "id": 0,
+                "kind": {
+                  "Local": {
+                    "id": 0,
+                    "name": {
+                      "Ident": [
+                        {
+                          "name": {
+                            "unstable_source": "result"
+                          },
+                          "span": {
+                            "start": 69,
+                            "end": 75
+                          }
+                        },
+                        {
+                          "start": 69,
+                          "end": 75
+                        }
+                      ]
+                    },
+                    "ty": null,
+                    "init": {
+                      "id": 0,
+                      "kind": {
+                        "Binary": [
+                          "Add",
+                          {
+                            "id": 0,
+                            "kind": {
+                              "Reference": {
+                                "name": {
+                                  "unstable_source": "a"
+                                },
+                                "span": {
+                                  "start": 78,
+                                  "end": 79
+                                }
+                              }
+                            },
+                            "span": {
+                              "start": 78,
+                              "end": 79
+                            },
+                            "ty": null
+                          },
+                          {
+                            "id": 0,
+                            "kind": {
+                              "Reference": {
+                                "name": {
+                                  "unstable_source": "b"
+                                },
+                                "span": {
+                                  "start": 82,
+                                  "end": 83
+                                }
+                              }
+                            },
+                            "span": {
+                              "start": 82,
+                              "end": 83
+                            },
+                            "ty": null
+                          }
+                        ]
+                      },
+                      "span": {
+                        "start": 78,
+                        "end": 83
+                      },
+                      "ty": null
+                    },
+                    "span": {
+                      "start": 65,
+                      "end": 83
+                    }
+                  }
+                },
+                "span": {
+                  "start": 65,
+                  "end": 84
+                },
+                "has_semi": false
+              },
+              {
+                "id": 0,
+                "kind": {
+                  "Return": {
+                    "id": 0,
+                    "kind": {
+                      "Reference": {
+                        "name": {
+                          "unstable_source": "result"
+                        },
+                        "span": {
+                          "start": 96,
+                          "end": 102
+                        }
+                      }
+                    },
+                    "span": {
+                      "start": 96,
+                      "end": 102
+                    },
+                    "ty": null
+                  }
+                },
+                "span": {
+                  "start": 89,
+                  "end": 103
+                },
+                "has_semi": false
+              }
+            ],
+            "id": 0,
+            "span": {
+              "start": 59,
+              "end": 105
+            }
+          },
+          "return_ty": {
+            "Variable": [
+              {
+                "name": {
+                  "unstable_source": "number"
+                },
+                "span": {
+                  "start": 52,
+                  "end": 58
+                }
+              },
+              null
+            ]
+          },
+          "is_async": false,
+          "generics": null,
+          "span": {
+            "start": 21,
+            "end": 105
+          }
+        }
+      },
+      "span": {
+        "start": 21,
+        "end": 105
+      }
+    }
+  ]
+}

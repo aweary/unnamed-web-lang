@@ -1,0 +1,5 @@
+// A simple function
+fn add(a: number, b: number) : number {
+    let result = a + b;
+    return result;
+}

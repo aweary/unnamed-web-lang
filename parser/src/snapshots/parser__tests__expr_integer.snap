@@ -1,0 +1,25 @@
+---
+source: parser/src/lib.rs
+expression: parse_expr(input)
+---
+{
+  "id": 0,
+  "kind": {
+    "Lit": {
+      "span": {
+        "start": 0,
+        "end": 4
+      },
+      "kind": {
+        "Number": {
+          "unstable_source": "1234"
+        }
+      }
+    }
+  },
+  "span": {
+    "start": 0,
+    "end": 4
+  },
+  "ty": null
+}
