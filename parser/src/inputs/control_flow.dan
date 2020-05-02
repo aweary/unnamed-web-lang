@@ -1,0 +1,13 @@
+fn control_flow(a, b) {
+    if true {
+        let a = b;
+    } else if false {
+        let c = 4;
+    }
+    if a == b {
+        return a;
+    } else {
+        return b;
+    }
+    return 4;
+}

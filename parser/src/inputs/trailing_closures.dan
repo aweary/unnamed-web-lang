@@ -1,0 +1,42 @@
+component UserList(user) {
+    if user.is_admin {
+        return View {
+            Text("Admin").color("red")
+        }
+    } else {
+        if user.is_guest {
+            return View {
+                Text("Guest")
+            }
+        }
+    }
+    View {
+        HStack {
+            VStack(true) {
+                Text("Hello")
+                Text("Goodbye")
+                if false {
+                    Text("Foo")
+                }
+                if true {
+                    Text("bar")
+                } else {
+                    match user {
+                        "foo" => View {
+                            Text("Bar")
+                        }
+                        _ => View {
+                            Text("Baz")
+                        }
+                    }
+                    View {
+                        HStack {
+                            Text("Qux")
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+}

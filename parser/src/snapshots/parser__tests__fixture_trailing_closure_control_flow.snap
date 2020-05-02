@@ -1,0 +1,1507 @@
+---
+source: parser/src/lib.rs
+expression: parse_module(input)
+---
+{
+  "items": [
+    {
+      "kind": {
+        "Component": {
+          "name": {
+            "name": {
+              "unstable_source": "UserList"
+            },
+            "span": {
+              "start": 10,
+              "end": 18
+            }
+          },
+          "params": {
+            "Single": {
+              "local": {
+                "Ident": [
+                  {
+                    "name": {
+                      "unstable_source": "user"
+                    },
+                    "span": {
+                      "start": 19,
+                      "end": 23
+                    }
+                  },
+                  {
+                    "start": 19,
+                    "end": 23
+                  }
+                ]
+              },
+              "ty": "Existential",
+              "id": 0,
+              "span": {
+                "start": 19,
+                "end": 23
+              }
+            }
+          },
+          "body": {
+            "stmts": [
+              {
+                "id": 0,
+                "kind": {
+                  "If": {
+                    "span": {
+                      "start": 31,
+                      "end": 246
+                    },
+                    "condition": {
+                      "id": 0,
+                      "kind": {
+                        "Member": [
+                          {
+                            "id": 0,
+                            "kind": {
+                              "Reference": {
+                                "name": {
+                                  "unstable_source": "user"
+                                },
+                                "span": {
+                                  "start": 34,
+                                  "end": 38
+                                }
+                              }
+                            },
+                            "span": {
+                              "start": 34,
+                              "end": 38
+                            },
+                            "ty": null
+                          },
+                          {
+                            "name": {
+                              "unstable_source": "is_admin"
+                            },
+                            "span": {
+                              "start": 39,
+                              "end": 47
+                            }
+                          }
+                        ]
+                      },
+                      "span": {
+                        "start": 34,
+                        "end": 47
+                      },
+                      "ty": null
+                    },
+                    "block": {
+                      "stmts": [
+                        {
+                          "id": 0,
+                          "kind": {
+                            "Return": {
+                              "id": 0,
+                              "kind": {
+                                "TrailingClosure": [
+                                  {
+                                    "id": 0,
+                                    "kind": {
+                                      "Reference": {
+                                        "name": {
+                                          "unstable_source": "View"
+                                        },
+                                        "span": {
+                                          "start": 65,
+                                          "end": 69
+                                        }
+                                      }
+                                    },
+                                    "span": {
+                                      "start": 65,
+                                      "end": 69
+                                    },
+                                    "ty": null
+                                  },
+                                  {
+                                    "stmts": [
+                                      {
+                                        "id": 0,
+                                        "kind": {
+                                          "Expr": {
+                                            "id": 0,
+                                            "kind": {
+                                              "Call": [
+                                                {
+                                                  "id": 0,
+                                                  "kind": {
+                                                    "Member": [
+                                                      {
+                                                        "id": 0,
+                                                        "kind": {
+                                                          "Call": [
+                                                            {
+                                                              "id": 0,
+                                                              "kind": {
+                                                                "Reference": {
+                                                                  "name": {
+                                                                    "unstable_source": "Text"
+                                                                  },
+                                                                  "span": {
+                                                                    "start": 84,
+                                                                    "end": 88
+                                                                  }
+                                                                }
+                                                              },
+                                                              "span": {
+                                                                "start": 84,
+                                                                "end": 88
+                                                              },
+                                                              "ty": null
+                                                            },
+                                                            [
+                                                              {
+                                                                "id": 0,
+                                                                "kind": {
+                                                                  "Lit": {
+                                                                    "span": {
+                                                                      "start": 89,
+                                                                      "end": 96
+                                                                    },
+                                                                    "kind": {
+                                                                      "Str": {
+                                                                        "unstable_source": "\"Admin\""
+                                                                      }
+                                                                    }
+                                                                  }
+                                                                },
+                                                                "span": {
+                                                                  "start": 89,
+                                                                  "end": 96
+                                                                },
+                                                                "ty": null
+                                                              }
+                                                            ]
+                                                          ]
+                                                        },
+                                                        "span": {
+                                                          "start": 84,
+                                                          "end": 97
+                                                        },
+                                                        "ty": null
+                                                      },
+                                                      {
+                                                        "name": {
+                                                          "unstable_source": "color"
+                                                        },
+                                                        "span": {
+                                                          "start": 98,
+                                                          "end": 103
+                                                        }
+                                                      }
+                                                    ]
+                                                  },
+                                                  "span": {
+                                                    "start": 84,
+                                                    "end": 103
+                                                  },
+                                                  "ty": null
+                                                },
+                                                [
+                                                  {
+                                                    "id": 0,
+                                                    "kind": {
+                                                      "Lit": {
+                                                        "span": {
+                                                          "start": 104,
+                                                          "end": 109
+                                                        },
+                                                        "kind": {
+                                                          "Str": {
+                                                            "unstable_source": "\"red\""
+                                                          }
+                                                        }
+                                                      }
+                                                    },
+                                                    "span": {
+                                                      "start": 104,
+                                                      "end": 109
+                                                    },
+                                                    "ty": null
+                                                  }
+                                                ]
+                                              ]
+                                            },
+                                            "span": {
+                                              "start": 84,
+                                              "end": 110
+                                            },
+                                            "ty": null
+                                          }
+                                        },
+                                        "span": {
+                                          "start": 84,
+                                          "end": 110
+                                        },
+                                        "has_semi": false
+                                      }
+                                    ],
+                                    "id": 0,
+                                    "span": {
+                                      "start": 70,
+                                      "end": 120
+                                    }
+                                  }
+                                ]
+                              },
+                              "span": {
+                                "start": 65,
+                                "end": 120
+                              },
+                              "ty": null
+                            }
+                          },
+                          "span": {
+                            "start": 58,
+                            "end": 120
+                          },
+                          "has_semi": false
+                        }
+                      ],
+                      "id": 0,
+                      "span": {
+                        "start": 48,
+                        "end": 126
+                      }
+                    },
+                    "alt": {
+                      "Block": {
+                        "stmts": [
+                          {
+                            "id": 0,
+                            "kind": {
+                              "If": {
+                                "span": {
+                                  "start": 142,
+                                  "end": 240
+                                },
+                                "condition": {
+                                  "id": 0,
+                                  "kind": {
+                                    "Member": [
+                                      {
+                                        "id": 0,
+                                        "kind": {
+                                          "Reference": {
+                                            "name": {
+                                              "unstable_source": "user"
+                                            },
+                                            "span": {
+                                              "start": 145,
+                                              "end": 149
+                                            }
+                                          }
+                                        },
+                                        "span": {
+                                          "start": 145,
+                                          "end": 149
+                                        },
+                                        "ty": null
+                                      },
+                                      {
+                                        "name": {
+                                          "unstable_source": "is_guest"
+                                        },
+                                        "span": {
+                                          "start": 150,
+                                          "end": 158
+                                        }
+                                      }
+                                    ]
+                                  },
+                                  "span": {
+                                    "start": 145,
+                                    "end": 158
+                                  },
+                                  "ty": null
+                                },
+                                "block": {
+                                  "stmts": [
+                                    {
+                                      "id": 0,
+                                      "kind": {
+                                        "Return": {
+                                          "id": 0,
+                                          "kind": {
+                                            "TrailingClosure": [
+                                              {
+                                                "id": 0,
+                                                "kind": {
+                                                  "Reference": {
+                                                    "name": {
+                                                      "unstable_source": "View"
+                                                    },
+                                                    "span": {
+                                                      "start": 180,
+                                                      "end": 184
+                                                    }
+                                                  }
+                                                },
+                                                "span": {
+                                                  "start": 180,
+                                                  "end": 184
+                                                },
+                                                "ty": null
+                                              },
+                                              {
+                                                "stmts": [
+                                                  {
+                                                    "id": 0,
+                                                    "kind": {
+                                                      "Expr": {
+                                                        "id": 0,
+                                                        "kind": {
+                                                          "Call": [
+                                                            {
+                                                              "id": 0,
+                                                              "kind": {
+                                                                "Reference": {
+                                                                  "name": {
+                                                                    "unstable_source": "Text"
+                                                                  },
+                                                                  "span": {
+                                                                    "start": 203,
+                                                                    "end": 207
+                                                                  }
+                                                                }
+                                                              },
+                                                              "span": {
+                                                                "start": 203,
+                                                                "end": 207
+                                                              },
+                                                              "ty": null
+                                                            },
+                                                            [
+                                                              {
+                                                                "id": 0,
+                                                                "kind": {
+                                                                  "Lit": {
+                                                                    "span": {
+                                                                      "start": 208,
+                                                                      "end": 215
+                                                                    },
+                                                                    "kind": {
+                                                                      "Str": {
+                                                                        "unstable_source": "\"Guest\""
+                                                                      }
+                                                                    }
+                                                                  }
+                                                                },
+                                                                "span": {
+                                                                  "start": 208,
+                                                                  "end": 215
+                                                                },
+                                                                "ty": null
+                                                              }
+                                                            ]
+                                                          ]
+                                                        },
+                                                        "span": {
+                                                          "start": 203,
+                                                          "end": 216
+                                                        },
+                                                        "ty": null
+                                                      }
+                                                    },
+                                                    "span": {
+                                                      "start": 203,
+                                                      "end": 216
+                                                    },
+                                                    "has_semi": false
+                                                  }
+                                                ],
+                                                "id": 0,
+                                                "span": {
+                                                  "start": 185,
+                                                  "end": 230
+                                                }
+                                              }
+                                            ]
+                                          },
+                                          "span": {
+                                            "start": 180,
+                                            "end": 230
+                                          },
+                                          "ty": null
+                                        }
+                                      },
+                                      "span": {
+                                        "start": 173,
+                                        "end": 230
+                                      },
+                                      "has_semi": false
+                                    }
+                                  ],
+                                  "id": 0,
+                                  "span": {
+                                    "start": 159,
+                                    "end": 240
+                                  }
+                                },
+                                "alt": null
+                              }
+                            },
+                            "span": {
+                              "start": 142,
+                              "end": 240
+                            },
+                            "has_semi": false
+                          }
+                        ],
+                        "id": 0,
+                        "span": {
+                          "start": 132,
+                          "end": 246
+                        }
+                      }
+                    }
+                  }
+                },
+                "span": {
+                  "start": 31,
+                  "end": 246
+                },
+                "has_semi": false
+              },
+              {
+                "id": 0,
+                "kind": {
+                  "Expr": {
+                    "id": 0,
+                    "kind": {
+                      "TrailingClosure": [
+                        {
+                          "id": 0,
+                          "kind": {
+                            "Reference": {
+                              "name": {
+                                "unstable_source": "View"
+                              },
+                              "span": {
+                                "start": 251,
+                                "end": 255
+                              }
+                            }
+                          },
+                          "span": {
+                            "start": 251,
+                            "end": 255
+                          },
+                          "ty": null
+                        },
+                        {
+                          "stmts": [
+                            {
+                              "id": 0,
+                              "kind": {
+                                "Expr": {
+                                  "id": 0,
+                                  "kind": {
+                                    "TrailingClosure": [
+                                      {
+                                        "id": 0,
+                                        "kind": {
+                                          "Reference": {
+                                            "name": {
+                                              "unstable_source": "HStack"
+                                            },
+                                            "span": {
+                                              "start": 266,
+                                              "end": 272
+                                            }
+                                          }
+                                        },
+                                        "span": {
+                                          "start": 266,
+                                          "end": 272
+                                        },
+                                        "ty": null
+                                      },
+                                      {
+                                        "stmts": [
+                                          {
+                                            "id": 0,
+                                            "kind": {
+                                              "Expr": {
+                                                "id": 0,
+                                                "kind": {
+                                                  "TrailingClosure": [
+                                                    {
+                                                      "id": 0,
+                                                      "kind": {
+                                                        "Call": [
+                                                          {
+                                                            "id": 0,
+                                                            "kind": {
+                                                              "Reference": {
+                                                                "name": {
+                                                                  "unstable_source": "VStack"
+                                                                },
+                                                                "span": {
+                                                                  "start": 287,
+                                                                  "end": 293
+                                                                }
+                                                              }
+                                                            },
+                                                            "span": {
+                                                              "start": 287,
+                                                              "end": 293
+                                                            },
+                                                            "ty": null
+                                                          },
+                                                          [
+                                                            {
+                                                              "id": 0,
+                                                              "kind": {
+                                                                "Lit": {
+                                                                  "span": {
+                                                                    "start": 294,
+                                                                    "end": 298
+                                                                  },
+                                                                  "kind": {
+                                                                    "Bool": {
+                                                                      "unstable_source": "true"
+                                                                    }
+                                                                  }
+                                                                }
+                                                              },
+                                                              "span": {
+                                                                "start": 294,
+                                                                "end": 298
+                                                              },
+                                                              "ty": null
+                                                            }
+                                                          ]
+                                                        ]
+                                                      },
+                                                      "span": {
+                                                        "start": 287,
+                                                        "end": 299
+                                                      },
+                                                      "ty": null
+                                                    },
+                                                    {
+                                                      "stmts": [
+                                                        {
+                                                          "id": 0,
+                                                          "kind": {
+                                                            "Expr": {
+                                                              "id": 0,
+                                                              "kind": {
+                                                                "Call": [
+                                                                  {
+                                                                    "id": 0,
+                                                                    "kind": {
+                                                                      "Reference": {
+                                                                        "name": {
+                                                                          "unstable_source": "Text"
+                                                                        },
+                                                                        "span": {
+                                                                          "start": 318,
+                                                                          "end": 322
+                                                                        }
+                                                                      }
+                                                                    },
+                                                                    "span": {
+                                                                      "start": 318,
+                                                                      "end": 322
+                                                                    },
+                                                                    "ty": null
+                                                                  },
+                                                                  [
+                                                                    {
+                                                                      "id": 0,
+                                                                      "kind": {
+                                                                        "Lit": {
+                                                                          "span": {
+                                                                            "start": 323,
+                                                                            "end": 330
+                                                                          },
+                                                                          "kind": {
+                                                                            "Str": {
+                                                                              "unstable_source": "\"Hello\""
+                                                                            }
+                                                                          }
+                                                                        }
+                                                                      },
+                                                                      "span": {
+                                                                        "start": 323,
+                                                                        "end": 330
+                                                                      },
+                                                                      "ty": null
+                                                                    }
+                                                                  ]
+                                                                ]
+                                                              },
+                                                              "span": {
+                                                                "start": 318,
+                                                                "end": 331
+                                                              },
+                                                              "ty": null
+                                                            }
+                                                          },
+                                                          "span": {
+                                                            "start": 318,
+                                                            "end": 331
+                                                          },
+                                                          "has_semi": false
+                                                        },
+                                                        {
+                                                          "id": 0,
+                                                          "kind": {
+                                                            "Expr": {
+                                                              "id": 0,
+                                                              "kind": {
+                                                                "Call": [
+                                                                  {
+                                                                    "id": 0,
+                                                                    "kind": {
+                                                                      "Reference": {
+                                                                        "name": {
+                                                                          "unstable_source": "Text"
+                                                                        },
+                                                                        "span": {
+                                                                          "start": 348,
+                                                                          "end": 352
+                                                                        }
+                                                                      }
+                                                                    },
+                                                                    "span": {
+                                                                      "start": 348,
+                                                                      "end": 352
+                                                                    },
+                                                                    "ty": null
+                                                                  },
+                                                                  [
+                                                                    {
+                                                                      "id": 0,
+                                                                      "kind": {
+                                                                        "Lit": {
+                                                                          "span": {
+                                                                            "start": 353,
+                                                                            "end": 362
+                                                                          },
+                                                                          "kind": {
+                                                                            "Str": {
+                                                                              "unstable_source": "\"Goodbye\""
+                                                                            }
+                                                                          }
+                                                                        }
+                                                                      },
+                                                                      "span": {
+                                                                        "start": 353,
+                                                                        "end": 362
+                                                                      },
+                                                                      "ty": null
+                                                                    }
+                                                                  ]
+                                                                ]
+                                                              },
+                                                              "span": {
+                                                                "start": 348,
+                                                                "end": 363
+                                                              },
+                                                              "ty": null
+                                                            }
+                                                          },
+                                                          "span": {
+                                                            "start": 348,
+                                                            "end": 363
+                                                          },
+                                                          "has_semi": false
+                                                        },
+                                                        {
+                                                          "id": 0,
+                                                          "kind": {
+                                                            "If": {
+                                                              "span": {
+                                                                "start": 380,
+                                                                "end": 440
+                                                              },
+                                                              "condition": {
+                                                                "id": 0,
+                                                                "kind": {
+                                                                  "Lit": {
+                                                                    "span": {
+                                                                      "start": 383,
+                                                                      "end": 388
+                                                                    },
+                                                                    "kind": {
+                                                                      "Bool": {
+                                                                        "unstable_source": "false"
+                                                                      }
+                                                                    }
+                                                                  }
+                                                                },
+                                                                "span": {
+                                                                  "start": 383,
+                                                                  "end": 388
+                                                                },
+                                                                "ty": null
+                                                              },
+                                                              "block": {
+                                                                "stmts": [
+                                                                  {
+                                                                    "id": 0,
+                                                                    "kind": {
+                                                                      "Expr": {
+                                                                        "id": 0,
+                                                                        "kind": {
+                                                                          "Call": [
+                                                                            {
+                                                                              "id": 0,
+                                                                              "kind": {
+                                                                                "Reference": {
+                                                                                  "name": {
+                                                                                    "unstable_source": "Text"
+                                                                                  },
+                                                                                  "span": {
+                                                                                    "start": 411,
+                                                                                    "end": 415
+                                                                                  }
+                                                                                }
+                                                                              },
+                                                                              "span": {
+                                                                                "start": 411,
+                                                                                "end": 415
+                                                                              },
+                                                                              "ty": null
+                                                                            },
+                                                                            [
+                                                                              {
+                                                                                "id": 0,
+                                                                                "kind": {
+                                                                                  "Lit": {
+                                                                                    "span": {
+                                                                                      "start": 416,
+                                                                                      "end": 421
+                                                                                    },
+                                                                                    "kind": {
+                                                                                      "Str": {
+                                                                                        "unstable_source": "\"Foo\""
+                                                                                      }
+                                                                                    }
+                                                                                  }
+                                                                                },
+                                                                                "span": {
+                                                                                  "start": 416,
+                                                                                  "end": 421
+                                                                                },
+                                                                                "ty": null
+                                                                              }
+                                                                            ]
+                                                                          ]
+                                                                        },
+                                                                        "span": {
+                                                                          "start": 411,
+                                                                          "end": 422
+                                                                        },
+                                                                        "ty": null
+                                                                      }
+                                                                    },
+                                                                    "span": {
+                                                                      "start": 411,
+                                                                      "end": 422
+                                                                    },
+                                                                    "has_semi": false
+                                                                  }
+                                                                ],
+                                                                "id": 0,
+                                                                "span": {
+                                                                  "start": 389,
+                                                                  "end": 440
+                                                                }
+                                                              },
+                                                              "alt": null
+                                                            }
+                                                          },
+                                                          "span": {
+                                                            "start": 380,
+                                                            "end": 440
+                                                          },
+                                                          "has_semi": false
+                                                        },
+                                                        {
+                                                          "id": 0,
+                                                          "kind": {
+                                                            "If": {
+                                                              "span": {
+                                                                "start": 457,
+                                                                "end": 952
+                                                              },
+                                                              "condition": {
+                                                                "id": 0,
+                                                                "kind": {
+                                                                  "Lit": {
+                                                                    "span": {
+                                                                      "start": 460,
+                                                                      "end": 464
+                                                                    },
+                                                                    "kind": {
+                                                                      "Bool": {
+                                                                        "unstable_source": "true"
+                                                                      }
+                                                                    }
+                                                                  }
+                                                                },
+                                                                "span": {
+                                                                  "start": 460,
+                                                                  "end": 464
+                                                                },
+                                                                "ty": null
+                                                              },
+                                                              "block": {
+                                                                "stmts": [
+                                                                  {
+                                                                    "id": 0,
+                                                                    "kind": {
+                                                                      "Expr": {
+                                                                        "id": 0,
+                                                                        "kind": {
+                                                                          "Call": [
+                                                                            {
+                                                                              "id": 0,
+                                                                              "kind": {
+                                                                                "Reference": {
+                                                                                  "name": {
+                                                                                    "unstable_source": "Text"
+                                                                                  },
+                                                                                  "span": {
+                                                                                    "start": 487,
+                                                                                    "end": 491
+                                                                                  }
+                                                                                }
+                                                                              },
+                                                                              "span": {
+                                                                                "start": 487,
+                                                                                "end": 491
+                                                                              },
+                                                                              "ty": null
+                                                                            },
+                                                                            [
+                                                                              {
+                                                                                "id": 0,
+                                                                                "kind": {
+                                                                                  "Lit": {
+                                                                                    "span": {
+                                                                                      "start": 492,
+                                                                                      "end": 497
+                                                                                    },
+                                                                                    "kind": {
+                                                                                      "Str": {
+                                                                                        "unstable_source": "\"bar\""
+                                                                                      }
+                                                                                    }
+                                                                                  }
+                                                                                },
+                                                                                "span": {
+                                                                                  "start": 492,
+                                                                                  "end": 497
+                                                                                },
+                                                                                "ty": null
+                                                                              }
+                                                                            ]
+                                                                          ]
+                                                                        },
+                                                                        "span": {
+                                                                          "start": 487,
+                                                                          "end": 498
+                                                                        },
+                                                                        "ty": null
+                                                                      }
+                                                                    },
+                                                                    "span": {
+                                                                      "start": 487,
+                                                                      "end": 498
+                                                                    },
+                                                                    "has_semi": false
+                                                                  }
+                                                                ],
+                                                                "id": 0,
+                                                                "span": {
+                                                                  "start": 465,
+                                                                  "end": 516
+                                                                }
+                                                              },
+                                                              "alt": {
+                                                                "Block": {
+                                                                  "stmts": [
+                                                                    {
+                                                                      "id": 0,
+                                                                      "kind": {
+                                                                        "Expr": {
+                                                                          "id": 0,
+                                                                          "kind": {
+                                                                            "Match": [
+                                                                              {
+                                                                                "id": 0,
+                                                                                "kind": {
+                                                                                  "Reference": {
+                                                                                    "name": {
+                                                                                      "unstable_source": "user"
+                                                                                    },
+                                                                                    "span": {
+                                                                                      "start": 550,
+                                                                                      "end": 554
+                                                                                    }
+                                                                                  }
+                                                                                },
+                                                                                "span": {
+                                                                                  "start": 550,
+                                                                                  "end": 554
+                                                                                },
+                                                                                "ty": null
+                                                                              },
+                                                                              [
+                                                                                {
+                                                                                  "test": {
+                                                                                    "id": 0,
+                                                                                    "kind": {
+                                                                                      "Lit": {
+                                                                                        "span": {
+                                                                                          "start": 581,
+                                                                                          "end": 586
+                                                                                        },
+                                                                                        "kind": {
+                                                                                          "Str": {
+                                                                                            "unstable_source": "\"foo\""
+                                                                                          }
+                                                                                        }
+                                                                                      }
+                                                                                    },
+                                                                                    "span": {
+                                                                                      "start": 581,
+                                                                                      "end": 586
+                                                                                    },
+                                                                                    "ty": null
+                                                                                  },
+                                                                                  "consequent": {
+                                                                                    "id": 0,
+                                                                                    "kind": {
+                                                                                      "TrailingClosure": [
+                                                                                        {
+                                                                                          "id": 0,
+                                                                                          "kind": {
+                                                                                            "Reference": {
+                                                                                              "name": {
+                                                                                                "unstable_source": "View"
+                                                                                              },
+                                                                                              "span": {
+                                                                                                "start": 590,
+                                                                                                "end": 594
+                                                                                              }
+                                                                                            }
+                                                                                          },
+                                                                                          "span": {
+                                                                                            "start": 590,
+                                                                                            "end": 594
+                                                                                          },
+                                                                                          "ty": null
+                                                                                        },
+                                                                                        {
+                                                                                          "stmts": [
+                                                                                            {
+                                                                                              "id": 0,
+                                                                                              "kind": {
+                                                                                                "Expr": {
+                                                                                                  "id": 0,
+                                                                                                  "kind": {
+                                                                                                    "Call": [
+                                                                                                      {
+                                                                                                        "id": 0,
+                                                                                                        "kind": {
+                                                                                                          "Reference": {
+                                                                                                            "name": {
+                                                                                                              "unstable_source": "Text"
+                                                                                                            },
+                                                                                                            "span": {
+                                                                                                              "start": 625,
+                                                                                                              "end": 629
+                                                                                                            }
+                                                                                                          }
+                                                                                                        },
+                                                                                                        "span": {
+                                                                                                          "start": 625,
+                                                                                                          "end": 629
+                                                                                                        },
+                                                                                                        "ty": null
+                                                                                                      },
+                                                                                                      [
+                                                                                                        {
+                                                                                                          "id": 0,
+                                                                                                          "kind": {
+                                                                                                            "Lit": {
+                                                                                                              "span": {
+                                                                                                                "start": 630,
+                                                                                                                "end": 635
+                                                                                                              },
+                                                                                                              "kind": {
+                                                                                                                "Str": {
+                                                                                                                  "unstable_source": "\"Bar\""
+                                                                                                                }
+                                                                                                              }
+                                                                                                            }
+                                                                                                          },
+                                                                                                          "span": {
+                                                                                                            "start": 630,
+                                                                                                            "end": 635
+                                                                                                          },
+                                                                                                          "ty": null
+                                                                                                        }
+                                                                                                      ]
+                                                                                                    ]
+                                                                                                  },
+                                                                                                  "span": {
+                                                                                                    "start": 625,
+                                                                                                    "end": 636
+                                                                                                  },
+                                                                                                  "ty": null
+                                                                                                }
+                                                                                              },
+                                                                                              "span": {
+                                                                                                "start": 625,
+                                                                                                "end": 636
+                                                                                              },
+                                                                                              "has_semi": false
+                                                                                            }
+                                                                                          ],
+                                                                                          "id": 0,
+                                                                                          "span": {
+                                                                                            "start": 595,
+                                                                                            "end": 662
+                                                                                          }
+                                                                                        }
+                                                                                      ]
+                                                                                    },
+                                                                                    "span": {
+                                                                                      "start": 590,
+                                                                                      "end": 662
+                                                                                    },
+                                                                                    "ty": null
+                                                                                  },
+                                                                                  "span": {
+                                                                                    "start": 581,
+                                                                                    "end": 662
+                                                                                  }
+                                                                                },
+                                                                                {
+                                                                                  "test": {
+                                                                                    "id": 0,
+                                                                                    "kind": {
+                                                                                      "Reference": {
+                                                                                        "name": {
+                                                                                          "unstable_source": "_"
+                                                                                        },
+                                                                                        "span": {
+                                                                                          "start": 687,
+                                                                                          "end": 688
+                                                                                        }
+                                                                                      }
+                                                                                    },
+                                                                                    "span": {
+                                                                                      "start": 687,
+                                                                                      "end": 688
+                                                                                    },
+                                                                                    "ty": null
+                                                                                  },
+                                                                                  "consequent": {
+                                                                                    "id": 0,
+                                                                                    "kind": {
+                                                                                      "TrailingClosure": [
+                                                                                        {
+                                                                                          "id": 0,
+                                                                                          "kind": {
+                                                                                            "Reference": {
+                                                                                              "name": {
+                                                                                                "unstable_source": "View"
+                                                                                              },
+                                                                                              "span": {
+                                                                                                "start": 692,
+                                                                                                "end": 696
+                                                                                              }
+                                                                                            }
+                                                                                          },
+                                                                                          "span": {
+                                                                                            "start": 692,
+                                                                                            "end": 696
+                                                                                          },
+                                                                                          "ty": null
+                                                                                        },
+                                                                                        {
+                                                                                          "stmts": [
+                                                                                            {
+                                                                                              "id": 0,
+                                                                                              "kind": {
+                                                                                                "Expr": {
+                                                                                                  "id": 0,
+                                                                                                  "kind": {
+                                                                                                    "Call": [
+                                                                                                      {
+                                                                                                        "id": 0,
+                                                                                                        "kind": {
+                                                                                                          "Reference": {
+                                                                                                            "name": {
+                                                                                                              "unstable_source": "Text"
+                                                                                                            },
+                                                                                                            "span": {
+                                                                                                              "start": 727,
+                                                                                                              "end": 731
+                                                                                                            }
+                                                                                                          }
+                                                                                                        },
+                                                                                                        "span": {
+                                                                                                          "start": 727,
+                                                                                                          "end": 731
+                                                                                                        },
+                                                                                                        "ty": null
+                                                                                                      },
+                                                                                                      [
+                                                                                                        {
+                                                                                                          "id": 0,
+                                                                                                          "kind": {
+                                                                                                            "Lit": {
+                                                                                                              "span": {
+                                                                                                                "start": 732,
+                                                                                                                "end": 737
+                                                                                                              },
+                                                                                                              "kind": {
+                                                                                                                "Str": {
+                                                                                                                  "unstable_source": "\"Baz\""
+                                                                                                                }
+                                                                                                              }
+                                                                                                            }
+                                                                                                          },
+                                                                                                          "span": {
+                                                                                                            "start": 732,
+                                                                                                            "end": 737
+                                                                                                          },
+                                                                                                          "ty": null
+                                                                                                        }
+                                                                                                      ]
+                                                                                                    ]
+                                                                                                  },
+                                                                                                  "span": {
+                                                                                                    "start": 727,
+                                                                                                    "end": 738
+                                                                                                  },
+                                                                                                  "ty": null
+                                                                                                }
+                                                                                              },
+                                                                                              "span": {
+                                                                                                "start": 727,
+                                                                                                "end": 738
+                                                                                              },
+                                                                                              "has_semi": false
+                                                                                            }
+                                                                                          ],
+                                                                                          "id": 0,
+                                                                                          "span": {
+                                                                                            "start": 697,
+                                                                                            "end": 764
+                                                                                          }
+                                                                                        }
+                                                                                      ]
+                                                                                    },
+                                                                                    "span": {
+                                                                                      "start": 692,
+                                                                                      "end": 764
+                                                                                    },
+                                                                                    "ty": null
+                                                                                  },
+                                                                                  "span": {
+                                                                                    "start": 687,
+                                                                                    "end": 764
+                                                                                  }
+                                                                                }
+                                                                              ]
+                                                                            ]
+                                                                          },
+                                                                          "span": {
+                                                                            "start": 544,
+                                                                            "end": 786
+                                                                          },
+                                                                          "ty": null
+                                                                        }
+                                                                      },
+                                                                      "span": {
+                                                                        "start": 544,
+                                                                        "end": 786
+                                                                      },
+                                                                      "has_semi": false
+                                                                    },
+                                                                    {
+                                                                      "id": 0,
+                                                                      "kind": {
+                                                                        "Expr": {
+                                                                          "id": 0,
+                                                                          "kind": {
+                                                                            "TrailingClosure": [
+                                                                              {
+                                                                                "id": 0,
+                                                                                "kind": {
+                                                                                  "Reference": {
+                                                                                    "name": {
+                                                                                      "unstable_source": "View"
+                                                                                    },
+                                                                                    "span": {
+                                                                                      "start": 807,
+                                                                                      "end": 811
+                                                                                    }
+                                                                                  }
+                                                                                },
+                                                                                "span": {
+                                                                                  "start": 807,
+                                                                                  "end": 811
+                                                                                },
+                                                                                "ty": null
+                                                                              },
+                                                                              {
+                                                                                "stmts": [
+                                                                                  {
+                                                                                    "id": 0,
+                                                                                    "kind": {
+                                                                                      "Expr": {
+                                                                                        "id": 0,
+                                                                                        "kind": {
+                                                                                          "TrailingClosure": [
+                                                                                            {
+                                                                                              "id": 0,
+                                                                                              "kind": {
+                                                                                                "Reference": {
+                                                                                                  "name": {
+                                                                                                    "unstable_source": "HStack"
+                                                                                                  },
+                                                                                                  "span": {
+                                                                                                    "start": 838,
+                                                                                                    "end": 844
+                                                                                                  }
+                                                                                                }
+                                                                                              },
+                                                                                              "span": {
+                                                                                                "start": 838,
+                                                                                                "end": 844
+                                                                                              },
+                                                                                              "ty": null
+                                                                                            },
+                                                                                            {
+                                                                                              "stmts": [
+                                                                                                {
+                                                                                                  "id": 0,
+                                                                                                  "kind": {
+                                                                                                    "Expr": {
+                                                                                                      "id": 0,
+                                                                                                      "kind": {
+                                                                                                        "Call": [
+                                                                                                          {
+                                                                                                            "id": 0,
+                                                                                                            "kind": {
+                                                                                                              "Reference": {
+                                                                                                                "name": {
+                                                                                                                  "unstable_source": "Text"
+                                                                                                                },
+                                                                                                                "span": {
+                                                                                                                  "start": 875,
+                                                                                                                  "end": 879
+                                                                                                                }
+                                                                                                              }
+                                                                                                            },
+                                                                                                            "span": {
+                                                                                                              "start": 875,
+                                                                                                              "end": 879
+                                                                                                            },
+                                                                                                            "ty": null
+                                                                                                          },
+                                                                                                          [
+                                                                                                            {
+                                                                                                              "id": 0,
+                                                                                                              "kind": {
+                                                                                                                "Lit": {
+                                                                                                                  "span": {
+                                                                                                                    "start": 880,
+                                                                                                                    "end": 885
+                                                                                                                  },
+                                                                                                                  "kind": {
+                                                                                                                    "Str": {
+                                                                                                                      "unstable_source": "\"Qux\""
+                                                                                                                    }
+                                                                                                                  }
+                                                                                                                }
+                                                                                                              },
+                                                                                                              "span": {
+                                                                                                                "start": 880,
+                                                                                                                "end": 885
+                                                                                                              },
+                                                                                                              "ty": null
+                                                                                                            }
+                                                                                                          ]
+                                                                                                        ]
+                                                                                                      },
+                                                                                                      "span": {
+                                                                                                        "start": 875,
+                                                                                                        "end": 886
+                                                                                                      },
+                                                                                                      "ty": null
+                                                                                                    }
+                                                                                                  },
+                                                                                                  "span": {
+                                                                                                    "start": 875,
+                                                                                                    "end": 886
+                                                                                                  },
+                                                                                                  "has_semi": false
+                                                                                                }
+                                                                                              ],
+                                                                                              "id": 0,
+                                                                                              "span": {
+                                                                                                "start": 845,
+                                                                                                "end": 912
+                                                                                              }
+                                                                                            }
+                                                                                          ]
+                                                                                        },
+                                                                                        "span": {
+                                                                                          "start": 838,
+                                                                                          "end": 912
+                                                                                        },
+                                                                                        "ty": null
+                                                                                      }
+                                                                                    },
+                                                                                    "span": {
+                                                                                      "start": 838,
+                                                                                      "end": 912
+                                                                                    },
+                                                                                    "has_semi": false
+                                                                                  }
+                                                                                ],
+                                                                                "id": 0,
+                                                                                "span": {
+                                                                                  "start": 812,
+                                                                                  "end": 934
+                                                                                }
+                                                                              }
+                                                                            ]
+                                                                          },
+                                                                          "span": {
+                                                                            "start": 807,
+                                                                            "end": 934
+                                                                          },
+                                                                          "ty": null
+                                                                        }
+                                                                      },
+                                                                      "span": {
+                                                                        "start": 807,
+                                                                        "end": 934
+                                                                      },
+                                                                      "has_semi": false
+                                                                    }
+                                                                  ],
+                                                                  "id": 0,
+                                                                  "span": {
+                                                                    "start": 522,
+                                                                    "end": 952
+                                                                  }
+                                                                }
+                                                              }
+                                                            }
+                                                          },
+                                                          "span": {
+                                                            "start": 457,
+                                                            "end": 952
+                                                          },
+                                                          "has_semi": false
+                                                        }
+                                                      ],
+                                                      "id": 0,
+                                                      "span": {
+                                                        "start": 300,
+                                                        "end": 966
+                                                      }
+                                                    }
+                                                  ]
+                                                },
+                                                "span": {
+                                                  "start": 287,
+                                                  "end": 966
+                                                },
+                                                "ty": null
+                                              }
+                                            },
+                                            "span": {
+                                              "start": 287,
+                                              "end": 966
+                                            },
+                                            "has_semi": false
+                                          }
+                                        ],
+                                        "id": 0,
+                                        "span": {
+                                          "start": 273,
+                                          "end": 976
+                                        }
+                                      }
+                                    ]
+                                  },
+                                  "span": {
+                                    "start": 266,
+                                    "end": 976
+                                  },
+                                  "ty": null
+                                }
+                              },
+                              "span": {
+                                "start": 266,
+                                "end": 976
+                              },
+                              "has_semi": false
+                            }
+                          ],
+                          "id": 0,
+                          "span": {
+                            "start": 256,
+                            "end": 982
+                          }
+                        }
+                      ]
+                    },
+                    "span": {
+                      "start": 251,
+                      "end": 982
+                    },
+                    "ty": null
+                  }
+                },
+                "span": {
+                  "start": 251,
+                  "end": 982
+                },
+                "has_semi": false
+              }
+            ],
+            "id": 0,
+            "span": {
+              "start": 25,
+              "end": 985
+            }
+          },
+          "return_ty": "Unit",
+          "generics": null,
+          "span": {
+            "start": 0,
+            "end": 985
+          }
+        }
+      },
+      "span": {
+        "start": 0,
+        "end": 985
+      }
+    }
+  ]
+}
