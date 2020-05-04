@@ -5,9 +5,9 @@ use lsp_types::{
         DidChangeTextDocument, DidCloseTextDocument, DidOpenTextDocument,
         Notification as LSPNotification, PublishDiagnostics,
     },
-    DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
-    PublishDiagnosticsParams, ServerCapabilities, TextDocumentItem, TextDocumentSyncCapability,
-    TextDocumentSyncKind, Url,
+    DidChangeTextDocumentParams, DidCloseTextDocumentParams,
+    DidOpenTextDocumentParams, PublishDiagnosticsParams, ServerCapabilities,
+    TextDocumentItem, TextDocumentSyncCapability, TextDocumentSyncKind, Url,
 };
 use serde_json;
 use std::error::Error;
@@ -47,11 +47,13 @@ impl LSPServer {
     }
 
     pub fn start(mut self) -> GenericResult<()> {
-        let server_capabilities = serde_json::to_value(&self.capabilities).unwrap();
+        let server_capabilities =
+            serde_json::to_value(&self.capabilities).unwrap();
         // Create the transport. Includes the stdio (stdin and stdout) versions but this could
         // also be implemented to use sockets or HTTP.
         let (connection, io_threads) = Connection::stdio();
-        let _initialization_params = connection.initialize(server_capabilities)?;
+        let _initialization_params =
+            connection.initialize(server_capabilities)?;
         self.main_loop(&connection)?;
         io_threads.join()?;
         Ok(())
@@ -78,13 +80,15 @@ impl LSPServer {
                     }
                     DidChangeTextDocument::METHOD => {
                         info!("Change event!");
-                        let params: DidChangeTextDocumentParams =
-                            notif.extract(DidChangeTextDocument::METHOD).unwrap();
+                        let params: DidChangeTextDocumentParams = notif
+                            .extract(DidChangeTextDocument::METHOD)
+                            .unwrap();
                         self.on_change_text_document(params, connection)?;
                     }
                     DidCloseTextDocument::METHOD => {
-                        let params: DidCloseTextDocumentParams =
-                            notif.extract(DidCloseTextDocument::METHOD).unwrap();
+                        let params: DidCloseTextDocumentParams = notif
+                            .extract(DidCloseTextDocument::METHOD)
+                            .unwrap();
                         self.on_close_text_document(params, connection)?;
                     }
                     _ => {}
@@ -128,7 +132,13 @@ impl LSPServer {
             }
             Err(diagnostic) => {
                 info!("Reporting an error for a change event!");
-                self.report_diagnostic(connection, diagnostic, uri, self.vfs.clone(), file)?;
+                self.report_diagnostic(
+                    connection,
+                    diagnostic,
+                    uri,
+                    self.vfs.clone(),
+                    file,
+                )?;
                 // ...
             }
         }
@@ -162,7 +172,13 @@ impl LSPServer {
                     .send(Message::Notification(notification))?;
             }
             Err(diagnostic) => {
-                self.report_diagnostic(connection, diagnostic, uri, self.vfs.clone(), file)?;
+                self.report_diagnostic(
+                    connection,
+                    diagnostic,
+                    uri,
+                    self.vfs.clone(),
+                    file,
+                )?;
             }
         }
         Ok(())

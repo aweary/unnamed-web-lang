@@ -3,24 +3,24 @@ use syntax::symbol::Symbol;
 use source::diagnostics::Span;
 
 use std::fmt;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::path::PathBuf;
 
 use data_structures::arena::Id;
 use data_structures::scope_map::{Referant, Reference};
-use data_structures::HashMap;
 use data_structures::{Blockable, ControlFlowGraph};
 use source::FileId;
 
 use edit_distance::edit_distance;
 
 // Shared with the typecheck module
-pub use ty::{LiteralType, Type};
+pub use ty::{LiteralType as TyLiteralType, Type as TyType};
 
 // Reused from the AST
 pub use syntax::ast::{
-    AssignOp, BinOp, Generics, Ident, ImportSpecifier, Lit, LitKind, LocalPattern, TypeDef, UnOp,
+    AssignOp, BinOp, Generics, Ident, ImportSpecifier, Lit, LitKind,
+    LocalPattern, TypeDef, UnOp,
 };
 
 pub type ModuleId = Id<Module>;
@@ -41,10 +41,33 @@ impl UniqueName {
 impl fmt::Debug for UniqueName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:x}", self.0)
-     }
+    }
 }
 
 impl Reference for UniqueName {}
+
+#[derive(Debug, Clone)]
+pub struct Type {
+    pub kind: TypeKind,
+    pub span: Span,
+    pub arguments: Option<Vec<Type>>,
+}
+
+#[derive(Debug, Clone)]
+pub enum TypeKind {
+    /// A type that will be inferred by the type checker
+    Infer,
+    /// `true` or `false`
+    Boolean,
+    /// All number types
+    Number,
+    /// All strings
+    String,
+    /// Some user-defined type
+    TypeDef(Arc<TypeDef>),
+    /// A type that the HIR could not resolve.
+    Unresolved(Ident),
+}
 
 /// The top-level container for the entire module graph.
 #[derive(Debug, Clone)]
@@ -56,14 +79,6 @@ pub struct Package {
     /// The set of modules in the package...
     modules: Vec<ModuleId>,
 }
-
-/// A type paramter defines an input type for a polymorphic type
-#[derive(Debug, Clone)]
-pub struct TypeParameter(
-    /// TIdenthe referencable name of the parameter
-    Symbol,
-    // In the future we can add constraints to generic type parameters here
-);
 
 #[derive(Debug, Clone)]
 pub enum Binding {
@@ -81,8 +96,10 @@ pub enum Binding {
     Import(Arc<Mutex<Import>>),
     /// A constant definition
     Constant(Arc<Constant>),
-    /// A type definition, either primtive or compound
-    Type(Type),
+    /// A type definition
+    Type(Arc<TypeDef>),
+    /// Enum definition
+    Enum(Arc<EnumDef>),
     /// A special identifier, denoted by `_`, for unused values and catch-all case
     /// in pattern matching.
     Wildcard,
@@ -122,17 +139,17 @@ impl Module {
                 match &def.kind {
                     DefinitionKind::Function(fndef) => {
                         let fndef = fndef.lock().unwrap();
-                        if fndef.name.name == name.name {
+                        if fndef.name.symbol == name.symbol {
                             return Some(def.clone());
                         }
                     }
                     DefinitionKind::Component(compdef) => {
-                        if compdef.name.name == name.name {
+                        if compdef.name.symbol == name.symbol {
                             return Some(def.clone());
                         }
                     }
                     DefinitionKind::Constant(constant) => {
-                        if constant.name.name == name.name {
+                        if constant.name.symbol == name.symbol {
                             return Some(def.clone());
                         }
                     }
@@ -143,12 +160,18 @@ impl Module {
         None
     }
 
-    pub fn resolve_similar_export(&self, export_ident: &Ident) -> Option<&Definition> {
+    pub fn resolve_similar_export(
+        &self,
+        export_ident: &Ident,
+    ) -> Option<&Definition> {
         let mut similar_export = None;
         let mut max_edit_distance = std::usize::MAX;
         for def in &self.definitions {
             let def_ident = def.name();
-            let distance = edit_distance(export_ident.name.as_str(), def_ident.name.as_str());
+            let distance = edit_distance(
+                export_ident.symbol.as_str(),
+                def_ident.symbol.as_str(),
+            );
             if distance < max_edit_distance {
                 max_edit_distance = distance;
                 similar_export = Some(def);
@@ -210,7 +233,11 @@ pub enum DefinitionKind {
 #[derive(Clone, Debug)]
 pub struct Constant {
     pub name: Ident,
-    pub ty: Type,
+    // We need to be able to solve the type of the
+    // constant, but we don't require an explicit annotation
+    // in all cases. The type checker will throw if it can't infer
+    // a type.
+    pub ty: Option<Type>,
     pub value: Expr,
     pub span: Span,
 }
@@ -218,7 +245,9 @@ pub struct Constant {
 #[derive(Debug, Clone)]
 pub struct Param {
     pub span: Span,
-    pub ty: Type,
+    // We don't currently require type annotation for function parameters,
+    // but we may require that soon
+    pub ty: Option<Type>,
     pub local: LocalPattern,
     pub unique_name: UniqueName,
 }
@@ -231,7 +260,7 @@ pub struct Function {
     pub name: Ident,
     pub span: Span,
     pub body: Block,
-    pub ty: Type,
+    pub ty: Option<Type>,
 }
 
 #[derive(Debug, Clone)]
@@ -335,7 +364,6 @@ pub enum StatementKind {
 pub struct Expr {
     pub kind: ExprKind,
     pub span: Span,
-    pub ty: Option<Type>,
 }
 
 #[derive(Clone, Debug)]

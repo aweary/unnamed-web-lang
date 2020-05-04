@@ -1,43 +1,38 @@
-
 use crate::symbol::Symbol;
 
-pub use crate::ty::{LiteralTy, Ty};
 use diagnostics::ParseResult as Result;
+use serde::{Deserialize, Serialize};
 use source::diagnostics::Span;
-use serde::{Serialize, Deserialize};
 
 use std::fmt::{Debug, Error, Formatter};
 use std::path::PathBuf;
 
-use graphql_parser::query::Document;
-
-const DUMMY_NODE_ID: NodeId = NodeId(0);
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct Type {
+    pub name: Ident,
+    pub arguments: Option<Vec<Type>>,
+}
 
 pub fn expr(kind: ExprKind, span: Span) -> Result<Expr> {
-    Ok(Expr {
-        id: DUMMY_NODE_ID,
-        kind,
-        span,
-        ty: None,
-    })
+    Ok(Expr { kind, span })
 }
 
 // TODO move these into symbols crate
 #[derive(Serialize, Deserialize, Clone, PartialEq)]
 pub struct Ident {
-    pub name: Symbol,
+    pub symbol: Symbol,
     pub span: Span,
 }
 
 impl Ident {
     pub fn to_str(&self) -> &str {
-        &self.name.as_str()
+        &self.symbol.as_str()
     }
 }
 
 impl Debug for Ident {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::result::Result<(), Error> {
-        write!(f, "{:?}", self.name)
+        write!(f, "{:?}", self.symbol)
     }
 }
 
@@ -67,9 +62,9 @@ pub enum ItemKind {
     /// A function declaration
     ///
     /// e.g., `fn add(a: number, b: number) : number { ... }
-    Fn(FnDef),
+    Fn(Function),
     /// A component definition
-    Component(ComponentDef),
+    Component(Component),
     /// An enum definition
     Enum(EnumDef),
     /// Type definition for records
@@ -83,7 +78,7 @@ pub enum ItemKind {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Constant {
     pub name: Ident,
-    pub ty: Ty,
+    pub ty: Type,
     pub value: Expr,
     pub span: Span,
 }
@@ -140,7 +135,7 @@ pub struct TypeDef {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TypeProperty {
     pub name: Ident,
-    pub ty: Ty,
+    pub ty: Type,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -168,11 +163,11 @@ impl IntoIterator for ParamType {
 
 /// A function definition
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct FnDef {
+pub struct Function {
     pub name: Ident,
     pub params: ParamType,
-    pub body: Box<Block>,
-    pub return_ty: Ty,
+    pub body: Block,
+    pub return_ty: Option<Type>,
     pub is_async: bool,
     pub generics: Option<Generics>,
     pub span: Span,
@@ -192,11 +187,11 @@ pub struct Lambda {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct ComponentDef {
+pub struct Component {
     pub name: Ident,
     pub params: ParamType,
-    pub body: Box<Block>,
-    pub return_ty: Ty,
+    pub body: Block,
+    pub return_ty: Option<Type>,
     pub generics: Option<Generics>,
     pub span: Span,
 }
@@ -214,7 +209,7 @@ pub struct Variant {
     // The name of the variant
     pub ident: Ident,
     // The input types for tuple variants
-    pub fields: Option<Vec<Ty>>,
+    pub fields: Option<Vec<Type>>,
     // TODO discriminants should be restricted to simple types like numbers and strings
     pub discriminant: Option<Expr>,
     pub span: Span,
@@ -273,17 +268,27 @@ pub struct LocalObjectProperty {
     pub span: Span,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone)]
 pub enum LocalPattern {
     Ident(Ident, Span),
     Object(Vec<LocalObjectProperty>, Span),
     List(Vec<Ident>, Span),
 }
 
+impl Debug for LocalPattern {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LocalPattern::Ident(ident, _) => write!(f, "{:?}", ident),
+            LocalPattern::Object(_, _) => write!(f, "LocalPattern::Object"),
+            LocalPattern::List(idents, _) => write!(f, "{:?}", idents),
+        }
+    }
+}
+
 impl Into<Symbol> for LocalPattern {
     fn into(self) -> Symbol {
         match self {
-            LocalPattern::Ident(ident, _) => ident.name,
+            LocalPattern::Ident(ident, _) => ident.symbol,
             _ => todo!("Cannot make destructured LocalPattern into Symbol"),
         }
     }
@@ -302,7 +307,7 @@ impl Into<Ident> for LocalPattern {
 pub struct Local {
     pub id: NodeId,
     pub name: LocalPattern,
-    pub ty: Option<Box<Ty>>,
+    pub ty: Option<Type>,
     // Optional initializing expression.
     pub init: Option<Box<Expr>>,
     pub span: Span,
@@ -311,7 +316,7 @@ pub struct Local {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct FnDecl {
     pub params: Vec<Param>,
-    pub output: Box<Option<Ty>>,
+    pub output: Box<Option<Type>>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -322,7 +327,7 @@ pub struct FnHeader {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Param {
     pub local: LocalPattern,
-    pub ty: Ty,
+    pub ty: Option<Type>,
     pub id: NodeId,
     pub span: Span,
     // ...
@@ -331,7 +336,7 @@ pub struct Param {
 impl Param {
     pub fn name(&self) -> Symbol {
         match &self.local {
-            LocalPattern::Ident(ident, _) => ident.name.clone(),
+            LocalPattern::Ident(ident, _) => ident.symbol.clone(),
             _ => todo!("Cant get name for destructure yet"),
         }
     }
@@ -355,11 +360,8 @@ pub enum TyKind {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Expr {
-    pub id: NodeId,
     pub kind: ExprKind,
     pub span: Span,
-    pub ty: Option<Ty>,
-    // ...
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -401,7 +403,7 @@ pub enum ExprKind {
     /// Match
     Match(Box<Expr>, Vec<MatchArm>),
     /// Function expression
-    Func(Box<FnDef>),
+    Func(Box<Function>),
     /// Lambda function expression
     Lambda(Lambda),
     /// Trailing closure function call

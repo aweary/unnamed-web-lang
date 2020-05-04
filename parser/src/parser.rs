@@ -4,8 +4,6 @@ use lexer::Lexer as Tokenizer;
 use syntax::ast;
 use syntax::precedence::Precedence;
 use syntax::token::{self, Keyword, Token, TokenKind};
-use syntax::ty;
-// use syntax::Span;
 
 use std::path::PathBuf;
 
@@ -33,7 +31,12 @@ trait DiagnosticReporting {
 }
 
 impl DiagnosticReporting for Parser<'_> {
-    fn fatal(&self, message: &str, label_message: &str, span: Span) -> Diagnostic {
+    fn fatal(
+        &self,
+        message: &str,
+        label_message: &str,
+        span: Span,
+    ) -> Diagnostic {
         let label = Label::primary(span).with_message(label_message);
         Diagnostic::error()
             .with_message(message)
@@ -86,9 +89,12 @@ impl Parser<'_> {
             let diagnostic = Diagnostic::error()
                 .with_message("Unexpected token")
                 .with_labels(vec![
-                    Label::primary(prev_span)
-                        .with_message(&format!("Expected {} after this token", kind)),
-                    Label::secondary(self.span).with_message("But we found this insteasd"),
+                    Label::primary(prev_span).with_message(&format!(
+                        "Expected {} after this token",
+                        kind
+                    )),
+                    Label::secondary(self.span)
+                        .with_message("But we found this insteasd"),
                 ]);
             Err(diagnostic)
         } else {
@@ -123,10 +129,14 @@ impl Parser<'_> {
         let token = self.next_token()?;
         match token.kind {
             TokenKind::Ident(symbol) => Ok(ast::Ident {
-                name: symbol,
+                symbol: symbol,
                 span: token.span,
             }),
-            _ => Err(self.fatal("Unexpected token", "Expected an identifier", token.span)),
+            _ => Err(self.fatal(
+                "Unexpected token",
+                "Expected an identifier",
+                token.span,
+            )),
         }
     }
 
@@ -242,7 +252,8 @@ impl Parser<'_> {
                     let lo = self.span;
                     let mut alias = None;
                     // If the next token is `as`, we have an alias
-                    if let TokenKind::Reserved(Keyword::As) = self.peek()?.kind {
+                    if let TokenKind::Reserved(Keyword::As) = self.peek()?.kind
+                    {
                         self.expect(TokenKind::Reserved(Keyword::As))?;
                         alias = Some(self.ident()?);
                     }
@@ -268,7 +279,10 @@ impl Parser<'_> {
                             let token = self.next_token()?;
                             return Err(self.fatal(
                                 "Unexpected token",
-                                &format!("Expexcted a comma, found {:?}", token.kind),
+                                &format!(
+                                    "Expexcted a comma, found {:?}",
+                                    token.kind
+                                ),
                                 token.span,
                             ));
                         }
@@ -283,7 +297,10 @@ impl Parser<'_> {
                     let token = self.next_token()?;
                     return Err(self.fatal(
                         "Unexpected token",
-                        &format!("Expexcted an identifier, found {:?}", token.kind),
+                        &format!(
+                            "Expexcted an identifier, found {:?}",
+                            token.kind
+                        ),
                         token.span,
                     ));
                 }
@@ -311,7 +328,9 @@ impl Parser<'_> {
     }
 
     fn parse_type(&mut self) -> Result<ast::Item> {
-        use TokenKind::{Colon, Comma, Ident, LCurlyBrace, RCurlyBrace, Reserved};
+        use TokenKind::{
+            Colon, Comma, Ident, LCurlyBrace, RCurlyBrace, Reserved,
+        };
         self.expect(Reserved(Keyword::Type))?;
         let lo = self.span;
         let name = self.ident()?;
@@ -331,7 +350,13 @@ impl Parser<'_> {
                     properties.push(prop);
                     self.eat(Comma)?;
                 }
-                _ => return Err(self.fatal("Unexpected token", "Expected identifier", self.span)),
+                _ => {
+                    return Err(self.fatal(
+                        "Unexpected token",
+                        "Expected identifier",
+                        self.span,
+                    ))
+                }
             }
         }
         self.expect(RCurlyBrace)?;
@@ -350,7 +375,10 @@ impl Parser<'_> {
     }
 
     fn parse_enum(&mut self) -> Result<ast::Item> {
-        use TokenKind::{Comma, Equals, Ident, LCurlyBrace, LParen, RCurlyBrace, RParen, Reserved};
+        use TokenKind::{
+            Comma, Equals, Ident, LCurlyBrace, LParen, RCurlyBrace, RParen,
+            Reserved,
+        };
         self.expect(Reserved(Keyword::Enum))?;
         let lo = self.span;
         // TODO support polymorphic names, self.type_ident()
@@ -496,11 +524,10 @@ impl Parser<'_> {
         })
     }
 
-    fn ty(&mut self) -> Result<ast::Ty> {
-        use ty::{LiteralTy, Ty};
+    fn ty(&mut self) -> Result<ast::Type> {
         use TokenKind::{Comma, GreaterThan, LessThan};
-        let ty_name = self.ident()?;
-        if self.eat(LessThan)? {
+        let name = self.ident()?;
+        let arguments = if self.eat(LessThan)? {
             let mut params = vec![];
             // Start parsing the list of generic parameters here
             loop {
@@ -512,13 +539,14 @@ impl Parser<'_> {
                 }
             }
             self.expect(GreaterThan)?;
-            Ok(Ty::Variable(ty_name, Some(params)))
+            Some(params)
         } else {
-            Ok(Ty::Variable(ty_name, None))
-        }
+            None
+        };
+        Ok(ast::Type { name, arguments })
     }
 
-    pub fn fn_def(&mut self) -> Result<ast::FnDef> {
+    pub fn fn_def(&mut self) -> Result<ast::Function> {
         self.expect(TokenKind::Reserved(Keyword::Func))?;
         let lo = self.span;
         let name = self.ident()?;
@@ -526,17 +554,16 @@ impl Parser<'_> {
         let params = self.parse_fn_params()?;
         let return_ty = {
             if self.eat(TokenKind::Colon)? {
-                self.ty()?
+                Some(self.ty()?)
             } else {
-                // No annotation means that we'll need to infer it
-                ast::Ty::Existential
+                None
             }
         };
-        let body = Box::new(self.block()?);
+        let body = self.block()?;
         let span = lo.merge(self.span);
         // We don't currently parse this, hardcode false
         let is_async = false;
-        Ok(ast::FnDef {
+        Ok(ast::Function {
             name,
             params,
             body,
@@ -547,7 +574,7 @@ impl Parser<'_> {
         })
     }
 
-    fn component_def(&mut self) -> Result<ast::ComponentDef> {
+    fn component_def(&mut self) -> Result<ast::Component> {
         self.expect(TokenKind::Reserved(Keyword::Component))?;
         let lo = self.span;
         let name = self.ident()?;
@@ -555,16 +582,14 @@ impl Parser<'_> {
         let params = self.parse_fn_params()?;
         let return_ty = {
             if self.eat(TokenKind::Colon)? {
-                self.ty()?
+                Some(self.ty()?)
             } else {
-                // No explicit return type annotation means the function
-                // implicitly returns Unit
-                ast::Ty::Unit
+                None
             }
         };
-        let body = Box::new(self.block()?);
+        let body = self.block()?;
         let span = lo.merge(self.span);
-        Ok(ast::ComponentDef {
+        Ok(ast::Component {
             name,
             params,
             body,
@@ -647,11 +672,11 @@ impl Parser<'_> {
                 TokenKind::Colon => {
                     self.expect(TokenKind::Colon)?;
                     // There is a type annotation
-                    self.ty()?
+                    Some(self.ty()?)
                 }
                 // If no annotation is provided we assume the type
                 // must be inferred.
-                _ => ast::Ty::Existential,
+                _ => None,
             }
         };
         let span = lo.merge(self.span);
@@ -698,9 +723,9 @@ impl Parser<'_> {
                 // If there was a semicolon, extend the statement's
                 // span to include it.
                 stmt.span = stmt.span.merge(self.span);
-                // Whether a statement has a semicolon is important
-                // for implicit function return and evaluating block expressions
-                // stmt.has_semi = true;
+            // Whether a statement has a semicolon is important
+            // for implicit function return and evaluating block expressions
+            // stmt.has_semi = true;
             } else {
                 // Only the last item in a statement list can omit the
                 // semicolon. If this loop runs again, we need to throw
@@ -820,7 +845,11 @@ impl Parser<'_> {
                 }
                 _ => {
                     self.skip()?;
-                    return Err(self.fatal("Unexpected token", "Unexpected", self.span));
+                    return Err(self.fatal(
+                        "Unexpected token",
+                        "Unexpected",
+                        self.span,
+                    ));
                 }
             }
         }
@@ -844,9 +873,17 @@ impl Parser<'_> {
                     self.local_pattern()?
                 }
                 // Valid following tokens, move on...
-                Comma | RCurlyBrace => ast::LocalPattern::Ident(key.clone(), key.span),
+                Comma | RCurlyBrace => {
+                    ast::LocalPattern::Ident(key.clone(), key.span)
+                }
                 // Everything else is a syntax error
-                _ => return Err(self.fatal("Unexpected token", "Unexpected", self.span)),
+                _ => {
+                    return Err(self.fatal(
+                        "Unexpected token",
+                        "Unexpected",
+                        self.span,
+                    ))
+                }
             };
             let span = lo.merge(self.span);
             let property = ast::LocalObjectProperty { span, key, value };
@@ -860,7 +897,13 @@ impl Parser<'_> {
                 // End of list, exit
                 RCurlyBrace => break,
                 // Everything else is a syntax error
-                _ => return Err(self.fatal("Unexpected token", "Unexpected", self.span)),
+                _ => {
+                    return Err(self.fatal(
+                        "Unexpected token",
+                        "Unexpected",
+                        self.span,
+                    ))
+                }
             }
         }
         self.expect(RCurlyBrace)?;
@@ -899,7 +942,7 @@ impl Parser<'_> {
         let pattern = self.local_pattern()?;
         // Optional type annotation
         let ty = if self.eat(TokenKind::Colon)? {
-            Some(Box::new(self.ty()?))
+            Some(self.ty()?)
         } else {
             None
         };
@@ -948,7 +991,13 @@ impl Parser<'_> {
                     properties.push((key, value));
                     self.eat(Comma)?;
                 }
-                _ => return Err(self.fatal("Unexpected", "Trying to parse object", self.span)),
+                _ => {
+                    return Err(self.fatal(
+                        "Unexpected",
+                        "Trying to parse object",
+                        self.span,
+                    ))
+                }
             }
         }
         self.expect(RCurlyBrace)?;
@@ -1252,7 +1301,9 @@ impl Parser<'_> {
     }
 
     fn template_children(&mut self) -> Result<Option<Vec<ast::TemplateChild>>> {
-        use TokenKind::{Div, LCurlyBrace, LessThan, RCurlyBrace, TemplateText};
+        use TokenKind::{
+            Div, LCurlyBrace, LessThan, RCurlyBrace, TemplateText,
+        };
         let mut children = vec![];
         loop {
             self.tokenizer.set_mode(LexMode::TemplateText);
@@ -1266,7 +1317,8 @@ impl Parser<'_> {
                         return Ok(Some(children));
                     }
                     let template = self.finish_template(lo)?;
-                    let child = ast::TemplateChild::Template(Box::new(template));
+                    let child =
+                        ast::TemplateChild::Template(Box::new(template));
                     children.push(child);
                 }
                 LCurlyBrace => {
@@ -1391,8 +1443,8 @@ impl Parser<'_> {
         use TokenKind::*;
         match self.peek()?.kind {
             // Binary
-            Plus | Minus | Div | Mul | LessThan | GreaterThan | DblEquals | And | Or | Pipeline
-            | BinOr => self.binary_expr(left),
+            Plus | Minus | Div | Mul | LessThan | GreaterThan | DblEquals
+            | And | Or | Pipeline | BinOr => self.binary_expr(left),
             // Assignment
             Equals | PlusEquals => self.assign_expr(left),
             // Conditional
@@ -1457,7 +1509,9 @@ impl Parser<'_> {
                 }
                 // allowed
             }
-            ExprKind::Lit(_) | ExprKind::Member(..) | ExprKind::Reference(_) => {
+            ExprKind::Lit(_)
+            | ExprKind::Member(..)
+            | ExprKind::Reference(_) => {
                 // All allowed
             }
             _ => {
@@ -1542,7 +1596,11 @@ impl Parser<'_> {
         let alt = self.expr(Precedence::ASSIGNMENT)?;
         let span = test.span.merge(self.span);
         ast::expr(
-            ast::ExprKind::Cond(Box::new(test), Box::new(consequent), Box::new(alt)),
+            ast::ExprKind::Cond(
+                Box::new(test),
+                Box::new(consequent),
+                Box::new(alt),
+            ),
             span,
         )
     }

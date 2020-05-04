@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, PartialOrd, Ord, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
+#[derive(
+    Debug, PartialOrd, Ord, PartialEq, Eq, Clone, Copy, Serialize, Deserialize,
+)]
 pub enum Precedence {
     NONE = 0,
     ASSIGNMENT = 1,

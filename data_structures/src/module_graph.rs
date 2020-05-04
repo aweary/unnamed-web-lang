@@ -37,7 +37,10 @@ impl<M> Copy for ModuleGraphIndex<M> {}
 
 impl<M: Debug> ModuleGraphIndex<M> {
     /// Resolve a module from the provided ModuleGraph for the index
-    pub fn resolve<'a, D: Reference>(&self, graph: &'a ModuleGraph<M, D>) -> &'a M {
+    pub fn resolve<'a, D: Reference>(
+        &self,
+        graph: &'a ModuleGraph<M, D>,
+    ) -> &'a M {
         graph
             .modules
             .get(self.0)
@@ -67,7 +70,8 @@ impl<M: Debug, D: Reference> ModuleGraph<M, D> {
         import_name: D,
     ) -> ModuleDependency<D> {
         let (a_index, b_index) = (a.1, b.1);
-        let edge_index = self.graph.add_edge(a_index, b_index, import_name.clone());
+        let edge_index =
+            self.graph.add_edge(a_index, b_index, import_name.clone());
         ModuleDependency(import_name, edge_index)
     }
 

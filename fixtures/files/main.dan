@@ -1,20 +1,9 @@
-type Landmark {}
+enum UserKind {
+    Guest,
+    Admin,
+}
 
-component View() {}
-component HStack() {}
-component VStack() {}
-component Text() {}
-
-component LandmarkRow(landmark: Landmark) {
-    let body = View {
-        match landmark.name {
-            "foo" => HStack {
-                Text("Hello there")
-            }
-            _ => VStack {
-                Text("Hello there!")
-            }
-        }
-    }
-    return body
+fn add(c) {
+    let a = "foo" - 1;
+    let b = a;
 }

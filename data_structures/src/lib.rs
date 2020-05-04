@@ -7,15 +7,15 @@ extern crate quickcheck;
 // #[macro_use(quickcheck)]
 extern crate quickcheck_macros;
 
-pub mod control_flow_graph;
 pub mod arena;
-pub mod scope_map;
+pub mod control_flow_graph;
 pub mod module_graph;
+pub mod scope_map;
 
-pub use control_flow_graph::*;
 pub use arena::*;
+pub use control_flow_graph::*;
 
-pub use fxhash::FxHashSet as HashSet;
 pub use fxhash::FxHashMap as HashMap;
+pub use fxhash::FxHashSet as HashSet;
 
 pub use petgraph::*;

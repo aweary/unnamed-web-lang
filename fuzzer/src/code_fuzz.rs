@@ -163,10 +163,10 @@ impl CodeFuzzer {
     fn gen_expr(&mut self) -> String {
         // Number literal
         if rand::random() {
-          format!("{}", rand::random::<u16>())
+            format!("{}", rand::random::<u16>())
         } else if rand::random() {
             // String literal
-          format!("\"{}\"", self.gen_ident())
+            format!("\"{}\"", self.gen_ident())
         } else {
             // Binary addition
             let left = self.gen_expr();

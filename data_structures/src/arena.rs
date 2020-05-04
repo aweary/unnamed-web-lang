@@ -1,1 +1,1 @@
-pub use id_arena::{Arena, Id, ArenaBehavior};
+pub use id_arena::{Arena, ArenaBehavior, Id};

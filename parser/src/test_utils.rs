@@ -2,8 +2,6 @@
 // use syntax::ast::{FnDef, Stmt, Block};
 // use diagnostics::ParseResult;
 
-
-
 // /// Parse a single statement
 // pub fn parse_statement(input: &str) -> Stmt {
 //     let mut files = Files::new();

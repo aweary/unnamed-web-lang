@@ -6,7 +6,7 @@ pub trait Visitor: Sized {
         // Item...
     }
 
-    fn visit_fn_def(&mut self, def: &mut FnDef) {
+    fn visit_fn_def(&mut self, def: &mut Function) {
         walk_fn_def(self, def);
     }
 
@@ -127,7 +127,10 @@ pub fn walk_block<V: Visitor>(visitor: &mut V, block: &mut Block) {
     }
 }
 
-pub fn walk_fn_def<V: Visitor>(visitor: &mut V, FnDef { params, body, .. }: &mut FnDef) {
+pub fn walk_fn_def<V: Visitor>(
+    visitor: &mut V,
+    Function { params, body, .. }: &mut Function,
+) {
     match params {
         ParamType::Empty => (),
         ParamType::Single(ref mut param) => visitor.visit_param(param),
@@ -142,7 +145,10 @@ pub fn walk_fn_def<V: Visitor>(visitor: &mut V, FnDef { params, body, .. }: &mut
     // ...
 }
 
-pub fn walk_local_object_property<V: Visitor>(visitor: &mut V, property: &mut LocalObjectProperty) {
+pub fn walk_local_object_property<V: Visitor>(
+    visitor: &mut V,
+    property: &mut LocalObjectProperty,
+) {
     use LocalPattern::*;
     match property.value {
         Ident(ref mut ident, _) => {
@@ -161,7 +167,10 @@ pub fn walk_local_object_property<V: Visitor>(visitor: &mut V, property: &mut Lo
     };
 }
 
-pub fn walk_local_pattern<V: Visitor>(visitor: &mut V, pattern: &mut LocalPattern) {
+pub fn walk_local_pattern<V: Visitor>(
+    visitor: &mut V,
+    pattern: &mut LocalPattern,
+) {
     use LocalPattern::*;
     match pattern {
         Ident(ref mut ident, _) => {

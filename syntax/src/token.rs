@@ -32,7 +32,7 @@ impl Token {
             Question => CONDITIONAL,
             Plus => SUM,
             // TODO idk if this is the right precedence
-            Or | And | Pipeline | BinOr  => CONDITIONAL,
+            Or | And | Pipeline | BinOr => CONDITIONAL,
             Minus => SUM,
             Mul => PRODUCT,
             Div => PRODUCT,

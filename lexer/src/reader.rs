@@ -1,7 +1,7 @@
 use std::iter::Peekable;
 use std::str::Chars;
 
-use source::diagnostics::{Span, ByteIndex};
+use source::diagnostics::{ByteIndex, Span};
 
 #[derive(Debug)]
 pub struct Reader<'a> {

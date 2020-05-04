@@ -1,5 +1,5 @@
+use data_structures::scope_map::Reference;
 use serde::{Deserialize, Serialize};
-use data_structures::scope_map::{Reference};
 
 use std::fmt::{Debug, Error, Formatter};
 use std::result::Result;

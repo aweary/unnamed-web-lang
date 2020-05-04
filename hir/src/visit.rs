@@ -39,7 +39,10 @@ pub trait Visitor: Sized {
     }
 }
 
-pub fn walk_statement<V: Visitor>(_visitor: &mut V, statement: &Statement) -> Result<()> {
+pub fn walk_statement<V: Visitor>(
+    _visitor: &mut V,
+    statement: &Statement,
+) -> Result<()> {
     match statement.kind {
         _ => {
             // ...
@@ -48,7 +51,10 @@ pub fn walk_statement<V: Visitor>(_visitor: &mut V, statement: &Statement) -> Re
     Ok(())
 }
 
-pub fn walk_definition<V: Visitor>(visitor: &mut V, definition: &Definition) -> Result<()> {
+pub fn walk_definition<V: Visitor>(
+    visitor: &mut V,
+    definition: &Definition,
+) -> Result<()> {
     match &definition.kind {
         DefinitionKind::Function(fndef) => {
             let mut fndef = fndef.lock().unwrap();
@@ -76,7 +82,10 @@ pub fn walk_block<V: Visitor>(visitor: &mut V, block: &Block) -> Result<()> {
     Ok(())
 }
 
-pub fn walk_function<V: Visitor>(visitor: &mut V, fndef: &Function) -> Result<()> {
+pub fn walk_function<V: Visitor>(
+    visitor: &mut V,
+    fndef: &Function,
+) -> Result<()> {
     // TODO walk params / function header stuff
     visitor.visit_block(&fndef.body)?;
     Ok(())

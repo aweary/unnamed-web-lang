@@ -13,13 +13,10 @@ use dashmap::DashMap;
 
 use crossbeam::atomic::AtomicCell;
 
-
-
 pub type Result<T> = std::result::Result<T, Diagnostic>;
 
-
 #[derive(Debug, Clone, Hash)]
-pub enum FileIdentifier  {
+pub enum FileIdentifier {
     Path(PathBuf),
     Url(Url),
 }
@@ -105,7 +102,9 @@ impl FileSystem {
             let source = match fs::read_to_string(path) {
                 Ok(source) => source,
                 Err(os_err) => {
-                    return Err(Diagnostic::error().with_message(os_err.to_string()));
+                    return Err(
+                        Diagnostic::error().with_message(os_err.to_string())
+                    );
                 }
             };
             let name = FileName(path.clone());
@@ -117,7 +116,11 @@ impl FileSystem {
         }
     }
 
-    pub fn with_source<F, T, E>(&self, id: &FileId, func: F) -> std::result::Result<T, E>
+    pub fn with_source<F, T, E>(
+        &self,
+        id: &FileId,
+        func: F,
+    ) -> std::result::Result<T, E>
     where
         F: FnOnce(&str) -> std::result::Result<T, E>,
     {
@@ -146,7 +149,11 @@ impl<'a> Files<'a> for FileSystem {
         self.files.get(&file_id).unwrap().line_index((), byte_index)
     }
 
-    fn line_range(&'a self, file_id: FileId, line_index: usize) -> Option<Range<usize>> {
+    fn line_range(
+        &'a self,
+        file_id: FileId,
+        line_index: usize,
+    ) -> Option<Range<usize>> {
         self.files.get(&file_id).unwrap().line_range((), line_index)
     }
 }

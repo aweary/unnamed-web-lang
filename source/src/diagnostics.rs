@@ -1,11 +1,13 @@
 use crate::filesystem::{FileId, FileSystem, Files};
 pub use codespan::{ByteIndex, Span};
 use codespan_reporting::diagnostic::{
-    Diagnostic as CodespanDiagnostic, Label as CodespanLabel, LabelStyle, Severity,
+    Diagnostic as CodespanDiagnostic, Label as CodespanLabel, LabelStyle,
+    Severity,
 };
 pub use codespan_reporting::term::*;
 use lsp_types::{
-    Diagnostic as LspDiagnostic, DiagnosticSeverity, Position, Range as LspRange, Url,
+    Diagnostic as LspDiagnostic, DiagnosticSeverity, Position,
+    Range as LspRange, Url,
 };
 use std::ops::Range;
 
@@ -53,7 +55,10 @@ impl Diagnostic {
                 (start.line_number - 1) as u64,
                 (start.column_number - 1) as u64,
             );
-            let end = Position::new((end.line_number - 1) as u64, (end.column_number - 1) as u64);
+            let end = Position::new(
+                (end.line_number - 1) as u64,
+                (end.column_number - 1) as u64,
+            );
             LspRange::new(start, end)
         };
         let severity = match self.severity {
@@ -92,13 +97,16 @@ impl Diagnostic {
                 self.labels
                     .into_iter()
                     .map(|label| {
-                        let file = label.file.expect("Must have a file when reporting a label");
+                        let file = label
+                            .file
+                            .expect("Must have a file when reporting a label");
                         CodespanLabel::new(label.style, file, label.range)
                             .with_message(label.message)
                     })
                     .collect(),
             );
-        emit(&mut writer.lock(), &config, &*files, &diagnostic).expect("Emitting");
+        emit(&mut writer.lock(), &config, &*files, &diagnostic)
+            .expect("Emitting");
     }
 
     pub fn error() -> Diagnostic {

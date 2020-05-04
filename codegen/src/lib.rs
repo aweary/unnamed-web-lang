@@ -9,5 +9,4 @@ pub fn codegen_module(_module: Module) -> ParseResult<()> {
     Ok(())
 }
 
-pub fn codegen_component(_compdef: Arc<Component>) {
-}
+pub fn codegen_component(_compdef: Arc<Component>) {}

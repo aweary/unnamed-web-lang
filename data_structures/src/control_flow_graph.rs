@@ -10,8 +10,7 @@ struct IdentDistribution;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct BlockIndex(NodeIndex);
 
-
-pub trait Blockable : Debug {
+pub trait Blockable: Debug {
     fn has_early_exit(&self) -> bool;
 }
 
@@ -57,15 +56,20 @@ impl<T: Blockable> Default for ControlFlowGraph<T> {
     }
 }
 
-impl<T : Blockable> ControlFlowGraph<T> {
+impl<T: Blockable> ControlFlowGraph<T> {
     /// Add a new basic block to the grapg
     pub fn add_block(&mut self, block: Block<T>) -> BlockIndex {
-        let block_index = BlockIndex(self.graph.add_node(BasicBlock::Block(block)));
+        let block_index =
+            BlockIndex(self.graph.add_node(BasicBlock::Block(block)));
         // If this is the first block to be added to the graph, add an edge from the
         // special entry block to this one.
         if self.first_block.is_none() {
             self.first_block = Some(block_index);
-            self.add_edge(self.entry_block, block_index, ControlFlowEdge::Normal);
+            self.add_edge(
+                self.entry_block,
+                block_index,
+                ControlFlowEdge::Normal,
+            );
         }
 
         // Flush the edge
@@ -84,18 +88,31 @@ impl<T : Blockable> ControlFlowGraph<T> {
     }
 
     /// Add an edge from a block to the special exit block
-    pub fn add_edge_to_exit(&mut self, index: BlockIndex, edge: ControlFlowEdge) {
+    pub fn add_edge_to_exit(
+        &mut self,
+        index: BlockIndex,
+        edge: ControlFlowEdge,
+    ) {
         self.add_edge(index, self.exit_block, edge);
     }
 
     /// Add an edge between two blocks
-    pub fn add_edge(&mut self, from: BlockIndex, to: BlockIndex, edge: ControlFlowEdge) {
+    pub fn add_edge(
+        &mut self,
+        from: BlockIndex,
+        to: BlockIndex,
+        edge: ControlFlowEdge,
+    ) {
         self.graph.update_edge(from.0, to.0, edge);
     }
 
     /// Queues up an edge for the next block added to the graph, where `block_index` is the
     /// source block.
-    pub fn enqueue_edge(&mut self, block_index: BlockIndex, edge: ControlFlowEdge) {
+    pub fn enqueue_edge(
+        &mut self,
+        block_index: BlockIndex,
+        edge: ControlFlowEdge,
+    ) {
         self.edge_queue.push_back((block_index, edge));
     }
 
@@ -134,7 +151,11 @@ impl<T : Blockable> ControlFlowGraph<T> {
         // If there is no last block, nothing was ever added to this
         // graph.
         if self.last_block.is_none() {
-            self.add_edge(self.entry_block, self.exit_block, ControlFlowEdge::Normal);
+            self.add_edge(
+                self.entry_block,
+                self.exit_block,
+                ControlFlowEdge::Normal,
+            );
         }
     }
 
@@ -166,7 +187,7 @@ impl<T: Blockable> fmt::Debug for Block<T> {
     }
 }
 
-impl<T : Blockable> Block<T> {
+impl<T: Blockable> Block<T> {
     /// Push a statement into the basic block
     pub fn push(&mut self, stmt: T) {
         self.statements.push(stmt);
@@ -210,7 +231,7 @@ pub enum BlockExit {
 }
 
 #[derive(Debug, Clone)]
-pub enum BasicBlock<T : Blockable> {
+pub enum BasicBlock<T: Blockable> {
     /// A special block denoting the entry-point of the graph.
     Entry,
     /// A basic block.

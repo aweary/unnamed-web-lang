@@ -9,8 +9,7 @@ pub use crate::parser::*;
 mod tests {
     use crate::parser::Parser;
     use insta::assert_json_snapshot;
-    use syntax::{ast};
-
+    use syntax::ast;
 
     fn parse_module(source: &str) -> ast::Module {
         let mut parser = Parser::new(source);

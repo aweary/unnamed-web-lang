@@ -38,7 +38,8 @@ impl IdentChar for char {
 
     fn is_id_continue(&self) -> bool {
         use ucd::Codepoint;
-        Codepoint::is_id_continue(*self) || Codepoint::is_id_continue_other(*self)
+        Codepoint::is_id_continue(*self)
+            || Codepoint::is_id_continue_other(*self)
     }
 
     fn is_whitespace(&self) -> bool {

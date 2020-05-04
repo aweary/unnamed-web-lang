@@ -1,8 +1,10 @@
+use diagnostics::ParseResult as Result;
 use hir::UniqueName;
 use std::collections::{BTreeSet, HashMap, VecDeque};
 use syntax::symbol::Symbol;
 use ty::{Existential, Type};
-use diagnostics::ParseResult as Result;
+
+use internment::Intern;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ElementKind {
@@ -10,8 +12,8 @@ pub enum ElementKind {
     Existential(Existential),
     /// An unsolved type variable
     Variable(Symbol),
-    TypedVariable(UniqueName, Type),
-    Solved(Existential, Type),
+    TypedVariable(UniqueName, Intern<Type>),
+    Solved(Existential, Intern<Type>),
     Marker(u8),
 }
 
@@ -31,7 +33,7 @@ impl Element {
     }
 
     #[inline]
-    pub fn new_typed_variable(name: UniqueName, ty: Type) -> Self {
+    pub fn new_typed_variable(name: UniqueName, ty: Intern<Type>) -> Self {
         Element {
             kind: ElementKind::TypedVariable(name, ty),
         }
@@ -45,7 +47,7 @@ impl Element {
     }
 
     #[inline]
-    pub fn new_solved(alpha: Existential, ty: Type) -> Self {
+    pub fn new_solved(alpha: Existential, ty: Intern<Type>) -> Self {
         Element {
             kind: ElementKind::Solved(alpha, ty),
         }
@@ -113,12 +115,29 @@ impl TypeContext {
     }
 
     pub(crate) fn leave_scope(&mut self) {
-        let index = self.scope_markers.pop().expect("Cant pop the global scope");
+        let index =
+            self.scope_markers.pop().expect("Cant pop the global scope");
         // Clear out items from this scope
         self.elements.truncate(index)
     }
 
-    pub(crate) fn insert_in_place(&mut self, index: usize, inserts: Vec<Element>) {
+    pub(crate) fn get_annotation(&self, name: &UniqueName) -> Option<Intern<Type>> {
+        for element in &self.elements {
+            match &element.kind {
+                ElementKind::TypedVariable(a, ty) if a == name => {
+                    return Some(*ty)
+                }
+                _ => {}
+            }
+        }
+        None
+    }
+
+    pub(crate) fn insert_in_place(
+        &mut self,
+        index: usize,
+        inserts: Vec<Element>,
+    ) {
         self.elements.splice(index..=index, inserts);
     }
 

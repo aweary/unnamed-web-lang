@@ -36,10 +36,19 @@ impl<K: Reference, V: Referant> Default for Scope<K, V> {
 }
 
 impl<K: Reference, V: Referant> Scope<K, V> {
-    pub fn define(&mut self, reference: K, referant: V, unique_reference: UniqueReference<K>) {
-        self.bindings.insert(reference, (referant, unique_reference));
+    pub fn define(
+        &mut self,
+        reference: K,
+        referant: V,
+        unique_reference: UniqueReference<K>,
+    ) {
+        self.bindings
+            .insert(reference, (referant, unique_reference));
     }
-    pub fn resolve(&mut self, reference: &K) -> Option<(V, UniqueReference<K>)> {
+    pub fn resolve(
+        &mut self,
+        reference: &K,
+    ) -> Option<(V, UniqueReference<K>)> {
         self.bindings.get(&reference).cloned()
     }
 }
@@ -90,7 +99,11 @@ impl<K: Reference + Debug, V: Referant> ScopeMap<K, V> {
     /// Define a new binding, returning a unique identifier for the binding,
     /// as well as a ScopeId which can be used to read all the values in that
     /// scope later
-    pub fn define(&mut self, reference: K, referant: V) -> (UniqueReference<K>, ScopeId<K, V>) {
+    pub fn define(
+        &mut self,
+        reference: K,
+        referant: V,
+    ) -> (UniqueReference<K>, ScopeId<K, V>) {
         let scope_id = self.current_scope_id();
         // Create a unique reference for this definition
         let unique_reference = self.generate_unique_reference();
@@ -150,7 +163,10 @@ impl<K: Reference + Debug, V: Referant> ScopeMap<K, V> {
 
     /// Resolve a reference to a binding, if it exists. If a binding does exist,
     /// this will track that it is being referenced to by `reference`.
-    pub fn resolve(&mut self, reference: &K) -> Option<(V, UniqueReference<K>)> {
+    pub fn resolve(
+        &mut self,
+        reference: &K,
+    ) -> Option<(V, UniqueReference<K>)> {
         // Walk through the active scopes backwards, as we want to attempt
         // resolution with the *newest* scope first.
         for scope_id in self.active_scopes.iter().rev() {

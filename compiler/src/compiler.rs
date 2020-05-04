@@ -30,7 +30,7 @@ struct GloballyUniqueImport {
 
 impl PartialEq for GloballyUniqueImport {
     fn eq(&self, rhs: &Self) -> bool {
-        self.import.name.name == rhs.import.name.name
+        self.import.name.symbol == rhs.import.name.symbol
             && self.import.path.resolved == rhs.import.path.resolved
     }
 }
@@ -50,7 +50,7 @@ impl GloballyUniqueImport {
 /// module specific data used only for error reporting.
 impl Hash for GloballyUniqueImport {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.import.name.name.hash(state);
+        self.import.name.symbol.hash(state);
         self.import.path.resolved.hash(state);
     }
 }
@@ -66,11 +66,16 @@ fn report_import_error(
     unique_import: &GloballyUniqueImport,
 ) -> Diagnostic {
     let import = &unique_import.import;
-    let mut labels = vec![Label::primary(import.name.span).with_message("Import not found")];
+    let mut labels =
+        vec![Label::primary(import.name.span).with_message("Import not found")];
     // Try and figure out what the user might have wanted...
-    if let Some(similar_def) = import_module.resolve_similar_export(&import.name) {
-        let message = if similar_def.visibility == hir::DefinitionVisibility::Private {
-            if similar_def.name().name == import.name.name {
+    if let Some(similar_def) =
+        import_module.resolve_similar_export(&import.name)
+    {
+        let message = if similar_def.visibility
+            == hir::DefinitionVisibility::Private
+        {
+            if similar_def.name().symbol == import.name.symbol {
                 "An item with this name exists, but it isn't exported."
             } else {
                 "This definitions looks similar, maybe you have a typo? It's also private, so make sure to export it."
@@ -165,8 +170,12 @@ fn parse_and_lower_module_from_file(
     Ok(hir)
 }
 
-pub fn run_on_single_file(vfs: Arc<FileSystem>, file: FileId) -> ParseResult<()> {
-    parse_and_lower_module_from_file(file, vfs).map_err(|diagnostic| diagnostic.for_file(file))?;
+pub fn run_on_single_file(
+    vfs: Arc<FileSystem>,
+    file: FileId,
+) -> ParseResult<()> {
+    parse_and_lower_module_from_file(file, vfs)
+        .map_err(|diagnostic| diagnostic.for_file(file))?;
     Ok(())
 }
 
@@ -209,10 +218,11 @@ pub fn run_on_file(vfs: Arc<FileSystem>, root_file: FileId) -> ParseResult<()> {
                 let path = &unique_import.import.path.resolved;
                 let file = vfs.resolve(path).map_err(|err| {
                     let message = err.message.clone();
-                    err.with_labels(vec![
-                        Label::primary(unique_import.import.path.span).with_message(message)
-                    ])
-                    .for_file(unique_import.file)
+                    err.with_labels(vec![Label::primary(
+                        unique_import.import.path.span,
+                    )
+                    .with_message(message)])
+                        .for_file(unique_import.file)
                 })?;
                 // TODO add file id to new Diagnostic structure here
                 // let file = vfs.resolve(path).unwrap();
@@ -221,7 +231,8 @@ pub fn run_on_file(vfs: Arc<FileSystem>, root_file: FileId) -> ParseResult<()> {
                 if hir.resolve_export(&unique_import.import.name).is_none() {
                     return Err(report_import_error(&hir, &unique_import));
                 }
-                let imports = ImportResolver::new(file).populate_module_graph(&hir)?;
+                let imports =
+                    ImportResolver::new(file).populate_module_graph(&hir)?;
                 // TODO
                 let _module_id = module_graph.lock().unwrap().add(hir);
                 for import in imports {

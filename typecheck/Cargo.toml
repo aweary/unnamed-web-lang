@@ -11,3 +11,5 @@ diagnostics = { path = "../diagnostics" }
 data_structures = { path = "../data_structures" }
 syntax = { path = "../syntax" }
 ty = { path = "../ty" }
+log = "0.4"
+internment = "0.3.12"
