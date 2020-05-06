@@ -7,6 +7,7 @@ use data_structures::scope_map::ScopeMap;
 use diagnostics::ParseResult as Result;
 
 use hir;
+use hir::unique_name::UniqueName;
 use source::FileId;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -344,7 +345,7 @@ impl LoweringContext {
             let ty = self.lower_type(param.ty)?;
 
             // TODO maybe scope.define should return a unique name?
-            let unique_name = self.unique_name(&param.local);
+            let unique_name = UniqueName::new();
 
             let param = Arc::new(hir::Param {
                 local: param.local,
@@ -353,7 +354,7 @@ impl LoweringContext {
                 ty,
             });
             self.scope
-                .define(name, hir::Binding::Argument(param.clone()));
+                .define(name, hir::Binding::Parameter(param.clone()));
             hir_params.push(param);
         }
 
@@ -407,7 +408,7 @@ impl LoweringContext {
                     | hir::Binding::Function(_)
                     | hir::Binding::Local(_)
                     | hir::Binding::State(_)
-                    | hir::Binding::Argument(_)
+                    | hir::Binding::Parameter(_)
                     | hir::Binding::Import(_) => {
                         return Err(Diagnostic::error()
                             .with_message(format!(
@@ -543,9 +544,11 @@ impl LoweringContext {
         let mut return_ty = self.lower_type(fndef.return_ty)?;
 
         self.scope.exit_scope();
+        let unique_name = UniqueName::new();
         let fndef = Arc::new(Mutex::new(hir::Function {
             params,
             name: fndef.name,
+            unique_name,
             span: fndef.span,
             graph: cfg,
             body: block,
@@ -720,7 +723,7 @@ impl LoweringContext {
                                     Box::new(value),
                                 )
                             }
-                            hir::Binding::Argument(param) => {
+                            hir::Binding::Parameter(param) => {
                                 panic!("Cant assign to parameters");
                             }
                             _ => {
@@ -983,15 +986,6 @@ impl LoweringContext {
         Ok(hir::Template { instrs, kind })
     }
 
-    fn unique_name(
-        &mut self,
-        _ident: &impl Into<hir::Ident>,
-    ) -> hir::UniqueName {
-        let id = self.unique_name_id;
-        self.unique_name_id += 1;
-        hir::UniqueName::new(id)
-    }
-
     fn lower_local(&mut self, local: ast::Local) -> Result<Arc<hir::Local>> {
         // Avoiding .map so the ? propagates errors
         let init = if let Some(expr) = local.init {
@@ -1000,7 +994,7 @@ impl LoweringContext {
             None
         };
         let ty = self.lower_type(local.ty)?;
-        let unique_name = self.unique_name(&local.name);
+        let unique_name = UniqueName::new();
 
         let local = hir::Local {
             name: local.name,

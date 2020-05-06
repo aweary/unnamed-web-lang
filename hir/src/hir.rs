@@ -1,5 +1,4 @@
 use syntax::symbol::Symbol;
-
 use source::diagnostics::Span;
 
 use std::fmt;
@@ -11,6 +10,8 @@ use data_structures::arena::Id;
 use data_structures::scope_map::{Referant, Reference};
 use data_structures::{Blockable, ControlFlowGraph};
 use source::FileId;
+
+use crate::unique_name::UniqueName;
 
 use edit_distance::edit_distance;
 
@@ -29,20 +30,7 @@ pub type StatementId = Id<Statement>;
 pub type BlockId = Id<Block>;
 pub type ExprId = Id<Expr>;
 
-#[derive(Clone, Copy, PartialOrd, Ord, PartialEq, Eq, Hash)]
-pub struct UniqueName(u32);
 
-impl UniqueName {
-    pub fn new(id: u32) -> Self {
-        UniqueName(id)
-    }
-}
-
-impl fmt::Debug for UniqueName {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:x}", self.0)
-    }
-}
 
 impl Reference for UniqueName {}
 
@@ -88,8 +76,8 @@ pub enum Binding {
     State(Arc<Local>),
     /// A function definition
     Function(Arc<Mutex<Function>>),
-    /// An argument to a function, only allowed inside functions/components
-    Argument(Arc<Param>),
+    /// A parameter to a function
+    Parameter(Arc<Param>),
     /// A component definition
     Component(Arc<Component>),
     /// An imported value
@@ -258,6 +246,7 @@ pub struct Function {
     pub params: Vec<Arc<Param>>,
     pub graph: ControlFlowGraph<Statement>,
     pub name: Ident,
+    pub unique_name: UniqueName,
     pub span: Span,
     pub body: Block,
     pub ty: Option<Type>,

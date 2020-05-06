@@ -1,9 +1,5 @@
-enum UserKind {
-    Guest,
-    Admin,
-}
-
-fn add(c) {
-    let a = "foo" - 1;
-    let b = a;
+fn math(a, b) {
+    let c = a("string");
+    let d = c * b;
+    return a;
 }

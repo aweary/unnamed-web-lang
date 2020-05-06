@@ -3,13 +3,14 @@
 //! can resolve some basic type information.
 
 use serde::{Deserialize, Serialize};
-use syntax::symbol::Symbol;
 
-use std::fmt;
 use internment::Intern;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Existential(pub u16);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Variable(pub u16);
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum LiteralType {
@@ -52,16 +53,12 @@ pub enum Type {
     Unit,
     /// Function abstraction
     Function(Vec<Intern<Type>>, Intern<Type>),
-    VariadicQuantification(Vec<Symbol>, Intern<Type>),
     // A 2-tuple of types
     Pair(Intern<Type>, Intern<Type>),
     /// An array of T items
     List(Intern<Type>),
-    Quantification(Symbol, Intern<Type>),
-    Variable(Symbol),
-    // TODO need to fill these out later. Have to figure out how to represent them
-    Enum,
-    Record,
+    Quantification(Variable, Intern<Type>),
+    Variable(Variable),
 }
 
 impl Type {

@@ -1,10 +1,11 @@
 use diagnostics::ParseResult as Result;
-use hir::UniqueName;
+use hir::unique_name::UniqueName;
 use std::collections::{BTreeSet, HashMap, VecDeque};
 use syntax::symbol::Symbol;
 use ty::{Existential, Type};
 
 use internment::Intern;
+use log::debug;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ElementKind {
@@ -96,7 +97,7 @@ impl Element {
 /// handle inserts.
 #[derive(Default)]
 pub struct TypeContext {
-    elements: Vec<Element>,
+    pub(crate) elements: Vec<Element>,
     scope_markers: Vec<usize>,
     solved_existentials: HashMap<Existential, Type>,
 }
@@ -121,7 +122,10 @@ impl TypeContext {
         self.elements.truncate(index)
     }
 
-    pub(crate) fn get_annotation(&self, name: &UniqueName) -> Option<Intern<Type>> {
+    pub(crate) fn get_annotation(
+        &self,
+        name: &UniqueName,
+    ) -> Option<Intern<Type>> {
         for element in &self.elements {
             match &element.kind {
                 ElementKind::TypedVariable(a, ty) if a == name => {
@@ -135,23 +139,58 @@ impl TypeContext {
 
     pub(crate) fn insert_in_place(
         &mut self,
-        index: usize,
+        element: &Element,
         inserts: Vec<Element>,
     ) {
-        self.elements.splice(index..=index, inserts);
+        debug!("insert_in_place: element: {:?}", element);
+        debug!("insert_in_place: inserts: {:#?}", inserts);
+        if let Some(index) =
+            self.elements.iter().position(|elem| elem == element)
+        {
+            self.elements.splice(index..=index, inserts);
+            return;
+        }
+        panic!("insert_in_place called with non-existent element")
     }
 
     pub(crate) fn drop_from_index(&mut self, index: usize) {
         // ...
     }
 
-    pub(crate) fn get_solved(&self, alpha: &Existential) -> Option<&Type> {
-        // ...
+    pub(crate) fn get_solved(
+        &self,
+        alpha: &Existential,
+    ) -> Option<Intern<Type>> {
+        for element in &self.elements {
+            if let ElementKind::Solved(beta, solved) = element.kind {
+                if alpha == &beta {
+                    return Some(solved);
+                }
+            }
+        }
         None
     }
 
     pub(crate) fn is_well_formed(&self, ty: &Type) -> bool {
         true
+    }
+
+    pub(crate) fn solve_existential(
+        &mut self,
+        existential: Existential,
+        ty: Intern<Type>,
+    ) -> Result<()> {
+        debug!("solve_existential: {:?}, {:?}", existential, ty);
+        for element in &mut self.elements {
+            if let ElementKind::Existential(alpha) = element.kind {
+                if alpha == existential {
+                    // Mutate it in place
+                    *element = Element::new_solved(alpha, ty);
+                }
+            }
+        }
+        // Find the element for this existential
+        Ok(())
     }
 
     /// Split a context at and an index. This is used to split
