@@ -119,7 +119,7 @@ impl<'a> Lexer<'a> {
     }
 
     fn skip_whitespace(&mut self) {
-        self.skip_while(|ch| ch.is_whitespace());
+        self.skip_while(char::is_whitespace);
     }
 
     // Read a token containing a single character
@@ -201,7 +201,7 @@ impl<'a> Lexer<'a> {
         let end = self.reader.offset();
         let span = self.reader.end(span_start);
         let ident = &self.source[start.to_usize()..end.to_usize()];
-        use Keyword::*;
+        use Keyword::{As, Catch, Component, Const, Else, Enum, For, Func, If, Import, ImportFrom, In, Let, Match, Pub, Return, State, Try, Type, While};
         let kind = match ident {
             "true" | "false" => {
                 let lit = Lit {
@@ -329,7 +329,7 @@ impl<'a> Lexer<'a> {
     }
 
     pub fn next_token(&mut self) -> Result<Token> {
-        use TokenKind::*;
+        use TokenKind::{And, Caret, Colon, Comma, Dot, Exclaim, GreaterThan, LBrace, LCurlyBrace, LParen, LessThan, Minus, Mod, Mul, RBrace, RCurlyBrace, RParen, Semi};
         // Read from the lookahead if its populated.
         if let Some(token) = self.lookahead.pop_front() {
             return Ok(token);
@@ -399,7 +399,7 @@ impl<'a> Lexer<'a> {
 
 impl Lexer<'_> {
     fn next_jsx_token(&mut self) -> Result<Token> {
-        use TokenKind::*;
+        use TokenKind::{GreaterThan, LCurlyBrace, LessThan, RCurlyBrace};
         match self.peek_char() {
             Some('<') => self.punc(LessThan, '<'),
             Some('>') => self.punc(GreaterThan, '>'),

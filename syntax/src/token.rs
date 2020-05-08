@@ -21,8 +21,8 @@ impl Token {
         }
     }
     pub fn precedence(&self) -> Precedence {
-        use Precedence::*;
-        use TokenKind::*;
+        use Precedence::{ASSIGNMENT, COMPARE, CONDITIONAL, NONE, PREFIX, PRODUCT, SUM};
+        use TokenKind::{And, BinOr, DblEquals, Div, Dot, Equals, GreaterThan, LCurlyBrace, LParen, LessThan, Minus, Mul, Or, Pipeline, Plus, PlusEquals, Question, QuestionDot};
         match self.kind {
             LCurlyBrace | LParen => PREFIX,
             Equals => ASSIGNMENT,
@@ -44,7 +44,7 @@ impl Token {
 
     /// Translate a token to a binary operator AST node
     pub fn to_bin_op(&self) -> Option<BinOp> {
-        use BinOp::*;
+        use BinOp::{Add, And, BinOr, DblEquals, Div, Equals, GreaterThan, LessThan, Mod, Mul, Or, Pipeline, Sub};
         match self.kind {
             TokenKind::Equals => Some(Equals),
             TokenKind::DblEquals => Some(DblEquals),
@@ -65,7 +65,7 @@ impl Token {
 
     /// Translate a token to an unary operator AST node
     pub fn to_un_op(&self) -> Option<UnOp> {
-        use UnOp::*;
+        use UnOp::{Minus, Negate, Plus};
         match self.kind {
             TokenKind::Plus => Some(Plus),
             TokenKind::Minus => Some(Minus),
@@ -76,7 +76,7 @@ impl Token {
 
     /// Translate a token to an assignment operator AST node
     pub fn to_assign_op(&self) -> Option<AssignOp> {
-        use AssignOp::*;
+        use AssignOp::{Equals, PlusEquals};
         match self.kind {
             TokenKind::Equals => Some(Equals),
             TokenKind::PlusEquals => Some(PlusEquals),
@@ -153,7 +153,7 @@ pub enum TokenKind {
 
 impl fmt::Display for TokenKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use TokenKind::*;
+        use TokenKind::{Ident, LCurlyBrace, LParen, RCurlyBrace, RParen};
         let txt = match *self {
             LCurlyBrace => "{",
             RCurlyBrace => "}",

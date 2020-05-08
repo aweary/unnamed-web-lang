@@ -106,7 +106,7 @@ impl Import {
     }
 
     pub fn resolve(&self, base: &PathBuf) -> Result<PathBuf> {
-        use path_dedot::*;
+        use path_dedot::ParseDot;
         let path = &self.path.path;
         let path = base.join(path).parse_dot().unwrap();
         Ok(path)
@@ -162,7 +162,7 @@ impl IntoIterator for ParamType {
     type Item = Param;
     type IntoIter = std::vec::IntoIter<Self::Item>;
     fn into_iter(self) -> Self::IntoIter {
-        use ParamType::*;
+        use ParamType::{Empty, Multi, Single};
         match self {
             Empty => vec![].into_iter(),
             Single(param) => vec![param].into_iter(),

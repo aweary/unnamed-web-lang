@@ -222,7 +222,7 @@ impl Parser<'_> {
     }
 
     fn import(&mut self) -> Result<ast::Item> {
-        use Keyword::*;
+        use Keyword::{Import, ImportFrom};
         use TokenKind::Reserved;
         self.expect(Reserved(Import))?;
         let lo = self.span;
@@ -1457,7 +1457,7 @@ impl Parser<'_> {
             // Literals such as numbers, strings, and booleans
             TokenKind::Literal(_) => {
                 let token::Lit { kind, symbol } = self.expect_lit()?;
-                use token::LitKind::*;
+                use token::LitKind::{Bool, Number, Str};
                 let kind = match kind {
                     Number => ast::LitKind::Number(symbol),
                     Bool => ast::LitKind::Bool(symbol),
@@ -1481,7 +1481,7 @@ impl Parser<'_> {
     }
 
     fn infix_expr(&mut self, left: ast::Expr) -> Result<ast::Expr> {
-        use TokenKind::*;
+        use TokenKind::{And, BinOr, DblEquals, Div, Dot, Equals, GreaterThan, LCurlyBrace, LParen, LessThan, Minus, Mul, Or, Pipeline, Plus, PlusEquals, Question, QuestionDot};
         match self.peek()?.kind {
             // Binary
             Plus | Minus | Div | Mul | LessThan | GreaterThan | DblEquals

@@ -184,7 +184,7 @@ impl CodeFuzzer {
 
     /// Generate a single statement
     fn gen_stmt(&mut self) {
-        use FuzzStmtChoice::*;
+        use FuzzStmtChoice::{If, Local, Return, While};
         match self.choose_stmt_kind() {
             // A local definition
             Local => {

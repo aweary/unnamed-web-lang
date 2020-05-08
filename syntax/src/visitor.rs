@@ -1,4 +1,4 @@
-use crate::ast::*;
+use crate::ast::{Block, Expr, ExprKind, Function, Ident, IfExpr, Import, Item, ItemKind, Local, LocalObjectProperty, LocalPattern, Module, Param, ParamType, Program, Stmt, StmtKind, Template, TypeDef};
 
 pub trait Visitor: Sized {
     fn visit_item(&mut self, item: &mut Item) {
@@ -63,19 +63,19 @@ pub trait Visitor: Sized {
 }
 
 pub fn walk_program<V: Visitor>(visitor: &mut V, program: &mut Program) {
-    for module in program.modules.iter_mut() {
+    for module in &mut program.modules {
         visitor.visit_mod(module)
     }
 }
 
 pub fn walk_mod<V: Visitor>(visitor: &mut V, module: &mut Module) {
-    for item in module.items.iter_mut() {
+    for item in &mut module.items {
         visitor.visit_item(item)
     }
 }
 
 pub fn walk_expr<V: Visitor>(visitor: &mut V, Expr { kind, .. }: &mut Expr) {
-    use ExprKind::*;
+    use ExprKind::{Array, Binary, Block, Call, For, If, Reference, Template};
     match kind {
         If(IfExpr {
             ref mut condition,
@@ -122,7 +122,7 @@ pub fn walk_expr<V: Visitor>(visitor: &mut V, Expr { kind, .. }: &mut Expr) {
 }
 
 pub fn walk_block<V: Visitor>(visitor: &mut V, block: &mut Block) {
-    for stmt in block.stmts.iter_mut() {
+    for stmt in &mut block.stmts {
         visitor.visit_stmt(stmt)
     }
 }
@@ -149,7 +149,7 @@ pub fn walk_local_object_property<V: Visitor>(
     visitor: &mut V,
     property: &mut LocalObjectProperty,
 ) {
-    use LocalPattern::*;
+    use LocalPattern::{Ident, List, Object};
     match property.value {
         Ident(ref mut ident, _) => {
             visitor.visit_ident(ident);
@@ -171,7 +171,7 @@ pub fn walk_local_pattern<V: Visitor>(
     visitor: &mut V,
     pattern: &mut LocalPattern,
 ) {
-    use LocalPattern::*;
+    use LocalPattern::{Ident, List, Object};
     match pattern {
         Ident(ref mut ident, _) => {
             visitor.visit_ident(ident);
@@ -193,7 +193,7 @@ pub fn walk_local_pattern<V: Visitor>(
 }
 
 pub fn walk_item<V: Visitor>(visitor: &mut V, item: &mut Item) {
-    use ItemKind::*;
+    use ItemKind::{Enum, Export, Fn, Import, Type};
     // visitor.visit_ident(&mut item.ident);
     match item.kind {
         Enum(ref _enum_def) => {
@@ -218,7 +218,7 @@ pub fn walk_item<V: Visitor>(visitor: &mut V, item: &mut Item) {
 }
 
 pub fn walk_stmt<V: Visitor>(visitor: &mut V, stmt: &mut Stmt) {
-    use StmtKind::*;
+    use StmtKind::{Expr, Item, Local, Return, While};
     match stmt.kind {
         Expr(ref mut expr) => visitor.visit_expr(expr),
         Local(ref mut local) => visitor.visit_local(local),

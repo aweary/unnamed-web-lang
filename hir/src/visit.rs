@@ -1,6 +1,6 @@
-use crate::hir::*;
+use crate::hir::{Block, Component, Definition, DefinitionKind, Function, Import, Module, Statement, TypeAlias};
 use diagnostics::ParseResult as Result;
-use std::ops::DerefMut;
+
 use std::sync::Arc;
 
 pub trait Visitor: Sized {
@@ -60,7 +60,7 @@ pub fn walk_definition<V: Visitor>(
     match &definition.kind {
         DefinitionKind::Function(fndef) => {
             let mut fndef = fndef.lock().unwrap();
-            let fndef = fndef.deref_mut();
+            let fndef = &mut *fndef;
             visitor.visit_function(fndef)?;
         }
         DefinitionKind::Component(compdef) => {
@@ -81,7 +81,7 @@ pub fn walk_definition<V: Visitor>(
 pub fn walk_block<V: Visitor>(visitor: &mut V, block: &Block) -> Result<()> {
     for statement in &block.statements {
         let mut statement = statement.lock().unwrap();
-        let statement = statement.deref_mut();
+        let statement = &mut *statement;
         visitor.visit_statement(statement)?;
     }
     Ok(())
@@ -99,7 +99,7 @@ pub fn walk_function<V: Visitor>(
 pub fn walk_module<V: Visitor>(visitor: &mut V, module: &Module) -> Result<()> {
     for import in &module.imports {
         let mut import = import.lock().unwrap();
-        let import = import.deref_mut();
+        let import = &mut *import;
         visitor.visit_import(import)?;
     }
     for definition in &module.definitions {
