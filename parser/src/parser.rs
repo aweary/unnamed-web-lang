@@ -329,12 +329,53 @@ impl Parser<'_> {
 
     fn parse_type(&mut self) -> Result<ast::Item> {
         use TokenKind::{
-            Colon, Comma, Ident, LCurlyBrace, RCurlyBrace, Reserved,
+            Colon, Comma, Ident, LCurlyBrace, LParen, RCurlyBrace, RParen,
+            Reserved, Arrow,
         };
         self.expect(Reserved(Keyword::Type))?;
         let lo = self.span;
         let name = self.ident()?;
         let generics = self.generics()?;
+
+        self.expect(TokenKind::Equals)?;
+
+        // We support record types as well as function type aliases
+        if self.eat(LParen)? {
+            let mut parameters = vec![];
+            loop {
+                match self.peek()?.kind {
+                    Ident(_) => {
+                        // Parse a type
+                        let ty = self.ty()?;
+                        parameters.push(ty);
+                        // Eat optional comma
+                        self.eat(Comma)?;
+                    }
+                    RParen => break,
+                    _ => {
+                        return Err(self.fatal(
+                            "Unexpected token",
+                            "expected identifier or `)`",
+                            self.span,
+                        ))
+                    }
+                }
+            }
+            self.expect(RParen)?;
+            self.expect(Arrow)?;
+            let return_ty = self.ty()?;
+            let span = lo.merge(self.span);
+            let alias = ast::TypeAlias {
+                parameters,
+                return_ty,
+                name
+            };
+            return Ok(ast::Item {
+                kind: ast::ItemKind::TypeAlias(alias),
+                span
+            })
+        }
+
         self.expect(LCurlyBrace)?;
         let mut properties = vec![];
         loop {

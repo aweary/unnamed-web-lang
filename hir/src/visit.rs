@@ -37,6 +37,10 @@ pub trait Visitor: Sized {
         walk_statement(self, statement)?;
         Ok(())
     }
+
+    fn visit_type_alias(&mut self, _alias: &TypeAlias) -> Result<()> {
+        Ok(())
+    }
 }
 
 pub fn walk_statement<V: Visitor>(
@@ -63,6 +67,9 @@ pub fn walk_definition<V: Visitor>(
         }
         DefinitionKind::Component(compdef) => {
             visitor.visit_component(compdef)?;
+        }
+        DefinitionKind::TypeAlias(typealias) => {
+            visitor.visit_type_alias(typealias)?;
         }
         // DefinitionKind::Import(imports) => {
         // }

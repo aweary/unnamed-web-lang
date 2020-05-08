@@ -1,5 +1,7 @@
-fn math(a, b) {
-    let c = a("string");
-    let d = c * b;
-    return a;
+
+fn main(a, b) {
+    let callback = |a: number, b| {
+        let result = a / b;
+        return result;
+    };
 }

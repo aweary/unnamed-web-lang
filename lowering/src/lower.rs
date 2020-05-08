@@ -8,6 +8,7 @@ use diagnostics::ParseResult as Result;
 
 use hir;
 use hir::unique_name::UniqueName;
+use log::debug;
 use source::FileId;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -153,6 +154,15 @@ impl LoweringContext {
                     span,
                 })
             }
+            ast::ItemKind::TypeAlias(typealias) => {
+                let span = item.span;
+                let typealias = self.lower_type_alias(typealias)?;
+                Ok(hir::Definition {
+                    kind: hir::DefinitionKind::TypeAlias(typealias),
+                    visibility: hir::DefinitionVisibility::Private,
+                    span,
+                })
+            }
             ast::ItemKind::Enum(enumdef) => {
                 let span = enumdef.span;
                 // TODO generics
@@ -255,6 +265,34 @@ impl LoweringContext {
             discriminant,
             span,
         })
+    }
+
+    fn lower_type_alias(
+        &mut self,
+        typealias: ast::TypeAlias,
+    ) -> Result<Arc<hir::TypeAlias>> {
+        let ast::TypeAlias {
+            parameters,
+            return_ty,
+            name,
+        } = typealias;
+        // Safe unwrap as we just passed in `Some`
+        let return_ty = self.lower_type(Some(return_ty))?.unwrap();
+        let mut hir_parameters = vec![];
+        for param in parameters {
+            // Safe unwrap as we just passed in `Some`
+            let param = self.lower_type(Some(param))?.unwrap();
+            hir_parameters.push(param);
+        }
+        let unique_name = UniqueName::new();
+        let typealias = Arc::new(hir::TypeAlias {
+            parameters: hir_parameters,
+            return_ty,
+            unique_name,
+        });
+        self.scope
+            .define(name.symbol, hir::Binding::TypeAlias(typealias.clone()));
+        Ok(typealias)
     }
 
     fn lower_typedef(
@@ -381,6 +419,7 @@ impl LoweringContext {
         &mut self,
         ty: Option<ast::Type>,
     ) -> Result<Option<hir::Type>> {
+        debug!("lower_type {:#?}", ty);
         if let Some(ast::Type { name, arguments }) = ty {
             let arguments = self.lower_type_arguments(arguments)?;
             if let Some((binding, unique_name)) =
@@ -389,6 +428,14 @@ impl LoweringContext {
                 match binding {
                     hir::Binding::Type(typedef) => {
                         let kind = hir::TypeKind::TypeDef(typedef.clone());
+                        Ok(Some(hir::Type {
+                            kind,
+                            span: name.span,
+                            arguments,
+                        }))
+                    }
+                    hir::Binding::TypeAlias(typealias) => {
+                        let kind = hir::TypeKind::TypeAlias(typealias.clone());
                         Ok(Some(hir::Type {
                             kind,
                             span: name.span,

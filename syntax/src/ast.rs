@@ -69,10 +69,20 @@ pub enum ItemKind {
     Enum(EnumDef),
     /// Type definition for records
     Type(Box<TypeDef>),
+    /// Type aliases
+    TypeAlias(TypeAlias),
     /// Import declaration
     Import(Box<Import>),
     /// Exported declaration
     Export(Box<Item>),
+}
+
+//  TODO(brandondail) currently just supports function type aliases
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct TypeAlias {
+    pub name: Ident,
+    pub parameters: Vec<Type>,
+    pub return_ty: Type,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

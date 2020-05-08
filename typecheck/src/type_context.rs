@@ -126,6 +126,8 @@ impl TypeContext {
         &self,
         name: &UniqueName,
     ) -> Option<Intern<Type>> {
+        debug!("get_annotation: {:?}", name);
+        debug!("{:#?}", self.elements);
         for element in &self.elements {
             match &element.kind {
                 ElementKind::TypedVariable(a, ty) if a == name => {
@@ -150,6 +152,8 @@ impl TypeContext {
             self.elements.splice(index..=index, inserts);
             return;
         }
+
+        debug!("E: {:#?}", self.elements);
         panic!("insert_in_place called with non-existent element")
     }
 

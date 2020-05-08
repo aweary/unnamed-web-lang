@@ -43,8 +43,6 @@ pub struct Type {
 
 #[derive(Debug, Clone)]
 pub enum TypeKind {
-    /// A type that will be inferred by the type checker
-    Infer,
     /// `true` or `false`
     Boolean,
     /// All number types
@@ -53,8 +51,17 @@ pub enum TypeKind {
     String,
     /// Some user-defined type
     TypeDef(Arc<TypeDef>),
+    /// Type alias
+    TypeAlias(Arc<TypeAlias>),
     /// A type that the HIR could not resolve.
     Unresolved(Ident),
+}
+
+#[derive(Debug, Clone)]
+pub struct TypeAlias {
+    pub parameters: Vec<Type>,
+    pub return_ty: Type,
+    pub unique_name: UniqueName,
 }
 
 /// The top-level container for the entire module graph.
@@ -86,6 +93,8 @@ pub enum Binding {
     Constant(Arc<Constant>),
     /// A type definition
     Type(Arc<TypeDef>),
+    /// A type alias
+    TypeAlias(Arc<TypeAlias>),
     /// Enum definition
     Enum(Arc<EnumDef>),
     /// A special identifier, denoted by `_`, for unused values and catch-all case
@@ -216,6 +225,7 @@ pub enum DefinitionKind {
     Constant(Arc<Constant>),
     Enum(Arc<EnumDef>),
     Type(Arc<TypeDef>),
+    TypeAlias(Arc<TypeAlias>),
 }
 
 #[derive(Clone, Debug)]

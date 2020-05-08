@@ -18,6 +18,9 @@ use syntax::ast;
 use syntax::symbol::Symbol;
 use typecheck::TypeChecker;
 
+use log::info;
+
+
 type ImportDescriptorList = Vec<(PathBuf, hir::Ident, ast::ImportPath)>;
 type DashSet<T> = dashmap::DashMap<T, ()>;
 type HirModuleGraph = ModuleGraph<hir::Module, Symbol>;
@@ -180,7 +183,7 @@ pub fn run_on_single_file(
 }
 
 pub fn run_on_file(vfs: Arc<FileSystem>, root_file: FileId) -> ParseResult<()> {
-    let _start = std::time::Instant::now();
+    let start = std::time::Instant::now();
     let hir = parse_and_lower_module_from_file(root_file, vfs.clone())
         .map_err(|err| err.for_file(root_file))?;
     // Get the initial set of imports
@@ -267,11 +270,6 @@ pub fn run_on_file(vfs: Arc<FileSystem>, root_file: FileId) -> ParseResult<()> {
     let mut typecheck = TypeChecker::new();
 
     typecheck.run(&hir).map_err(|err| err.for_file(root_file))?;
-    // println!(
-    //     "Completed parsing, name, and crawling imports for {} modules in {}μs",
-    //     seen_modules.len(),
-    //     start.elapsed().as_micros()
-    // );
     Ok(())
 }
 

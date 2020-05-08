@@ -5,10 +5,12 @@ use ::hir::*;
 use ::hir::visit::{walk_function, Visitor};
 use diagnostics::ParseResult as Result;
 use source::diagnostics::{Diagnostic, Label};
-use ty::{boolean, number, Existential, LiteralType, Type, Variable};
+use ty::{boolean, number, string, Existential, LiteralType, Type, Variable};
 
 use internment::Intern;
-use log::debug;
+use log::{debug, info};
+
+use std::time::Instant;
 
 type InternType = Intern<Type>;
 
@@ -52,9 +54,25 @@ impl Visitor for TypeChecker {
         }
         Ok(())
     }
-    // fn visit_import(&mut self, _import: &hir::Import) -> Result<()> {
-    //     Ok(())
-    // }
+
+    fn visit_type_alias(&mut self, typealias: &hir::TypeAlias) -> Result<()> {
+        debug!("visit_type_alias");
+        let hir::TypeAlias {
+            unique_name,
+            parameters,
+            return_ty,
+        } = typealias;
+        let return_ty = self.hir_type_to_type(&return_ty)?;
+        let mut parameters_ty = vec![];
+        for param in parameters {
+            let ty = self.hir_type_to_type(param)?;
+            parameters_ty.push(ty);
+        }
+        let ty = Type::Function(parameters_ty, return_ty);
+        let element = Element::new_typed_variable(*unique_name, ty.into());
+        self.context.add(element);
+        Ok(())
+    }
 
     fn visit_function(&mut self, function: &hir::Function) -> Result<()> {
         debug!("visit_function: {:?}", function.name);
@@ -62,16 +80,10 @@ impl Visitor for TypeChecker {
             debug!("check param: {:?}", param.local);
             let name = param.unique_name;
             if let Some(ty) = &param.ty {
-                match ty.kind {
-                    _ => {
-                        return Err(Diagnostic::error()
-                            .with_message("Cant type check annotations yet")
-                            .with_labels(vec![Label::primary(param.span)]));
-                        // TODO
-                        // let element = Element::new_typed_variable(name, param.ty.clone());
-                        // self.context.add(element);
-                    }
-                }
+                debug!("param has annotation: {:?}", ty);
+                let ty = self.hir_type_to_type(ty)?;
+                let element = Element::new_typed_variable(name, ty);
+                self.context.add(element);
             } else {
                 debug!("need existential for param `{:?}`", param.local);
                 // No type annotation means we need to infer
@@ -92,8 +104,31 @@ impl Visitor for TypeChecker {
         // Read the return type
         let return_ty = match &function.ty {
             Some(ty) => {
-                return Err(Diagnostic::error()
-                    .with_message("Cant check annotations yet"))
+                let name = function.unique_name;
+                debug!("param has annotation: {:?}", ty);
+                let ty: Type = match &ty.kind {
+                    TypeKind::Number => Type::Literal(LiteralType::Number),
+                    TypeKind::String => Type::Literal(LiteralType::String),
+                    TypeKind::Boolean => Type::Literal(LiteralType::Boolean),
+                    TypeKind::TypeDef(_) => {
+                        panic!();
+                    }
+                    TypeKind::TypeAlias(_alias) => {
+                        panic!();
+                    }
+                    TypeKind::Unresolved(typename) => {
+                        let ty = match typename.symbol.as_str() {
+                            "number" => Type::Literal(LiteralType::Number),
+                            "boolean" => Type::Literal(LiteralType::Boolean),
+                            "string" => Type::Literal(LiteralType::String),
+                            _ => {
+                                panic!("Cant resolve");
+                            }
+                        };
+                        ty
+                    }
+                };
+                ty.into()
             }
             None => {
                 // New existential for the return type
@@ -129,16 +164,13 @@ impl Visitor for TypeChecker {
             input_ty.push(ty)
         }
 
-        let function_ty = Type::Function(input_ty, return_ty).into();
-
-        let function_ty = self.apply_context(function_ty)?;
+        let function_ty =
+            self.apply_context(Type::Function(input_ty, return_ty).into())?;
 
         debug!(
             "inferred function {:?} as {:#?}",
             function.name, function_ty
         );
-
-        debug!("elements: {:#?}", self.context.elements);
 
         self.context.add(Element::new_typed_variable(
             function.unique_name,
@@ -161,8 +193,27 @@ impl TypeChecker {
 
     /// Run the type checker from a root HIR module.
     pub fn run(&mut self, module: &hir::Module) -> Result<()> {
-        self.visit_module(module)?;
-        Ok(())
+        let start = Instant::now();
+        match self.visit_module(module) {
+            Ok(_) => {
+                let end = Instant::now();
+                let duration = end.duration_since(start);
+                info!(
+                    "Type checking module took: {:?}us",
+                    duration.as_micros()
+                );
+                Ok(())
+            }
+            Err(err) => {
+                let end = Instant::now();
+                let duration = end.duration_since(start);
+                info!(
+                    "Type checking module took: {:?}us",
+                    duration.as_micros()
+                );
+                Err(err)
+            }
+        }
     }
 
     /// Create a new existential
@@ -192,6 +243,14 @@ impl TypeChecker {
     fn synthesize(&mut self, expr: &Expr) -> Result<InternType> {
         match &expr.kind {
             ExprKind::Lit(lit) => Ok(infer_literal(lit)),
+            ExprKind::Lambda(lambda) => {
+                let hir::Lambda {
+                    params, body, span, ..
+                } = lambda;
+                info!("lambda: {:#?}", body);
+                Err(Diagnostic::error()
+                    .with_message("Cant infer lambdas right now"))
+            }
             ExprKind::Reference(_ident, binding) => {
                 match binding {
                     Binding::Local(local) => {
@@ -204,8 +263,14 @@ impl TypeChecker {
                         let ty = self.context.get_annotation(&name).unwrap();
                         Ok(ty)
                     }
+                    Binding::Function(function) => {
+                        let function = function.lock().unwrap();
+                        let name = function.unique_name;
+                        let ty = self.context.get_annotation(&name).unwrap();
+                        Ok(ty)
+                    }
                     Binding::State(_)
-                    | Binding::Function(_)
+                    | Binding::TypeAlias(_)
                     | Binding::Component(_)
                     | Binding::Import(_)
                     | Binding::Constant(_)
@@ -246,6 +311,11 @@ impl TypeChecker {
                         let ty =
                             self.synthesize_application(param_ty, mapped_args)?;
                         Ok(ty)
+                    }
+                    Binding::Local(local) => {
+                        let name = local.unique_name;
+                        let ty = self.context.get_annotation(&name).unwrap();
+                        self.synthesize_application(ty, mapped_args)
                     }
                     _ => Err(Diagnostic::error()
                         .with_message("Cant call this type as a function")),
@@ -290,7 +360,9 @@ impl TypeChecker {
         debug!("check_against, {:?}", ty);
         // TODO assert is_well_formed
         match (&expr.kind, &*ty) {
+            // I1
             (ExprKind::Lit(_), Type::Literal(_)) => {
+                debug!("1I");
                 // Check that literal types are equal
                 let synth_ty = self.synth(expr)?;
                 if ty == synth_ty {
@@ -301,6 +373,22 @@ impl TypeChecker {
                         .with_message(msg)
                         .with_labels(vec![Label::primary(expr.span)]))
                 }
+            }
+            //->I, lambdas
+            (
+                ExprKind::Lambda(lambda),
+                Type::Function(input_tys, return_ty),
+            ) => {
+                let hir::Lambda { params, span, .. } = lambda;
+                assert_eq!(params.len(), input_tys.len());
+                debug!("->I");
+                Ok(())
+            }
+            //forallI
+            (_, Type::Quantification(alpha, a)) => {
+                debug!("∀I");
+                Err(Diagnostic::error()
+                    .with_message("Cant check against quantification yet"))
             }
             // Subtyping
             (_, _) => {
@@ -318,7 +406,9 @@ impl TypeChecker {
     fn subtype(&mut self, a: InternType, b: InternType) -> Result<()> {
         debug!("subtype, a: {:?}, b: {:?}", a, b);
         match (&*a, &*b) {
+            // <:Unit
             (Type::Literal(a), Type::Literal(b)) => {
+                debug!("<:Unit");
                 if a == b {
                     Ok(())
                 } else {
@@ -328,15 +418,64 @@ impl TypeChecker {
                     )))
                 }
             }
+            // <:Var
             (Type::Variable(alpha), Type::Variable(beta)) => {
+                debug!("<:Var");
                 if alpha == beta {
                     Ok(())
                 } else {
                     panic!("Cant subtype type variables")
                 }
             }
-            (Type::Existential(alpha), _) => self.instantiate_l(*alpha, b),
-            (_, Type::Existential(alpha)) => self.instantiate_r(*alpha, a),
+            // <:Exvar
+            (Type::Existential(alpha), Type::Existential(beta))
+                if alpha == beta =>
+            {
+                // TODO check well formed
+                Ok(())
+            }
+            // <:->
+            (Type::Function(a1, a2), Type::Function(b1, b2)) => {
+                debug!("<:->");
+                for (a, b) in a1.iter().zip(b1) {
+                    self.subtype(*a, *b)?;
+                }
+                self.subtype(*a2, *b2)
+            }
+            // >:forallL
+            (Type::Quantification(alpha, a), _) => {
+                debug!("<:∀L");
+                Err(Diagnostic::error()
+                    .with_message("Cant subtype left quantification yet"))
+            }
+            // >:forallR
+            (_, Type::Quantification(alpha, a)) => {
+                debug!("<:∀R");
+                Err(Diagnostic::error()
+                    .with_message("Cant subtype right quantification yet"))
+            }
+            // <:InstantiateL
+            (Type::Existential(alpha), _) => {
+                if occurs_in(alpha, b) {
+                    // This is a circular type, we can't figure it out
+                    Err(Diagnostic::error().with_message(
+                        "We found a circular type that we couldn't infer",
+                    ))
+                } else {
+                    self.instantiate_l(*alpha, b)
+                }
+            }
+            // <:InstantiateR
+            (_, Type::Existential(alpha)) => {
+                if occurs_in(alpha, a) {
+                    // This is a circular type, we can't figure it out
+                    Err(Diagnostic::error().with_message(
+                        "We found a circular type that we couldn't infer",
+                    ))
+                } else {
+                    self.instantiate_r(*alpha, a)
+                }
+            }
             (_, _) => Err(Diagnostic::error().with_message("Cant subtype")),
         }
     }
@@ -408,6 +547,8 @@ impl TypeChecker {
         ty: InternType,
         args: Vec<&Expr>,
     ) -> Result<InternType> {
+        // TODO is this right?
+        let ty = self.apply_context(ty)?;
         debug!("synthesize_application: {:#?}", ty);
         match &*ty {
             Type::Function(inputs, output) => {
@@ -443,14 +584,17 @@ impl TypeChecker {
                     .iter()
                     .map(|alpha| Element::new_existential(*alpha))
                     .collect();
-                let beta_ty : Vec<InternType> = beta
+                let beta_ty: Vec<InternType> = beta
                     .iter()
                     .map(|alpha| Type::Existential(*alpha).into())
                     .collect();
 
                 // Create an existential function type
-                let fn_ty =
-                    Type::Function(beta_ty.clone(), Type::Existential(alpha).into());
+                let fn_ty = Type::Function(
+                    beta_ty.clone(),
+                    Type::Existential(alpha).into(),
+                );
+
                 debug!("created new function type: {:#?}", fn_ty);
 
                 // Start with adding the existential for the return type
@@ -526,6 +670,55 @@ impl TypeChecker {
             )
             .into()),
             _ => unimplemented!(),
+        }
+    }
+
+    fn hir_type_to_type(&self, hir_type: &hir::Type) -> Result<InternType> {
+        debug!("hir_type_to_type {:?}", hir_type);
+        let ty = match &hir_type.kind {
+            TypeKind::Boolean => boolean!(),
+            TypeKind::Number => number!(),
+            TypeKind::String => string!(),
+            TypeKind::TypeDef(_) => todo!(),
+            TypeKind::TypeAlias(typealias) => {
+                let name = typealias.unique_name;
+                let ty = self.context.get_annotation(&name).unwrap();
+                ty
+            }
+            // Types that we can't resolve. These should be built-ins
+            // that the HIR doesn't know about
+            TypeKind::Unresolved(typename) => match typename.symbol.as_str() {
+                "number" => Type::Literal(LiteralType::Number),
+                "boolean" => Type::Literal(LiteralType::Boolean),
+                "string" => Type::Literal(LiteralType::String),
+                _ => {
+                    panic!("Cant resolve");
+                }
+            }
+            .into(),
+        };
+        Ok(ty)
+    }
+}
+
+fn occurs_in(alpha: &Existential, ty: InternType) -> bool {
+    debug!("occurs_in: {:?} - {:?}", alpha, ty);
+    // false
+    match &*ty {
+        Type::Unit => false,
+        Type::Literal(_) => false,
+        // TODO when is it possible for an existential to equal a type variable?
+        Type::Variable(_) => false,
+        Type::Function(inputs, ty) => {
+            occurs_in(alpha, *ty) || inputs.iter().any(|t| occurs_in(alpha, *t))
+        }
+        Type::Existential(beta) => alpha == beta,
+        Type::SolvableExistential(beta, _) => alpha == beta,
+        Type::Pair(a, b) => occurs_in(alpha, *a) || occurs_in(alpha, *b),
+        Type::List(ty) => occurs_in(alpha, *ty),
+        Type::Quantification(_beta, ty) => {
+            // TODO alpha == beta condition, but WHEN COULD THAT HAPPEN?
+            occurs_in(alpha, *ty)
         }
     }
 }
