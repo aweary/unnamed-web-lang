@@ -2,7 +2,7 @@
 //! This is shared between the `hir` and `typecheck` module, as the lowering step
 //! can resolve some basic type information.
 
-use serde::{Deserialize, Serialize};
+
 
 use internment::Intern;
 

@@ -9,14 +9,14 @@ use lsp_types::{
     DidOpenTextDocumentParams, PublishDiagnosticsParams, ServerCapabilities,
     TextDocumentItem, TextDocumentSyncCapability, TextDocumentSyncKind, Url,
 };
-use serde_json;
+
 use std::error::Error;
 use std::sync::Arc;
 
 use source::diagnostics::Diagnostic as CompilerDiagnostic;
 use source::filesystem::{FileId, FileSystem};
 
-use compiler;
+
 
 pub type GenericResult<T> = Result<T, Box<dyn Error + Sync + Send>>;
 
@@ -210,7 +210,7 @@ impl LSPServer {
     fn on_close_text_document(
         &mut self,
         params: DidCloseTextDocumentParams,
-        connection: &Connection,
+        _connection: &Connection,
     ) -> GenericResult<()> {
         info!("text document close: {:#?}", params);
         Ok(())

@@ -6,7 +6,7 @@ use data_structures::scope_map::ScopeMap;
 
 use diagnostics::ParseResult as Result;
 
-use hir;
+
 use hir::unique_name::UniqueName;
 use log::debug;
 use source::FileId;
@@ -422,12 +422,12 @@ impl LoweringContext {
         debug!("lower_type {:#?}", ty);
         if let Some(ast::Type { name, arguments }) = ty {
             let arguments = self.lower_type_arguments(arguments)?;
-            if let Some((binding, unique_name)) =
+            if let Some((binding, _unique_name)) =
                 self.scope.resolve(&name.symbol)
             {
                 match binding {
                     hir::Binding::Type(typedef) => {
-                        let kind = hir::TypeKind::TypeDef(typedef.clone());
+                        let kind = hir::TypeKind::TypeDef(typedef);
                         Ok(Some(hir::Type {
                             kind,
                             span: name.span,
@@ -435,7 +435,7 @@ impl LoweringContext {
                         }))
                     }
                     hir::Binding::TypeAlias(typealias) => {
-                        let kind = hir::TypeKind::TypeAlias(typealias.clone());
+                        let kind = hir::TypeKind::TypeAlias(typealias);
                         Ok(Some(hir::Type {
                             kind,
                             span: name.span,
@@ -444,7 +444,7 @@ impl LoweringContext {
                     }
                     // Can't use the wildcard as a type
                     hir::Binding::Wildcard => {
-                        return Err(Diagnostic::error()
+                        Err(Diagnostic::error()
                             .with_message("_ can't be used as a type")
                             .with_labels(vec![Label::primary(name.span)]))
                     }
@@ -457,12 +457,12 @@ impl LoweringContext {
                     | hir::Binding::State(_)
                     | hir::Binding::Parameter(_)
                     | hir::Binding::Import(_) => {
-                        return Err(Diagnostic::error()
+                        Err(Diagnostic::error()
                             .with_message(format!(
                                 "`{:?}` is a value and can't be used as a type",
                                 name.symbol
                             ))
-                            .with_labels(vec![Label::primary(name.span)]));
+                            .with_labels(vec![Label::primary(name.span)]))
                     }
                 }
             } else {
@@ -588,7 +588,7 @@ impl LoweringContext {
         // Function body
         let block = self.lower_block(fndef.body)?;
         // Function return type
-        let mut return_ty = self.lower_type(fndef.return_ty)?;
+        let return_ty = self.lower_type(fndef.return_ty)?;
 
         self.scope.exit_scope();
         let unique_name = UniqueName::new();
@@ -751,7 +751,7 @@ impl LoweringContext {
             ExprKind::Assign(op, reference, value) => {
                 if let ast::ExprKind::Reference(reference) = reference.kind {
                     match self.scope.resolve(&reference.symbol) {
-                        Some((binding, unique_name)) => match binding {
+                        Some((binding, _unique_name)) => match binding {
                             hir::Binding::Local(local) => {
                                 let value = self.lower_expr(*value)?;
                                 hir::ExprKind::Assign(
@@ -770,7 +770,7 @@ impl LoweringContext {
                                     Box::new(value),
                                 )
                             }
-                            hir::Binding::Parameter(param) => {
+                            hir::Binding::Parameter(_param) => {
                                 panic!("Cant assign to parameters");
                             }
                             _ => {
@@ -802,7 +802,7 @@ impl LoweringContext {
             // A variable reference
             ExprKind::Reference(ident) => {
                 match self.scope.resolve(&ident.symbol) {
-                    Some((binding, unique_name)) => {
+                    Some((binding, _unique_name)) => {
                         // You can't reference the empty binding in expressions, outside of
                         // match expressions
                         match binding {
@@ -924,10 +924,10 @@ impl LoweringContext {
 
         // We currently use the same JSX herustic of uppercase denoting components
         // but that will probably change soon
-        match &ident.symbol.as_str().chars().nth(0).unwrap() {
+        match &ident.symbol.as_str().chars().next().unwrap() {
             'A'..='Z' => {
                 match self.scope.resolve(&ident.symbol) {
-                    Some((binding, unique_name)) => {
+                    Some((binding, _unique_name)) => {
                         match binding {
                             hir::Binding::Component(component) => instrs.push(
                                 hir::TemplateInstr::OpenCustomElement(

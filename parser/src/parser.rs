@@ -12,7 +12,7 @@ use diagnostics::ParseResult as Result;
 
 use source::diagnostics::{Diagnostic, Label, Span};
 
-use log::{debug, info, trace};
+use log::{debug};
 
 const DUMMY_NODE_ID: ast::NodeId = ast::NodeId(0);
 
@@ -129,7 +129,7 @@ impl Parser<'_> {
         let token = self.next_token()?;
         match token.kind {
             TokenKind::Ident(symbol) => Ok(ast::Ident {
-                symbol: symbol,
+                symbol,
                 span: token.span,
             }),
             _ => Err(self.fatal(

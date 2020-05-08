@@ -1,6 +1,6 @@
 use crate::type_context::{Element, TypeContext};
 use ::hir::unique_name::UniqueName;
-use ::hir::*;
+use ::hir::{BinOp, Binding, Expr, ExprKind, Lit, LitKind, Local, StatementKind, TypeKind, hir};
 
 use ::hir::visit::{walk_function, Visitor};
 use diagnostics::ParseResult as Result;
@@ -62,7 +62,7 @@ impl Visitor for TypeChecker {
             parameters,
             return_ty,
         } = typealias;
-        let return_ty = self.hir_type_to_type(&return_ty)?;
+        let return_ty = self.hir_type_to_type(return_ty)?;
         let mut parameters_ty = vec![];
         for param in parameters {
             let ty = self.hir_type_to_type(param)?;
@@ -104,7 +104,7 @@ impl Visitor for TypeChecker {
         // Read the return type
         let return_ty = match &function.ty {
             Some(ty) => {
-                let name = function.unique_name;
+                let _name = function.unique_name;
                 debug!("param has annotation: {:?}", ty);
                 let ty: Type = match &ty.kind {
                     TypeKind::Number => Type::Literal(LiteralType::Number),
@@ -182,8 +182,8 @@ impl Visitor for TypeChecker {
 }
 
 impl TypeChecker {
-    pub fn new() -> Self {
-        TypeChecker {
+    #[must_use] pub fn new() -> Self {
+        return Self {
             context: TypeContext::default(),
             existential: 0,
             variables: 0,
@@ -245,7 +245,7 @@ impl TypeChecker {
             ExprKind::Lit(lit) => Ok(infer_literal(lit)),
             ExprKind::Lambda(lambda) => {
                 let hir::Lambda {
-                    params, body, span, ..
+                    params: _, body, span: _, ..
                 } = lambda;
                 info!("lambda: {:#?}", body);
                 Err(Diagnostic::error()
@@ -377,16 +377,16 @@ impl TypeChecker {
             //->I, lambdas
             (
                 ExprKind::Lambda(lambda),
-                Type::Function(input_tys, return_ty),
+                Type::Function(input_tys, _return_ty),
             ) => {
-                let hir::Lambda { params, span, .. } = lambda;
+                let hir::Lambda { params, span: _, .. } = lambda;
                 assert_eq!(params.len(), input_tys.len());
                 debug!("->I");
                 Ok(())
             }
             //forallI
-            (_, Type::Quantification(alpha, a)) => {
-                debug!("∀I");
+            (_, Type::Quantification(_alpha, _a)) => {
+                debug!("\u{2200}I");
                 Err(Diagnostic::error()
                     .with_message("Cant check against quantification yet"))
             }
@@ -443,14 +443,14 @@ impl TypeChecker {
                 self.subtype(*a2, *b2)
             }
             // >:forallL
-            (Type::Quantification(alpha, a), _) => {
-                debug!("<:∀L");
+            (Type::Quantification(_alpha, _a), _) => {
+                debug!("<:\u{2200}L");
                 Err(Diagnostic::error()
                     .with_message("Cant subtype left quantification yet"))
             }
             // >:forallR
-            (_, Type::Quantification(alpha, a)) => {
-                debug!("<:∀R");
+            (_, Type::Quantification(_alpha, _a)) => {
+                debug!("<:\u{2200}R");
                 Err(Diagnostic::error()
                     .with_message("Cant subtype right quantification yet"))
             }
@@ -562,7 +562,7 @@ impl TypeChecker {
                 Ok(*output)
             }
             Type::Quantification(v, ty) => {
-                debug!("∀App");
+                debug!("\u{2200}App");
                 let alpha = self.fresh_existential();
                 self.context.add(Element::new_existential(alpha));
                 let substituted =
@@ -632,9 +632,9 @@ impl TypeChecker {
             Type::Variable(var) => {
                 if var == alpha {
                     // Substitute it
-                    return Ok(b);
+                    return Ok(b)
                 } else {
-                    return Ok(a);
+                    return Ok(a)
                 }
             }
             Type::Quantification(var, ty) => {
@@ -654,13 +654,13 @@ impl TypeChecker {
                     s1.push(self.substitution(alpha, *t, b)?);
                 }
                 Ok(Type::Function(
-                    s1.into(),
-                    self.substitution(alpha, *t2, b)?.into(),
+                    s1,
+                    self.substitution(alpha, *t2, b)?,
                 )
                 .into())
                 // let mut t1 = vec![];
             }
-            Type::Existential(var) => {
+            Type::Existential(_var) => {
                 // In what case would we replace a type variable with an existential?
                 Ok(a)
             }
@@ -710,7 +710,7 @@ fn occurs_in(alpha: &Existential, ty: InternType) -> bool {
         // TODO when is it possible for an existential to equal a type variable?
         Type::Variable(_) => false,
         Type::Function(inputs, ty) => {
-            occurs_in(alpha, *ty) || inputs.iter().any(|t| occurs_in(alpha, *t))
+            return occurs_in(alpha, *ty) || inputs.iter().any(|t| return occurs_in(alpha, *t))
         }
         Type::Existential(beta) => alpha == beta,
         Type::SolvableExistential(beta, _) => alpha == beta,

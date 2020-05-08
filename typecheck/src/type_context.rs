@@ -28,28 +28,28 @@ pub struct Element {
 impl Element {
     #[inline]
     pub fn new_existential(alpha: Existential) -> Self {
-        Element {
+        return Self {
             kind: ElementKind::Existential(alpha),
         }
     }
 
     #[inline]
     pub fn new_typed_variable(name: UniqueName, ty: Intern<Type>) -> Self {
-        Element {
+        return Self {
             kind: ElementKind::TypedVariable(name, ty),
         }
     }
 
     #[inline]
     pub fn new_variable(name: Symbol) -> Self {
-        Element {
+        return Self {
             kind: ElementKind::Variable(name),
         }
     }
 
     #[inline]
     pub fn new_solved(alpha: Existential, ty: Intern<Type>) -> Self {
-        Element {
+        return Self {
             kind: ElementKind::Solved(alpha, ty),
         }
     }
@@ -157,7 +157,7 @@ impl TypeContext {
         panic!("insert_in_place called with non-existent element")
     }
 
-    pub(crate) fn drop_from_index(&mut self, index: usize) {
+    pub(crate) fn drop_from_index(&mut self, _index: usize) {
         // ...
     }
 
@@ -175,7 +175,7 @@ impl TypeContext {
         None
     }
 
-    pub(crate) fn is_well_formed(&self, ty: &Type) -> bool {
+    pub(crate) fn is_well_formed(&self, _ty: &Type) -> bool {
         true
     }
 
@@ -200,7 +200,7 @@ impl TypeContext {
     /// Split a context at and an index. This is used to split
     /// the type context into a left and right context, though
     /// the right context seems unused in the reference implementation
-    fn split_at(&self, index: usize) {}
+    fn split_at(&self, _index: usize) {}
 
-    fn iterate_to_the_left_of(&self, index: usize) {}
+    fn iterate_to_the_left_of(&self, _index: usize) {}
 }

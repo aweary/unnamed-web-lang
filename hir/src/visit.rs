@@ -45,12 +45,10 @@ pub trait Visitor: Sized {
 
 pub fn walk_statement<V: Visitor>(
     _visitor: &mut V,
-    statement: &Statement,
+    _statement: &Statement,
 ) -> Result<()> {
-    match statement.kind {
-        _ => {
-            // ...
-        }
+    {
+        // ...
     };
     Ok(())
 }

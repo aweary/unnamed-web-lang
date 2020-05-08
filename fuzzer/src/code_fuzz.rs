@@ -93,7 +93,7 @@ pub struct CodeFuzzer {
 /// This lets us use quickcheck for tests that rely on
 /// parsing code samples
 impl Arbitrary for CodeFuzzer {
-    fn arbitrary<G: Gen>(gen: &mut G) -> Self {
+    fn arbitrary<G: Gen>(_gen: &mut G) -> Self {
         let mut fuzz = CodeFuzzer::default();
         fuzz.restrict_stmts(vec![
             FuzzStmtChoice::Local,

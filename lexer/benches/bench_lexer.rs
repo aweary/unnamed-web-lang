@@ -15,7 +15,7 @@ fn lex_small_string() {
 }
 
 fn criterion_benchmark(c: &mut Criterion) {
-    c.bench_function("lex_small_string", |b| b.iter(|| lex_small_string()));
+    c.bench_function("lex_small_string", |b| b.iter(lex_small_string));
 }
 
 criterion_group!(benches, criterion_benchmark);

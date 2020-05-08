@@ -3,11 +3,11 @@ use data_structures::module_graph::ModuleGraph;
 use data_structures::HashSet;
 use diagnostics::ParseResult as Result;
 use diagnostics::ParseResult;
-use hir;
+
 use hir::visit::{walk_module, Visitor};
 use lowering::LoweringContext;
 use parser::Parser;
-use source::diagnostics::{Diagnostic, DiagnosticSet, Label};
+use source::diagnostics::{Diagnostic, Label};
 use source::filesystem::FileId;
 use source::FileSystem;
 use std::hash::{Hash, Hasher};
@@ -18,7 +18,7 @@ use syntax::ast;
 use syntax::symbol::Symbol;
 use typecheck::TypeChecker;
 
-use log::info;
+
 
 
 type ImportDescriptorList = Vec<(PathBuf, hir::Ident, ast::ImportPath)>;
@@ -183,7 +183,7 @@ pub fn run_on_single_file(
 }
 
 pub fn run_on_file(vfs: Arc<FileSystem>, root_file: FileId) -> ParseResult<()> {
-    let start = std::time::Instant::now();
+    let _start = std::time::Instant::now();
     let hir = parse_and_lower_module_from_file(root_file, vfs.clone())
         .map_err(|err| err.for_file(root_file))?;
     // Get the initial set of imports
