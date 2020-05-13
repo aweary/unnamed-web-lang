@@ -21,7 +21,7 @@ pub use ty::{LiteralType as TyLiteralType, Type as TyType};
 // Reused from the AST
 pub use syntax::ast::{
     AssignOp, BinOp, Generics, Ident, ImportSpecifier, Lit, LitKind,
-    LocalPattern, TypeDef, UnOp,
+    LocalPattern, UnOp,
 };
 
 pub type ModuleId = Id<Module>;
@@ -51,8 +51,6 @@ pub enum TypeKind {
     String,
     /// Some user-defined type
     TypeDef(Arc<TypeDef>),
-    /// Type alias
-    TypeAlias(Arc<TypeAlias>),
     /// A type that the HIR could not resolve.
     Unresolved(Ident),
 }
@@ -62,6 +60,36 @@ pub struct TypeAlias {
     pub parameters: Vec<Type>,
     pub return_ty: Type,
     pub unique_name: UniqueName,
+}
+
+
+#[derive(Debug, Clone)]
+pub struct TypeDef {
+    pub name: Ident,
+    pub unique_name: UniqueName,
+    pub kind: TypeDefKind,
+}
+
+#[derive(Debug, Clone)]
+pub enum TypeDefKind {
+    // A simple reference to some other type
+    Reference(Type),
+    // A function
+    Function {
+        parameters: Vec<Type>,
+        return_ty: Type,
+    },
+    // A tuple
+    Tuple(Vec<Type>),
+    // A record
+    Record(Vec<RecordTypeField>)
+}
+
+#[derive(Debug, Clone)]
+pub struct RecordTypeField {
+    name: Ident,
+    unique_name: UniqueName,
+    ty: Type,
 }
 
 /// The top-level container for the entire module graph.
@@ -224,8 +252,7 @@ pub enum DefinitionKind {
     Component(Arc<Component>),
     Constant(Arc<Constant>),
     Enum(Arc<EnumDef>),
-    Type(Arc<TypeDef>),
-    TypeAlias(Arc<TypeAlias>),
+    Type(Arc<Type>),
 }
 
 #[derive(Clone, Debug)]
@@ -317,14 +344,14 @@ pub enum DefinitionVisibility {
 
 #[derive(Debug, Clone)]
 pub struct Block {
-    pub statements: Vec<Arc<Mutex<Statement>>>,
+    pub statements: Vec<Statement>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Statement {
     pub kind: StatementKind,
     pub span: Span,
-    // ...
+    pub has_semi: bool,
 }
 
 impl Blockable for Statement {
@@ -333,12 +360,6 @@ impl Blockable for Statement {
             StatementKind::Return(_) => true,
             _ => false,
         }
-    }
-}
-
-impl fmt::Debug for Statement {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self.kind)
     }
 }
 

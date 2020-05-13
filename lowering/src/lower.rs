@@ -6,7 +6,6 @@ use data_structures::scope_map::ScopeMap;
 
 use diagnostics::ParseResult as Result;
 
-
 use hir::unique_name::UniqueName;
 use log::debug;
 use source::FileId;
@@ -145,20 +144,11 @@ impl LoweringContext {
                     span,
                 })
             }
-            ast::ItemKind::Type(typedef) => {
-                let span = typedef.span;
-                let typedef = self.lower_typedef(*typedef)?;
-                Ok(hir::Definition {
-                    kind: hir::DefinitionKind::Type(typedef),
-                    visibility: hir::DefinitionVisibility::Private,
-                    span,
-                })
-            }
-            ast::ItemKind::TypeAlias(typealias) => {
+            ast::ItemKind::Type(ty) => {
                 let span = item.span;
-                let typealias = self.lower_type_alias(typealias)?;
+                let ty = self.lower_type(ty)?;
                 Ok(hir::Definition {
-                    kind: hir::DefinitionKind::TypeAlias(typealias),
+                    kind: hir::DefinitionKind::Type(Arc::new(ty)),
                     visibility: hir::DefinitionVisibility::Private,
                     span,
                 })
@@ -277,11 +267,11 @@ impl LoweringContext {
             name,
         } = typealias;
         // Safe unwrap as we just passed in `Some`
-        let return_ty = self.lower_type(Some(return_ty))?.unwrap();
+        let return_ty = self.lower_type(return_ty)?;
         let mut hir_parameters = vec![];
         for param in parameters {
             // Safe unwrap as we just passed in `Some`
-            let param = self.lower_type(Some(param))?.unwrap();
+            let param = self.lower_type(param)?;
             hir_parameters.push(param);
         }
         let unique_name = UniqueName::new();
@@ -299,14 +289,15 @@ impl LoweringContext {
         &mut self,
         typedef: ast::TypeDef,
     ) -> Result<Arc<hir::TypeDef>> {
-        let name = typedef.name.symbol.clone();
-        let typedef = Arc::new(typedef);
-        self.scope.define(
-            name,
-            // hir::Binding::Type(hir::Type::Record(typedef.clone())));
-            hir::Binding::Type(typedef.clone()),
-        );
-        Ok(typedef)
+        // let name = typedef.name.symbol.clone();
+        // let typedef = Arc::new(typedef);
+        // self.scope.define(
+        //     name,
+        //     // hir::Binding::Type(hir::Type::Record(typedef.clone())));
+        //     hir::Binding::Type(typedef.clone()),
+        // );
+        // Ok(typedef)
+        Err(Diagnostic::error().with_message("Cant lower typedef now"))
     }
 
     fn lower_constant(
@@ -316,11 +307,11 @@ impl LoweringContext {
         let span = constant.span;
         let name = constant.name;
         // TODO anyway to not require Some here?
-        let ty = self.lower_type(Some(constant.ty))?;
+        let ty = self.lower_type(constant.ty)?;
         let value = self.lower_expr(constant.value)?;
         let constant = Arc::new(hir::Constant {
             name,
-            ty,
+            ty: Some(ty),
             value,
             span,
         });
@@ -380,7 +371,11 @@ impl LoweringContext {
         let mut hir_params = vec![];
         for param in params {
             let name = param.name();
-            let ty = self.lower_type(param.ty)?;
+            let ty = if let Some(ty) = param.ty {
+                Some(self.lower_type(ty)?)
+            } else {
+                None
+            };
 
             // TODO maybe scope.define should return a unique name?
             let unique_name = UniqueName::new();
@@ -406,7 +401,7 @@ impl LoweringContext {
         if let Some(arguments) = arguments {
             let mut hir_arguments = vec![];
             for ty in arguments {
-                let ty = self.lower_type(Some(ty))?.unwrap();
+                let ty = self.lower_type(ty)?;
                 hir_arguments.push(ty);
             }
             Ok(Some(hir_arguments))
@@ -415,73 +410,71 @@ impl LoweringContext {
         }
     }
 
-    fn lower_type(
-        &mut self,
-        ty: Option<ast::Type>,
-    ) -> Result<Option<hir::Type>> {
+    fn lower_type(&mut self, ty: ast::Type) -> Result<hir::Type> {
         debug!("lower_type {:#?}", ty);
-        if let Some(ast::Type { name, arguments }) = ty {
-            let arguments = self.lower_type_arguments(arguments)?;
-            if let Some((binding, _unique_name)) =
-                self.scope.resolve(&name.symbol)
-            {
-                match binding {
-                    hir::Binding::Type(typedef) => {
-                        let kind = hir::TypeKind::TypeDef(typedef);
-                        Ok(Some(hir::Type {
-                            kind,
-                            span: name.span,
-                            arguments,
-                        }))
-                    }
-                    hir::Binding::TypeAlias(typealias) => {
-                        let kind = hir::TypeKind::TypeAlias(typealias);
-                        Ok(Some(hir::Type {
-                            kind,
-                            span: name.span,
-                            arguments,
-                        }))
-                    }
-                    // Can't use the wildcard as a type
-                    hir::Binding::Wildcard => {
-                        Err(Diagnostic::error()
-                            .with_message("_ can't be used as a type")
-                            .with_labels(vec![Label::primary(name.span)]))
-                    }
-                    // Value types, can't be referenced as types
-                    hir::Binding::Component(_)
-                    | hir::Binding::Enum(_)
-                    | hir::Binding::Constant(_)
-                    | hir::Binding::Function(_)
-                    | hir::Binding::Local(_)
-                    | hir::Binding::State(_)
-                    | hir::Binding::Parameter(_)
-                    | hir::Binding::Import(_) => {
-                        Err(Diagnostic::error()
-                            .with_message(format!(
-                                "`{:?}` is a value and can't be used as a type",
-                                name.symbol
-                            ))
-                            .with_labels(vec![Label::primary(name.span)]))
-                    }
-                }
-            } else {
-                // If we can't resolve this type, it might be a built-in type.
-                // We could hardcode those here, but then the lower step would
-                // control a key part of the type system. Return an unresolved
-                // type kind that the type checker can attempt to resolve later
-                let span = name.span;
-                Ok(Some(hir::Type {
-                    kind: hir::TypeKind::Unresolved(name),
-                    span,
-                    arguments,
-                }))
-            }
-        } else {
-            Ok(None)
-            // Ok(None)
-            // No type in the AST means we'll need to infer it
-        }
+        Err(Diagnostic::error().with_message("lower_type"))
+        // if let Some(ast::Type { name, arguments }) = ty {
+        //     let arguments = self.lower_type_arguments(arguments)?;
+        //     if let Some((binding, _unique_name)) =
+        //         self.scope.resolve(&name.symbol)
+        //     {
+        //         match binding {
+        //             hir::Binding::Type(typedef) => {
+        //                 let kind = hir::TypeKind::TypeDef(typedef);
+        //                 Ok(Some(hir::Type {
+        //                     kind,
+        //                     span: name.span,
+        //                     arguments,
+        //                 }))
+        //             }
+        //             hir::Binding::TypeAlias(typealias) => {
+        //                 let kind = hir::TypeKind::TypeAlias(typealias);
+        //                 Ok(Some(hir::Type {
+        //                     kind,
+        //                     span: name.span,
+        //                     arguments,
+        //                 }))
+        //             }
+        //             // Can't use the wildcard as a type
+        //             hir::Binding::Wildcard => {
+        //                 Err(Diagnostic::error()
+        //                     .with_message("_ can't be used as a type")
+        //                     .with_labels(vec![Label::primary(name.span)]))
+        //             }
+        //             // Value types, can't be referenced as types
+        //             hir::Binding::Component(_)
+        //             | hir::Binding::Enum(_)
+        //             | hir::Binding::Constant(_)
+        //             | hir::Binding::Function(_)
+        //             | hir::Binding::Local(_)
+        //             | hir::Binding::State(_)
+        //             | hir::Binding::Parameter(_)
+        //             | hir::Binding::Import(_) => {
+        //                 Err(Diagnostic::error()
+        //                     .with_message(format!(
+        //                         "`{:?}` is a value and can't be used as a type",
+        //                         name.symbol
+        //                     ))
+        //                     .with_labels(vec![Label::primary(name.span)]))
+        //             }
+        //         }
+        //     } else {
+        //         // If we can't resolve this type, it might be a built-in type.
+        //         // We could hardcode those here, but then the lower step would
+        //         // control a key part of the type system. Return an unresolved
+        //         // type kind that the type checker can attempt to resolve later
+        //         let span = name.span;
+        //         Ok(Some(hir::Type {
+        //             kind: hir::TypeKind::Unresolved(name),
+        //             span,
+        //             arguments,
+        //         }))
+        //     }
+        // } else {
+        //     Ok(None)
+        //     // Ok(None)
+        //     // No type in the AST means we'll need to infer it
+        // }
         // Attempt to resolve the type
         // match ty {
         //     // Referencing some named type
@@ -588,7 +581,11 @@ impl LoweringContext {
         // Function body
         let block = self.lower_block(fndef.body)?;
         // Function return type
-        let return_ty = self.lower_type(fndef.return_ty)?;
+        let return_ty = if let Some(ty) = fndef.return_ty {
+            Some(self.lower_type(ty)?)
+        } else {
+            None
+        };
 
         self.scope.exit_scope();
         let unique_name = UniqueName::new();
@@ -624,33 +621,12 @@ impl LoweringContext {
     // }
 
     fn lower_block(&mut self, block: ast::Block) -> Result<hir::Block> {
-        let mut cfg = ControlFlowGraph::default();
-        let mut cfg_block = Block::default();
-        let mut block_indicies = vec![];
         if !self.ignore_next_scope {
             self.scope.enter_scope();
         }
         let mut statements = vec![];
         for stmt in block.stmts {
             let stmt = self.lower_stmt(stmt)?;
-            let stmt = Arc::new(Mutex::new(stmt));
-            // Construct the CFG for the block, following this new statement
-            match stmt.lock().unwrap().kind {
-                hir::StatementKind::Return(_) => {
-                    // Add to the basic block
-                    cfg_block.push(CFGStatement(stmt.clone()));
-                    // Finalize the block and add it to the CFG
-                    let block_index = cfg.add_block(cfg_block);
-                    block_indicies.push(block_index);
-                    // We know this block will only have an edge to the exit node, so add it here
-                    cfg.add_edge_to_exit(block_index, ControlFlowEdge::Return);
-                    // Create a new block, preempting other statements
-                    cfg_block = Block::default();
-                }
-                _ => {
-                    cfg_block.push(CFGStatement(stmt.clone()));
-                }
-            };
             statements.push(stmt);
         }
         if !self.ignore_next_scope {
@@ -668,6 +644,7 @@ impl LoweringContext {
                 hir::ExprKind::TrailingClosure(expr.into(), block)
             }
             ExprKind::Lambda(lambda) => {
+                self.scope.enter_scope();
                 let params = self.lower_fn_params(lambda.params)?;
                 let body = match lambda.body {
                     ast::LambdaBody::Block(block) => {
@@ -679,6 +656,7 @@ impl LoweringContext {
                         hir::LambdaBody::Expr(Box::new(expr))
                     }
                 };
+                self.scope.exit_scope();
                 let span = lambda.span;
                 let graph = ControlFlowGraph::default();
                 hir::ExprKind::Lambda(hir::Lambda {
@@ -1040,7 +1018,11 @@ impl LoweringContext {
         } else {
             None
         };
-        let ty = self.lower_type(local.ty)?;
+        let ty = if let Some(ty) = local.ty {
+            Some(self.lower_type(ty)?)
+        } else {
+            None
+        };
         let unique_name = UniqueName::new();
 
         let local = hir::Local {
@@ -1149,6 +1131,7 @@ impl LoweringContext {
         Ok(hir::Statement {
             span: stmt.span,
             kind,
+            has_semi: stmt.has_semi,
         })
     }
 

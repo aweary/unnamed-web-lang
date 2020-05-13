@@ -176,7 +176,7 @@ impl CodeFuzzer {
         // TODO we only support number literals now
     }
 
-    fn gen_local(&mut self) -> String {
+    fn _gen_local(&mut self) -> String {
         let name = self.gen_ident();
         let value = self.gen_expr();
         format!("let {} = {}", name, value)

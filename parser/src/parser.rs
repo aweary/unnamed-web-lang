@@ -12,7 +12,7 @@ use diagnostics::ParseResult as Result;
 
 use source::diagnostics::{Diagnostic, Label, Span};
 
-use log::{debug};
+use log::debug;
 
 const DUMMY_NODE_ID: ast::NodeId = ast::NodeId(0);
 
@@ -170,7 +170,7 @@ impl Parser<'_> {
             // Enum definition
             TokenKind::Reserved(Keyword::Enum) => self.parse_enum(),
             // Type definition
-            TokenKind::Reserved(Keyword::Type) => self.parse_type(),
+            TokenKind::Reserved(Keyword::Type) => self.parse_type_definition(),
             // Import declaration
             TokenKind::Reserved(Keyword::Import) => self.import(),
             // Constant declaration
@@ -205,7 +205,7 @@ impl Parser<'_> {
         let lo = self.span;
         let name = self.ident()?;
         self.expect(TokenKind::Colon)?;
-        let ty = self.ty()?;
+        let ty = self.parse_type()?;
         self.expect(TokenKind::Equals)?;
         let value = self.expr(Precedence::NONE)?;
         let span = lo.merge(self.span);
@@ -327,92 +327,103 @@ impl Parser<'_> {
         Err(self.fatal("Expected import path", "found this", self.span))
     }
 
-    fn parse_type(&mut self) -> Result<ast::Item> {
-        use TokenKind::{
-            Colon, Comma, Ident, LCurlyBrace, LParen, RCurlyBrace, RParen,
-            Reserved, Arrow,
-        };
-        self.expect(Reserved(Keyword::Type))?;
-        let lo = self.span;
+    fn parse_type_definition(&mut self) -> Result<ast::Item> {
+        self.expect(TokenKind::Reserved(Keyword::Type))?;
         let name = self.ident()?;
-        let generics = self.generics()?;
-
         self.expect(TokenKind::Equals)?;
-
-        // We support record types as well as function type aliases
-        if self.eat(LParen)? {
-            let mut parameters = vec![];
-            loop {
-                match self.peek()?.kind {
-                    Ident(_) => {
-                        // Parse a type
-                        let ty = self.ty()?;
-                        parameters.push(ty);
-                        // Eat optional comma
-                        self.eat(Comma)?;
-                    }
-                    RParen => break,
-                    _ => {
-                        return Err(self.fatal(
-                            "Unexpected token",
-                            "expected identifier or `)`",
-                            self.span,
-                        ))
-                    }
-                }
-            }
-            self.expect(RParen)?;
-            self.expect(Arrow)?;
-            let return_ty = self.ty()?;
-            let span = lo.merge(self.span);
-            let alias = ast::TypeAlias {
-                parameters,
-                return_ty,
-                name
-            };
-            return Ok(ast::Item {
-                kind: ast::ItemKind::TypeAlias(alias),
-                span
-            })
-        }
-
-        self.expect(LCurlyBrace)?;
-        let mut properties = vec![];
-        loop {
-            match self.peek()?.kind {
-                // End of definition
-                RCurlyBrace => break,
-                // New property
-                Ident(_) => {
-                    let name = self.ident()?;
-                    self.expect(Colon)?;
-                    let ty = self.ty()?;
-                    let prop = ast::TypeProperty { name, ty };
-                    properties.push(prop);
-                    self.eat(Comma)?;
-                }
-                _ => {
-                    return Err(self.fatal(
-                        "Unexpected token",
-                        "Expected identifier",
-                        self.span,
-                    ))
-                }
-            }
-        }
-        self.expect(RCurlyBrace)?;
-        let span = lo.merge(self.span);
-        let def = ast::TypeDef {
-            // TODO don't clone?
-            name,
-            span,
-            generics,
-            properties,
-        };
+        let ty = self.parse_type()?;
+        let span = ty.span;
         Ok(ast::Item {
-            kind: ast::ItemKind::Type(Box::new(def)),
+            kind: ast::ItemKind::Type(ty),
             span,
         })
+        // Err(Diagnostic::error().with_message("Cant parse type definition"))
+    }
+
+    fn parse_prefix_type(&mut self) -> Result<ast::Type> {
+        debug!("parse_prefix_type");
+        let lo = self.span;
+        let kind = match self.peek()?.kind {
+            // // Record types
+            TokenKind::LCurlyBrace => {
+                self.expect(TokenKind::LCurlyBrace)?;
+                let mut properties = vec![];
+                loop {
+                    if let TokenKind::Ident(_) = self.peek()?.kind {
+                        let name = self.ident()?;
+                        self.expect(TokenKind::Colon)?;
+                        let ty = self.parse_type()?;
+                        properties.push(ast::RecordTypeField { name, ty });
+                        // TODO this makes commas optional, should be required?
+                        self.eat(TokenKind::Comma)?;
+                    } else {
+                        break;
+                    }
+                }
+                ast::TypeKind::Record(properties)
+            }
+            // Tuple type
+            TokenKind::LParen => {
+                self.expect(TokenKind::LParen)?;
+                let mut types = vec![];
+                loop {
+                    match self.peek()?.kind {
+                        TokenKind::Ident(_) | TokenKind::LParen => {
+                            let ty = self.parse_type()?;
+                            types.push(ty);
+                        }
+                        _ => break,
+                    }
+                    self.eat(TokenKind::Comma)?;
+                }
+                self.expect(TokenKind::RParen)?;
+                ast::TypeKind::Tuple(types)
+            }
+            // Alias to some type
+            TokenKind::Ident(_) => {
+                let name = self.ident()?;
+                let parameters = self.type_parameter_list()?;
+                ast::TypeKind::Reference(name, parameters)
+            }
+            _ => {
+                let token = self.next_token()?;
+                return Err(self.fatal(
+                    "Unexpected token",
+                    "Not a valid character for a type",
+                    token.span,
+                ));
+            }
+        };
+        let span = lo.merge(self.span);
+        Ok(ast::Type { kind, span })
+    }
+
+    fn parse_type(&mut self) -> Result<ast::Type> {
+        debug!("parse_type");
+
+        let ty = self.parse_prefix_type()?;
+        match self.peek()?.kind {
+            TokenKind::Arrow => {
+                let lo = ty.span;
+                self.expect(TokenKind::Arrow)?;
+                let out_ty = self.parse_type()?;
+                let span = lo.merge(self.span);
+                Ok(ast::Type {
+                    kind: ast::TypeKind::Function(ty.into(), out_ty.into()),
+                    span,
+                })
+                // let parameters = if let ast::TypeKind::Tuple(parameters) = ty {
+                //     parameters
+                // } else {
+                //     return Err(Diagnostic::error()
+                //         .with_message("Cant define an arrow type"));
+                // };
+                // self.expect(TokenKind::Arrow)?;
+                // let output = self.parse_type()?;
+                // return ast::TypeKind::Function(parameters, output.into());
+            }
+            _ => Ok(ty),
+        }
     }
 
     fn parse_enum(&mut self) -> Result<ast::Item> {
@@ -428,7 +439,7 @@ impl Parser<'_> {
         let parameters = self.type_parameter_list()?;
         let mut variants = vec![];
         self.expect(LCurlyBrace)?;
-        let mut has_discriminant = false;
+        // let mut has_discriminant = false;
         loop {
             match self.peek()?.kind {
                 Ident(_) => {
@@ -438,7 +449,7 @@ impl Parser<'_> {
                     let discriminant = if self.eat(Equals)? {
                         // Track that this enum uses a discriminant in at least one of the
                         // variants.
-                        has_discriminant = true;
+                        // has_discriminant = true;
                         // TODO this should not be an arbitrary expression. Should
                         // be a literal only.
                         Some(self.expr(Precedence::NONE)?)
@@ -451,7 +462,7 @@ impl Parser<'_> {
                         loop {
                             match self.peek()?.kind {
                                 Ident(_) => {
-                                    let ty = self.ty()?;
+                                    let ty = self.parse_type()?;
                                     fields.push(ty);
                                 }
                                 Comma => {
@@ -565,28 +576,6 @@ impl Parser<'_> {
         })
     }
 
-    fn ty(&mut self) -> Result<ast::Type> {
-        use TokenKind::{Comma, GreaterThan, LessThan};
-        let name = self.ident()?;
-        let arguments = if self.eat(LessThan)? {
-            let mut params = vec![];
-            // Start parsing the list of generic parameters here
-            loop {
-                let param = self.ty()?;
-                params.push(param);
-                // If we don't see a comma next, we should exist
-                if !self.eat(Comma)? {
-                    break;
-                }
-            }
-            self.expect(GreaterThan)?;
-            Some(params)
-        } else {
-            None
-        };
-        Ok(ast::Type { name, arguments })
-    }
-
     pub fn fn_def(&mut self) -> Result<ast::Function> {
         self.expect(TokenKind::Reserved(Keyword::Func))?;
         let lo = self.span;
@@ -595,7 +584,7 @@ impl Parser<'_> {
         let params = self.parse_fn_params()?;
         let return_ty = {
             if self.eat(TokenKind::Colon)? {
-                Some(self.ty()?)
+                Some(self.parse_type()?)
             } else {
                 None
             }
@@ -623,7 +612,7 @@ impl Parser<'_> {
         let params = self.parse_fn_params()?;
         let return_ty = {
             if self.eat(TokenKind::Colon)? {
-                Some(self.ty()?)
+                Some(self.parse_type()?)
             } else {
                 None
             }
@@ -713,7 +702,7 @@ impl Parser<'_> {
                 TokenKind::Colon => {
                     self.expect(TokenKind::Colon)?;
                     // There is a type annotation
-                    Some(self.ty()?)
+                    Some(self.parse_type()?)
                 }
                 // If no annotation is provided we assume the type
                 // must be inferred.
@@ -744,7 +733,7 @@ impl Parser<'_> {
 
     pub(crate) fn stmt_list(&mut self) -> Result<Vec<ast::Stmt>> {
         let mut stmts = vec![];
-        let mut terminated = false;
+        // let mut terminated = false;
         while !self.peek()?.follows_item_list() {
             // if terminated {
             //     return Err(self.fatal(
@@ -764,13 +753,13 @@ impl Parser<'_> {
                 // If there was a semicolon, extend the statement's
                 // span to include it.
                 stmt.span = stmt.span.merge(self.span);
-            // Whether a statement has a semicolon is important
-            // for implicit function return and evaluating block expressions
-            // stmt.has_semi = true;
+                // Whether a statement has a semicolon is important
+                // for implicit function return and evaluating block expressions
+                stmt.has_semi = true;
             } else {
                 // Only the last item in a statement list can omit the
                 // semicolon. If this loop runs again, we need to throw
-                terminated = true;
+                // terminated = true;
             }
             stmts.push(stmt);
         }
@@ -953,7 +942,7 @@ impl Parser<'_> {
     }
 
     fn local_pattern(&mut self) -> Result<ast::LocalPattern> {
-        use TokenKind::{Ident, LBrace, LCurlyBrace};
+        use TokenKind::{Ident, LBrace, LCurlyBrace, Reserved};
         match self.peek()?.kind {
             // Simple, single identifer
             Ident(_) => {
@@ -965,10 +954,9 @@ impl Parser<'_> {
             LCurlyBrace => self.obj_pattern(),
             // List destructure
             LBrace => self.array_pattern(),
-            // ...
             _ => {
-                let span = self.span;
                 let token = self.next_token()?;
+                let span = self.span;
                 Err(self.fatal(
                     "Syntax error",
                     &format!("did not expect {}", token.kind),
@@ -983,7 +971,7 @@ impl Parser<'_> {
         let pattern = self.local_pattern()?;
         // Optional type annotation
         let ty = if self.eat(TokenKind::Colon)? {
-            Some(self.ty()?)
+            Some(self.parse_type()?)
         } else {
             None
         };
@@ -1481,7 +1469,11 @@ impl Parser<'_> {
     }
 
     fn infix_expr(&mut self, left: ast::Expr) -> Result<ast::Expr> {
-        use TokenKind::{And, BinOr, DblEquals, Div, Dot, Equals, GreaterThan, LCurlyBrace, LParen, LessThan, Minus, Mul, Or, Pipeline, Plus, PlusEquals, Question, QuestionDot};
+        use TokenKind::{
+            And, BinOr, DblEquals, Div, Dot, Equals, GreaterThan, LCurlyBrace,
+            LParen, LessThan, Minus, Mul, Or, Pipeline, Plus, PlusEquals,
+            Question, QuestionDot,
+        };
         match self.peek()?.kind {
             // Binary
             Plus | Minus | Div | Mul | LessThan | GreaterThan | DblEquals

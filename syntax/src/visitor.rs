@@ -1,4 +1,4 @@
-use crate::ast::{Block, Expr, ExprKind, Function, Ident, IfExpr, Import, Item, ItemKind, Local, LocalObjectProperty, LocalPattern, Module, Param, ParamType, Program, Stmt, StmtKind, Template, TypeDef};
+use crate::ast::*;
 
 pub trait Visitor: Sized {
     fn visit_item(&mut self, item: &mut Item) {
@@ -10,7 +10,7 @@ pub trait Visitor: Sized {
         walk_fn_def(self, def);
     }
 
-    fn visit_type_def(&mut self, _type_def: &mut TypeDef) {
+    fn visit_type_def(&mut self, _type_def: &mut Type) {
         // We don't currently walk the typedef
         // ....
     }

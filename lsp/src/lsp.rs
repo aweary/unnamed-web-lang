@@ -42,7 +42,7 @@ impl LSPServer {
 
         LSPServer {
             capabilities,
-            vfs: Arc::new(FileSystem::new()),
+            vfs: Arc::new(FileSystem::default()),
         }
     }
 
@@ -217,7 +217,7 @@ impl LSPServer {
     }
 }
 
-fn cast_notif<N>(notif: Notification) -> Result<N::Params, Notification>
+fn _cast_notif<N>(notif: Notification) -> Result<N::Params, Notification>
 where
     N: lsp_types::notification::Notification,
     N::Params: serde::de::DeserializeOwned,

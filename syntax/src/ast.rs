@@ -7,10 +7,27 @@ use source::diagnostics::Span;
 use std::fmt::{Debug, Error, Formatter};
 use std::path::PathBuf;
 
+
+
+/// How types are represented in the AST. Intrinsic primitive types like `number`
+/// and `string` are identified at parsing. We don't alias types to use these names.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum TypeKind {
+    Number,
+    String,
+    Boolean,
+    List(Box<Type>),
+    Tuple(Vec<Type>),
+    Record(Vec<RecordTypeField>),
+    Function(Box<Type>, Box<Type>),
+    Reference(Ident, Option<Vec<Ident>>),
+}
+
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Type {
-    pub name: Ident,
-    pub arguments: Option<Vec<Type>>,
+    pub span: Span,
+    pub kind: TypeKind,
 }
 
 pub fn expr(kind: ExprKind, span: Span) -> Result<Expr> {
@@ -68,9 +85,7 @@ pub enum ItemKind {
     /// An enum definition
     Enum(EnumDef),
     /// Type definition for records
-    Type(Box<TypeDef>),
-    /// Type aliases
-    TypeAlias(TypeAlias),
+    Type(Type),
     /// Import declaration
     Import(Box<Import>),
     /// Exported declaration
@@ -132,6 +147,32 @@ impl Debug for ImportPath {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::result::Result<(), Error> {
         write!(f, "{:?}", self.path)
     }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct TypeDefinition {
+    pub kind: TypeDefinitionKind,
+    pub span: Span,
+}
+
+
+/// The kinds of types that can be declared/named
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum TypeDefinitionKind {
+    /// An alias to another type
+    Alias(Ident),
+    /// A Tuple
+    Tuple(Vec<Type>),
+    /// A function
+    Function(Vec<Type>, Type),
+    /// An object/record type
+    Record(Vec<RecordTypeField>),
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct RecordTypeField {
+    pub name: Ident,
+    pub ty: Type,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

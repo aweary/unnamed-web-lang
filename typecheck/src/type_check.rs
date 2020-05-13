@@ -1,6 +1,9 @@
 use crate::type_context::{Element, TypeContext};
 use ::hir::unique_name::UniqueName;
-use ::hir::{BinOp, Binding, Expr, ExprKind, Lit, LitKind, Local, StatementKind, TypeKind, hir};
+use ::hir::{
+    hir, BinOp, Binding, Expr, ExprKind, Lit, LitKind, Local, StatementKind,
+    TypeKind,
+};
 
 use ::hir::visit::{walk_function, Visitor};
 use diagnostics::ParseResult as Result;
@@ -10,6 +13,7 @@ use ty::{boolean, number, string, Existential, LiteralType, Type, Variable};
 use internment::Intern;
 use log::{debug, info};
 
+use std::sync::Arc;
 use std::time::Instant;
 
 type InternType = Intern<Type>;
@@ -55,49 +59,28 @@ impl Visitor for TypeChecker {
         Ok(())
     }
 
-    fn visit_type_alias(&mut self, typealias: &hir::TypeAlias) -> Result<()> {
+    fn visit_type(&mut self, typealias: &hir::Type) -> Result<()> {
         debug!("visit_type_alias");
-        let hir::TypeAlias {
-            unique_name,
-            parameters,
-            return_ty,
-        } = typealias;
-        let return_ty = self.hir_type_to_type(return_ty)?;
-        let mut parameters_ty = vec![];
-        for param in parameters {
-            let ty = self.hir_type_to_type(param)?;
-            parameters_ty.push(ty);
-        }
-        let ty = Type::Function(parameters_ty, return_ty);
-        let element = Element::new_typed_variable(*unique_name, ty.into());
-        self.context.add(element);
+        // let hir::Type {
+        //     // unique_name,
+        //     // parameters,
+        //     // return_ty,
+        // } = typealias;
+        // let return_ty = self.hir_type_to_type(return_ty)?;
+        // let mut parameters_ty = vec![];
+        // for param in parameters {
+        //     let ty = self.hir_type_to_type(param)?;
+        //     parameters_ty.push(ty);
+        // }
+        // let ty = Type::Function(parameters_ty, return_ty);
+        // let element = Element::new_typed_variable(*unique_name, ty.into());
+        // self.context.add(element);
         Ok(())
     }
 
     fn visit_function(&mut self, function: &hir::Function) -> Result<()> {
         debug!("visit_function: {:?}", function.name);
-        for param in &function.params {
-            debug!("check param: {:?}", param.local);
-            let name = param.unique_name;
-            if let Some(ty) = &param.ty {
-                debug!("param has annotation: {:?}", ty);
-                let ty = self.hir_type_to_type(ty)?;
-                let element = Element::new_typed_variable(name, ty);
-                self.context.add(element);
-            } else {
-                debug!("need existential for param `{:?}`", param.local);
-                // No type annotation means we need to infer
-                let alpha = self.fresh_existential();
-                let existential = Element::new_existential(alpha);
-                let element = Element::new_typed_variable(
-                    name,
-                    Intern::new(Type::Existential(alpha)),
-                );
-                self.context.add(existential);
-                self.context.add(element);
-            }
-        }
-
+        self.add_fn_params_to_context(&function.params)?;
         // Create a new unique name for the return type.
         let return_ty_name = UniqueName::new();
 
@@ -105,7 +88,6 @@ impl Visitor for TypeChecker {
         let return_ty = match &function.ty {
             Some(ty) => {
                 let _name = function.unique_name;
-                debug!("param has annotation: {:?}", ty);
                 let ty: Type = match &ty.kind {
                     TypeKind::Number => Type::Literal(LiteralType::Number),
                     TypeKind::String => Type::Literal(LiteralType::String),
@@ -113,7 +95,7 @@ impl Visitor for TypeChecker {
                     TypeKind::TypeDef(_) => {
                         panic!();
                     }
-                    TypeKind::TypeAlias(_alias) => {
+                    TypeKind::TypeDef(_alias) => {
                         panic!();
                     }
                     TypeKind::Unresolved(typename) => {
@@ -151,18 +133,10 @@ impl Visitor for TypeChecker {
 
         // Return type should be solved now
         let return_ty = self.apply_context(return_ty)?;
+        let input_ty = self.synth_fn_params(&function.params)?;
 
         debug!("complete visit_function: {:?}", function.name);
         debug!("return type: {:?}", return_ty);
-
-        // Get the solved input types
-        let mut input_ty = vec![];
-        for param in &function.params {
-            let name = param.unique_name;
-            let ty = self.context.get_annotation(&name).unwrap();
-            let ty = self.apply_context(ty)?;
-            input_ty.push(ty)
-        }
 
         let function_ty =
             self.apply_context(Type::Function(input_ty, return_ty).into())?;
@@ -182,13 +156,14 @@ impl Visitor for TypeChecker {
 }
 
 impl TypeChecker {
-    #[must_use] pub fn new() -> Self {
+    #[must_use]
+    pub fn new() -> Self {
         return Self {
             context: TypeContext::default(),
             existential: 0,
             variables: 0,
             tracked_return_ty: None,
-        }
+        };
     }
 
     /// Run the type checker from a root HIR module.
@@ -239,19 +214,111 @@ impl TypeChecker {
         Ok(t)
     }
 
+    fn add_fn_params_to_context(
+        &mut self,
+        params: &Vec<Arc<hir::Param>>,
+    ) -> Result<()> {
+        debug!("add_fn_params_to_context");
+        for param in params {
+            debug!("check param: {:?}, {:?}", param.local, param.unique_name);
+            let name = param.unique_name;
+            if let Some(ty) = &param.ty {
+                debug!("param has annotation: {:?}", ty);
+                let ty = self.hir_type_to_type(ty)?;
+                let element = Element::new_typed_variable(name, ty);
+                self.context.add(element);
+            } else {
+                debug!("need existential for param `{:?}`", param.local);
+                // No type annotation means we need to infer
+                let alpha = self.fresh_existential();
+                let existential = Element::new_existential(alpha);
+                let element = Element::new_typed_variable(
+                    name,
+                    Intern::new(Type::Existential(alpha)),
+                );
+                self.context.add(existential);
+                self.context.add(element);
+            }
+        }
+        Ok(())
+    }
+
+    fn synth_fn_params(
+        &mut self,
+        params: &Vec<Arc<hir::Param>>,
+    ) -> Result<Vec<InternType>> {
+        // Get the solved input types
+        let mut input_ty = vec![];
+        for param in params {
+            let name = param.unique_name;
+            let ty = self.context.get_annotation(&name).unwrap();
+            let ty = self.apply_context(ty)?;
+            input_ty.push(ty)
+        }
+        Ok(input_ty)
+    }
+
     /// Infer the type of some expression, before applying the context
     fn synthesize(&mut self, expr: &Expr) -> Result<InternType> {
+        debug!("synthesize {:#?}", expr);
         match &expr.kind {
             ExprKind::Lit(lit) => Ok(infer_literal(lit)),
             ExprKind::Lambda(lambda) => {
+                debug!("synthesize lambda");
                 let hir::Lambda {
-                    params: _, body, span: _, ..
+                    params,
+                    body,
+                    span: _,
+                    ..
                 } = lambda;
-                info!("lambda: {:#?}", body);
-                Err(Diagnostic::error()
-                    .with_message("Cant infer lambdas right now"))
+
+                self.add_fn_params_to_context(params)?;
+
+                let return_ty = match body {
+                    // Walk the lambda body block and track the return types
+                    hir::LambdaBody::Block(block) => {
+                        // Cache the last tracked return type
+                        let cached_tracked_return_ty = self.tracked_return_ty;
+                        // Set a new one, for this lambda.
+                        // TODO check annotations for lambdas
+                        let return_ty = {
+                            let return_ty_name = UniqueName::new();
+                            // New existential for the return type
+                            // TODO dedupe this with function declarations
+                            let alpha = self.fresh_existential();
+                            let existential = Element::new_existential(alpha);
+                            let existential_ty =
+                                Type::Existential(alpha).into();
+                            let element = Element::new_typed_variable(
+                                return_ty_name,
+                                existential_ty,
+                            );
+                            self.context.add(existential);
+                            self.context.add(element);
+                            existential_ty
+                        };
+
+                        self.tracked_return_ty = Some(return_ty);
+                        self.visit_block(&*block)?;
+                        let ty = self.apply_context(return_ty)?;
+                        self.tracked_return_ty = cached_tracked_return_ty;
+                        ty
+                    }
+                    hir::LambdaBody::Expr(expr) => {
+                        self.synth(expr)?
+                        // Infer the type of this expression
+                    }
+                };
+
+                let input_ty = self.synth_fn_params(&params)?;
+                let ty = Type::Function(input_ty, return_ty);
+                debug!("Lambda type: {:#?}", ty);
+                Ok(ty.into())
+                // Err(Diagnostic::error()
+                //     .with_message("Cant infer lambdas right now"))
             }
             ExprKind::Reference(_ident, binding) => {
+                debug!("synthesizing a reference!");
                 match binding {
                     Binding::Local(local) => {
                         let name = local.unique_name;
@@ -261,6 +328,7 @@ impl TypeChecker {
                     Binding::Parameter(param) => {
                         let name = param.unique_name;
                         let ty = self.context.get_annotation(&name).unwrap();
+                        debug!("synthesize a reference to a paramter: {:?}", ty);
                         Ok(ty)
                     }
                     Binding::Function(function) => {
@@ -379,7 +447,9 @@ impl TypeChecker {
                 ExprKind::Lambda(lambda),
                 Type::Function(input_tys, _return_ty),
             ) => {
-                let hir::Lambda { params, span: _, .. } = lambda;
+                let hir::Lambda {
+                    params, span: _, ..
+                } = lambda;
                 assert_eq!(params.len(), input_tys.len());
                 debug!("->I");
                 Ok(())
@@ -392,8 +462,7 @@ impl TypeChecker {
             }
             // Subtyping
             (_, _) => {
-                let a = self.synthesize(expr)?;
-                let a = self.apply_context(a)?;
+                let a = self.synth(expr)?;
                 let b = self.apply_context(ty)?;
                 self.subtype(a, b).map_err(|err| {
                     err.with_labels(vec![Label::primary(expr.span)])
@@ -522,7 +591,7 @@ impl TypeChecker {
         debug!("apply_context {:?}", ty);
         match &*ty {
             Type::Existential(alpha) => {
-                if let Some(tau) = self.context.get_solved(alpha) {
+                if let Some(tau) = self.context.get_solved(*alpha) {
                     debug!("solved existential {:?} as {:?}", alpha, tau);
                     self.apply_context(tau)
                 } else {
@@ -550,6 +619,7 @@ impl TypeChecker {
         // TODO is this right?
         let ty = self.apply_context(ty)?;
         debug!("synthesize_application: {:#?}", ty);
+        debug!("synthesize_application, args: {:#?}", args);
         match &*ty {
             Type::Function(inputs, output) => {
                 // TODO error handling for too many/few arguments
@@ -632,9 +702,9 @@ impl TypeChecker {
             Type::Variable(var) => {
                 if var == alpha {
                     // Substitute it
-                    return Ok(b)
+                    return Ok(b);
                 } else {
-                    return Ok(a)
+                    return Ok(a);
                 }
             }
             Type::Quantification(var, ty) => {
@@ -653,11 +723,7 @@ impl TypeChecker {
                 for t in t1 {
                     s1.push(self.substitution(alpha, *t, b)?);
                 }
-                Ok(Type::Function(
-                    s1,
-                    self.substitution(alpha, *t2, b)?,
-                )
-                .into())
+                Ok(Type::Function(s1, self.substitution(alpha, *t2, b)?).into())
                 // let mut t1 = vec![];
             }
             Type::Existential(_var) => {
@@ -679,9 +745,8 @@ impl TypeChecker {
             TypeKind::Boolean => boolean!(),
             TypeKind::Number => number!(),
             TypeKind::String => string!(),
-            TypeKind::TypeDef(_) => todo!(),
-            TypeKind::TypeAlias(typealias) => {
-                let name = typealias.unique_name;
+            TypeKind::TypeDef(typedef) => {
+                let name = typedef.unique_name;
                 let ty = self.context.get_annotation(&name).unwrap();
                 ty
             }
@@ -710,7 +775,8 @@ fn occurs_in(alpha: &Existential, ty: InternType) -> bool {
         // TODO when is it possible for an existential to equal a type variable?
         Type::Variable(_) => false,
         Type::Function(inputs, ty) => {
-            return occurs_in(alpha, *ty) || inputs.iter().any(|t| return occurs_in(alpha, *t))
+            return occurs_in(alpha, *ty)
+                || inputs.iter().any(|t| return occurs_in(alpha, *t))
         }
         Type::Existential(beta) => alpha == beta,
         Type::SolvableExistential(beta, _) => alpha == beta,

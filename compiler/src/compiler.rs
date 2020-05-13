@@ -274,7 +274,7 @@ pub fn run_on_file(vfs: Arc<FileSystem>, root_file: FileId) -> ParseResult<()> {
 }
 
 pub fn run_from_path(path: PathBuf) {
-    let vfs = Arc::new(FileSystem::new());
+    let vfs = Arc::new(FileSystem::default());
     let root_file = vfs.resolve(&path).unwrap();
     if let Err(err) = run_on_file(vfs.clone(), root_file) {
         err.emit_to_terminal(&*vfs);

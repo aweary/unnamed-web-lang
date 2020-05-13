@@ -1,0 +1,65 @@
+enum States {
+    Idle,
+    Suggesting,
+    Navigating,
+    Interacting,
+}
+
+enum Events {
+    Clear,
+    Change,
+    InitialChange,
+    Navigate,
+    SelectWithKeyboard,
+    SelectWithClick,
+    Escape,
+    Blur,
+    Interact,
+    Focus,
+    OpenWithButton,
+    CloseWithButton,
+}
+
+// We need language-level state charts. Not sure what the syntax
+// will be but its important. They should just compose enums.
+// Does it make sense to allow composing more than two enums?
+// How can the syntax be improved so that this can be named *and*
+// just be referred to as `state`?
+
+// Use the optional named paramter sytnax to make the ordering clear
+state ComboboxState(states: States, events: Events, initial: States::Idle) {
+    Idle {
+        Blur => Idle,
+        Clear => Idle,
+        Change => Suggesting,
+        InitialChange => Idle,
+    }
+    Suggesting {
+        Change => Suggesting,
+        Focus => Suggesting,
+    }
+}
+
+// Sometimes we have enough props that it makes
+// sense to define them separately from the component.
+// Having them as named structs also works better with
+// "props subtyping". BUT it makes components inconsitent
+// with functions.
+pub struct TypeaheadProps<T> {
+    label: Text,
+    value: T,
+    onChange: T => void,
+}
+
+/// A core, generic typeahead.
+component Combobox<T: Serializable>(
+    value: T,
+    onChange: T => void,
+    label: Text,
+) {
+    View {
+        Input {
+
+        }
+    }
+}

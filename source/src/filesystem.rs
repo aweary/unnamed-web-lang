@@ -45,8 +45,8 @@ pub struct FileSystem {
     paths: DashMap<FileId, PathBuf>,
 }
 
-impl FileSystem {
-    pub fn new() -> Self {
+impl Default for FileSystem {
+    fn default() -> Self {
         FileSystem {
             next_id: AtomicCell::new(0),
             // TODO how to use fxhash here?
@@ -55,6 +55,9 @@ impl FileSystem {
             paths: DashMap::default(),
         }
     }
+}
+
+impl FileSystem {
 
     pub fn id_for_path(&self, path: &PathBuf) -> Option<FileId> {
         self.ids.get(path).map(|path| *path)

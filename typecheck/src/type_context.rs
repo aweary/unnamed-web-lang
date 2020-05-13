@@ -1,7 +1,5 @@
 use diagnostics::ParseResult as Result;
 use hir::unique_name::UniqueName;
-use std::collections::{BTreeSet, HashMap, VecDeque};
-use syntax::symbol::Symbol;
 use ty::{Existential, Type};
 
 use internment::Intern;
@@ -12,10 +10,8 @@ pub enum ElementKind {
     /// An existential type
     Existential(Existential),
     /// An unsolved type variable
-    Variable(Symbol),
     TypedVariable(UniqueName, Intern<Type>),
     Solved(Existential, Intern<Type>),
-    Marker(u8),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -37,13 +33,6 @@ impl Element {
     pub fn new_typed_variable(name: UniqueName, ty: Intern<Type>) -> Self {
         return Self {
             kind: ElementKind::TypedVariable(name, ty),
-        }
-    }
-
-    #[inline]
-    pub fn new_variable(name: Symbol) -> Self {
-        return Self {
-            kind: ElementKind::Variable(name),
         }
     }
 
@@ -80,7 +69,7 @@ impl Element {
 //     }
 // }
 
-/// An ordered list of type elements, as described in https://arxiv.org/pdf/1306.6032.pdf.
+/// An ordered list of type elements, as described in [this paper](https://arxiv.org/pdf/1306.6032.pdf).
 /// We also track scope markers and solved existentials on the side.
 ///
 /// This ordered list is an interested data structure problem. We need to be able to:
@@ -99,12 +88,13 @@ impl Element {
 pub struct TypeContext {
     pub(crate) elements: Vec<Element>,
     scope_markers: Vec<usize>,
-    solved_existentials: HashMap<Existential, Type>,
+    // solved_existentials: HashMap<Existential, Type>,
 }
 
 impl TypeContext {
     /// Adds a new element to the ordered type context
     pub(crate) fn add(&mut self, element: Element) {
+        debug!("adding context element: {:?}", element);
         self.elements.push(element)
     }
     /// Create a new scope, which will be contain
@@ -127,10 +117,10 @@ impl TypeContext {
         name: &UniqueName,
     ) -> Option<Intern<Type>> {
         debug!("get_annotation: {:?}", name);
-        debug!("{:#?}", self.elements);
         for element in &self.elements {
             match &element.kind {
                 ElementKind::TypedVariable(a, ty) if a == name => {
+                    debug!("get_annotation: {:?} is {:?}", name, ty);
                     return Some(*ty)
                 }
                 _ => {}
@@ -163,11 +153,11 @@ impl TypeContext {
 
     pub(crate) fn get_solved(
         &self,
-        alpha: &Existential,
+        alpha: Existential,
     ) -> Option<Intern<Type>> {
         for element in &self.elements {
             if let ElementKind::Solved(beta, solved) = element.kind {
-                if alpha == &beta {
+                if alpha == beta {
                     return Some(solved);
                 }
             }

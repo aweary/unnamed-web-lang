@@ -201,7 +201,10 @@ impl<'a> Lexer<'a> {
         let end = self.reader.offset();
         let span = self.reader.end(span_start);
         let ident = &self.source[start.to_usize()..end.to_usize()];
-        use Keyword::{As, Catch, Component, Const, Else, Enum, For, Func, If, Import, ImportFrom, In, Let, Match, Pub, Return, State, Try, Type, While};
+        use Keyword::{
+            As, Catch, Component, Const, Else, Enum, For, Func, If, Import,
+            ImportFrom, In, Let, Match, Pub, Return, State, Try, Type, While,
+        };
         let kind = match ident {
             "true" | "false" => {
                 let lit = Lit {
@@ -329,7 +332,11 @@ impl<'a> Lexer<'a> {
     }
 
     pub fn next_token(&mut self) -> Result<Token> {
-        use TokenKind::{And, Caret, Colon, Comma, Dot, Exclaim, GreaterThan, LBrace, LCurlyBrace, LParen, LessThan, Minus, Mod, Mul, RBrace, RCurlyBrace, RParen, Semi};
+        use TokenKind::{
+            And, Caret, Colon, Comma, Dot, Exclaim, GreaterThan, LBrace,
+            LCurlyBrace, LParen, LessThan, Minus, Mod, Mul, RBrace,
+            RCurlyBrace, RParen, Semi,
+        };
         // Read from the lookahead if its populated.
         if let Some(token) = self.lookahead.pop_front() {
             return Ok(token);

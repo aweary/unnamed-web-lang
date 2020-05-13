@@ -1,4 +1,4 @@
-use crate::hir::{Block, Component, Definition, DefinitionKind, Function, Import, Module, Statement, TypeAlias};
+use crate::hir::*;
 use diagnostics::ParseResult as Result;
 
 use std::sync::Arc;
@@ -38,9 +38,63 @@ pub trait Visitor: Sized {
         Ok(())
     }
 
-    fn visit_type_alias(&mut self, _alias: &TypeAlias) -> Result<()> {
+    fn visit_type(&mut self, _alias: &Type) -> Result<()> {
         Ok(())
     }
+
+    fn visit_lambda(&mut self, lambda: &Lambda) -> Result<()> {
+        walk_lambda(self, lambda)?;
+        Ok(())
+    }
+
+    fn visit_local(&mut self, local: &Arc<Local>) -> Result<()> {
+        if let Some(expr) = &local.init {
+            walk_expr(self, expr)?;
+        }
+        Ok(())
+    }
+
+    fn visit_expr(&mut self, expr: &Expr) -> Result<()> {
+        Ok(())
+    }
+}
+
+pub fn walk_lambda<V: Visitor>(visitor: &mut V, lambda: &Lambda) -> Result<()> {
+    // let Lambda { params, body, .. } = lambda;
+    Ok(())
+}
+
+pub fn walk_expr<V: Visitor>(visitor: &mut V, expr: &Expr) -> Result<()> {
+    visitor.visit_expr(expr)?;
+    match &expr.kind {
+        crate::ExprKind::Lambda(lambda) => {
+            visitor.visit_lambda(lambda)?;
+        }
+        crate::ExprKind::Array(_) => {}
+        crate::ExprKind::Object(_) => {}
+        crate::ExprKind::Tuple(_) => {}
+        crate::ExprKind::Block(_) => {}
+        crate::ExprKind::Binary(_, _, _) => {}
+        crate::ExprKind::Unary(_, _) => {}
+        crate::ExprKind::Cond(_, _, _) => {}
+        crate::ExprKind::Call(_, _) => {}
+        crate::ExprKind::MemberCall(_, _, _) => {}
+        crate::ExprKind::Assign(_, _, _) => {}
+        crate::ExprKind::StateUpdate(_, _, _) => {}
+        crate::ExprKind::Member(_, _) => {}
+        crate::ExprKind::OptionalMember(_, _) => {}
+        crate::ExprKind::Lit(_) => {}
+        crate::ExprKind::Reference(_, _) => {}
+        crate::ExprKind::If(_) => {}
+        crate::ExprKind::For(_, _, _) => {}
+        crate::ExprKind::Index(_, _) => {}
+        crate::ExprKind::Return(_) => {}
+        crate::ExprKind::Template(_) => {}
+        crate::ExprKind::Match(_, _) => {}
+        crate::ExprKind::Func(_) => {}
+        crate::ExprKind::TrailingClosure(_, _) => {}
+    }
+    Ok(())
 }
 
 pub fn walk_statement<V: Visitor>(
@@ -66,8 +120,9 @@ pub fn walk_definition<V: Visitor>(
         DefinitionKind::Component(compdef) => {
             visitor.visit_component(compdef)?;
         }
-        DefinitionKind::TypeAlias(typealias) => {
-            visitor.visit_type_alias(typealias)?;
+        DefinitionKind::Type(ty) => {
+            // TODO
+            visitor.visit_type(ty)?;
         }
         // DefinitionKind::Import(imports) => {
         // }
@@ -80,9 +135,18 @@ pub fn walk_definition<V: Visitor>(
 
 pub fn walk_block<V: Visitor>(visitor: &mut V, block: &Block) -> Result<()> {
     for statement in &block.statements {
-        let mut statement = statement.lock().unwrap();
-        let statement = &mut *statement;
         visitor.visit_statement(statement)?;
+        match &statement.kind {
+            crate::StatementKind::Local(local) => {
+                visitor.visit_local(&local)?;
+            }
+            crate::StatementKind::State(_) => {}
+            crate::StatementKind::Expr(_) => {}
+            crate::StatementKind::BranchingCondition => {}
+            crate::StatementKind::LoopingCondition => {}
+            crate::StatementKind::Return(_) => {}
+            crate::StatementKind::If(_) => {}
+        }
     }
     Ok(())
 }
