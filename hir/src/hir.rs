@@ -25,64 +25,35 @@ pub use syntax::ast::{
 };
 
 pub type ModuleId = Id<Module>;
-pub type DefId = Id<Definition>;
-pub type StatementId = Id<Statement>;
-pub type BlockId = Id<Block>;
-pub type ExprId = Id<Expr>;
-
-
 
 impl Reference for UniqueName {}
 
+
 #[derive(Debug, Clone)]
 pub struct Type {
-    pub kind: TypeKind,
     pub span: Span,
-    pub arguments: Option<Vec<Type>>,
+    pub kind: TypeKind,
 }
 
 #[derive(Debug, Clone)]
 pub enum TypeKind {
-    /// `true` or `false`
-    Boolean,
-    /// All number types
-    Number,
-    /// All strings
-    String,
-    /// Some user-defined type
-    TypeDef(Arc<TypeDef>),
-    /// A type that the HIR could not resolve.
-    Unresolved(Ident),
+    // A reference to some resolved user type
+    Reference(Arc<TypeDef>),
+    // A tuple
+    Tuple(Vec<Type>),
+    // A function
+    Function(Box<Type>, Box<Type>),
+    // An unresolved reference. Let the type checker figure it out
+    UnresolvedReference(Ident),
 }
 
-#[derive(Debug, Clone)]
-pub struct TypeAlias {
-    pub parameters: Vec<Type>,
-    pub return_ty: Type,
-    pub unique_name: UniqueName,
-}
-
-
+// A type definition, declared with the `type` keyword
 #[derive(Debug, Clone)]
 pub struct TypeDef {
     pub name: Ident,
     pub unique_name: UniqueName,
-    pub kind: TypeDefKind,
-}
-
-#[derive(Debug, Clone)]
-pub enum TypeDefKind {
-    // A simple reference to some other type
-    Reference(Type),
-    // A function
-    Function {
-        parameters: Vec<Type>,
-        return_ty: Type,
-    },
-    // A tuple
-    Tuple(Vec<Type>),
-    // A record
-    Record(Vec<RecordTypeField>)
+    pub ty: Type,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone)]
@@ -121,8 +92,6 @@ pub enum Binding {
     Constant(Arc<Constant>),
     /// A type definition
     Type(Arc<TypeDef>),
-    /// A type alias
-    TypeAlias(Arc<TypeAlias>),
     /// Enum definition
     Enum(Arc<EnumDef>),
     /// A special identifier, denoted by `_`, for unused values and catch-all case
@@ -252,7 +221,7 @@ pub enum DefinitionKind {
     Component(Arc<Component>),
     Constant(Arc<Constant>),
     Enum(Arc<EnumDef>),
-    Type(Arc<Type>),
+    Type(Arc<TypeDef>),
 }
 
 #[derive(Clone, Debug)]

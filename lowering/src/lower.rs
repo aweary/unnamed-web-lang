@@ -144,11 +144,11 @@ impl LoweringContext {
                     span,
                 })
             }
-            ast::ItemKind::Type(ty) => {
+            ast::ItemKind::Type(typedef) => {
                 let span = item.span;
-                let ty = self.lower_type(ty)?;
+                let typedef = self.lower_type_def(typedef)?;
                 Ok(hir::Definition {
-                    kind: hir::DefinitionKind::Type(Arc::new(ty)),
+                    kind: hir::DefinitionKind::Type(typedef),
                     visibility: hir::DefinitionVisibility::Private,
                     span,
                 })
@@ -257,47 +257,24 @@ impl LoweringContext {
         })
     }
 
-    fn lower_type_alias(
-        &mut self,
-        typealias: ast::TypeAlias,
-    ) -> Result<Arc<hir::TypeAlias>> {
-        let ast::TypeAlias {
-            parameters,
-            return_ty,
-            name,
-        } = typealias;
-        // Safe unwrap as we just passed in `Some`
-        let return_ty = self.lower_type(return_ty)?;
-        let mut hir_parameters = vec![];
-        for param in parameters {
-            // Safe unwrap as we just passed in `Some`
-            let param = self.lower_type(param)?;
-            hir_parameters.push(param);
-        }
-        let unique_name = UniqueName::new();
-        let typealias = Arc::new(hir::TypeAlias {
-            parameters: hir_parameters,
-            return_ty,
-            unique_name,
-        });
-        self.scope
-            .define(name.symbol, hir::Binding::TypeAlias(typealias.clone()));
-        Ok(typealias)
-    }
-
-    fn lower_typedef(
+    fn lower_type_def(
         &mut self,
         typedef: ast::TypeDef,
     ) -> Result<Arc<hir::TypeDef>> {
-        // let name = typedef.name.symbol.clone();
-        // let typedef = Arc::new(typedef);
-        // self.scope.define(
-        //     name,
-        //     // hir::Binding::Type(hir::Type::Record(typedef.clone())));
-        //     hir::Binding::Type(typedef.clone()),
-        // );
-        // Ok(typedef)
-        Err(Diagnostic::error().with_message("Cant lower typedef now"))
+        let ast::TypeDef { name, ty, span } = typedef;
+        let ty = self.lower_type(ty)?;
+        let unique_name = UniqueName::new();
+        let symbol = name.symbol.clone();
+        let typedef = hir::TypeDef {
+            name,
+            unique_name,
+            ty,
+            span,
+        };
+        let typedef = Arc::new(typedef);
+        self.scope
+            .define(symbol, hir::Binding::Type(typedef.clone()));
+        Ok(typedef)
     }
 
     fn lower_constant(
@@ -412,6 +389,59 @@ impl LoweringContext {
 
     fn lower_type(&mut self, ty: ast::Type) -> Result<hir::Type> {
         debug!("lower_type {:#?}", ty);
+        match ty.kind {
+            ast::TypeKind::List(_) => {}
+            ast::TypeKind::Tuple(tys) => {
+                let mut hir_tys = vec![];
+                for ty in tys {
+                    hir_tys.push(self.lower_type(ty)?)
+                }
+                let kind = hir::TypeKind::Tuple(hir_tys);
+                return Ok(hir::Type {
+                    span: ty.span,
+                    kind,
+                });
+            }
+            ast::TypeKind::Record(_) => {
+                panic!("Record types are expiermental and unsupported in the IR for now")
+            }
+            ast::TypeKind::Function(input, output) => {
+                let input = self.lower_type(*input)?;
+                let output = self.lower_type(*output)?;
+                let kind = hir::TypeKind::Function(input.into(), output.into());
+                return Ok(hir::Type {
+                    span: ty.span,
+                    kind
+                })
+            }
+            ast::TypeKind::Reference(name, _arguments) => {
+                use hir::Binding;
+                match self.scope.resolve(&name.symbol) {
+                    Some((Binding::Type(typedef), _)) => {
+                        let kind = hir::TypeKind::Reference(typedef.clone());
+                        let ty = hir::Type {
+                            kind,
+                            span: ty.span,
+                        };
+                        return Ok(ty);
+                    }
+                    Some(_) => {
+                        return Err(Diagnostic::error()
+                            .with_message("Cant use this as a type")
+                            .with_labels(vec![Label::primary(ty.span)]));
+                    }
+                    None => {
+                        let kind = hir::TypeKind::UnresolvedReference(name);
+                        return Ok(hir::Type {
+                            kind,
+                            span: ty.span,
+                        });
+                    }
+                }
+                // TODO handle arguments
+                // let arguments = self.lower_type_arguments(arguments)?;
+            }
+        };
         Err(Diagnostic::error().with_message("lower_type"))
         // if let Some(ast::Type { name, arguments }) = ty {
         //     let arguments = self.lower_type_arguments(arguments)?;

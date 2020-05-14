@@ -10,7 +10,7 @@ pub trait Visitor: Sized {
         walk_fn_def(self, def);
     }
 
-    fn visit_type_def(&mut self, _type_def: &mut Type) {
+    fn visit_type_def(&mut self, _type_def: &mut TypeDef) {
         // We don't currently walk the typedef
         // ....
     }

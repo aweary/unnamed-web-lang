@@ -88,29 +88,7 @@ impl Visitor for TypeChecker {
         let return_ty = match &function.ty {
             Some(ty) => {
                 let _name = function.unique_name;
-                let ty: Type = match &ty.kind {
-                    TypeKind::Number => Type::Literal(LiteralType::Number),
-                    TypeKind::String => Type::Literal(LiteralType::String),
-                    TypeKind::Boolean => Type::Literal(LiteralType::Boolean),
-                    TypeKind::TypeDef(_) => {
-                        panic!();
-                    }
-                    TypeKind::TypeDef(_alias) => {
-                        panic!();
-                    }
-                    TypeKind::Unresolved(typename) => {
-                        let ty = match typename.symbol.as_str() {
-                            "number" => Type::Literal(LiteralType::Number),
-                            "boolean" => Type::Literal(LiteralType::Boolean),
-                            "string" => Type::Literal(LiteralType::String),
-                            _ => {
-                                panic!("Cant resolve");
-                            }
-                        };
-                        ty
-                    }
-                };
-                ty.into()
+                self.hir_type_to_type(ty)?
             }
             None => {
                 // New existential for the return type
@@ -328,7 +306,10 @@ impl TypeChecker {
                     Binding::Parameter(param) => {
                         let name = param.unique_name;
                         let ty = self.context.get_annotation(&name).unwrap();
-                        debug!("synthesize a reference to a paramter: {:?}", ty);
+                        debug!(
+                            "synthesize a reference to a paramter: {:?}",
+                            ty
+                        );
                         Ok(ty)
                     }
                     Binding::Function(function) => {
@@ -338,7 +319,6 @@ impl TypeChecker {
                         Ok(ty)
                     }
                     Binding::State(_)
-                    | Binding::TypeAlias(_)
                     | Binding::Component(_)
                     | Binding::Import(_)
                     | Binding::Constant(_)
@@ -742,25 +722,49 @@ impl TypeChecker {
     fn hir_type_to_type(&self, hir_type: &hir::Type) -> Result<InternType> {
         debug!("hir_type_to_type {:?}", hir_type);
         let ty = match &hir_type.kind {
-            TypeKind::Boolean => boolean!(),
-            TypeKind::Number => number!(),
-            TypeKind::String => string!(),
-            TypeKind::TypeDef(typedef) => {
-                let name = typedef.unique_name;
-                let ty = self.context.get_annotation(&name).unwrap();
-                ty
-            }
             // Types that we can't resolve. These should be built-ins
             // that the HIR doesn't know about
-            TypeKind::Unresolved(typename) => match typename.symbol.as_str() {
-                "number" => Type::Literal(LiteralType::Number),
-                "boolean" => Type::Literal(LiteralType::Boolean),
-                "string" => Type::Literal(LiteralType::String),
-                _ => {
-                    panic!("Cant resolve");
+            TypeKind::UnresolvedReference(typename) => {
+                match typename.symbol.as_str() {
+                    "number" => Type::Literal(LiteralType::Number),
+                    "boolean" => Type::Literal(LiteralType::Boolean),
+                    "string" => Type::Literal(LiteralType::String),
+                    _ => {
+                        panic!("Cant resolve");
+                    }
                 }
+                .into()
             }
-            .into(),
+            TypeKind::Reference(typedef) => {
+                let ty = &typedef.ty;
+                self.hir_type_to_type(ty)?
+            },
+            TypeKind::Tuple(hir_tys) => {
+                let mut tys = vec![];
+                for ty in hir_tys {
+                    tys.push(self.hir_type_to_type(ty)?);
+                }
+                Type::Tuple(tys).into()
+            }
+            TypeKind::Function(input, output) => {
+                let input = match &input.kind {
+                    TypeKind::Tuple(hir_tys) => {
+                        let mut parameters = vec![];
+                        for ty in hir_tys {
+                            parameters.push(self.hir_type_to_type(ty)?);
+                        }
+                        parameters
+                    }
+                    TypeKind::Reference(_) | 
+                    TypeKind::Function(_, _) | 
+                    TypeKind::UnresolvedReference(_) => {
+                        let ty = self.hir_type_to_type(input)?;
+                        vec![ty]
+                    }
+                };
+                let output = self.hir_type_to_type(output)?;
+                Type::Function(input, output).into()
+            },
         };
         Ok(ty)
     }
@@ -785,6 +789,9 @@ fn occurs_in(alpha: &Existential, ty: InternType) -> bool {
         Type::Quantification(_beta, ty) => {
             // TODO alpha == beta condition, but WHEN COULD THAT HAPPEN?
             occurs_in(alpha, *ty)
+        }
+        Type::Tuple(tys) => {
+            tys.iter().any(|ty| occurs_in(alpha, *ty))
         }
     }
 }

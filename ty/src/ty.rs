@@ -55,6 +55,8 @@ pub enum Type {
     Function(Vec<Intern<Type>>, Intern<Type>),
     // A 2-tuple of types
     Pair(Intern<Type>, Intern<Type>),
+    // An n-tuple of types
+    Tuple(Vec<Intern<Type>>),
     /// An array of T items
     List(Intern<Type>),
     Quantification(Variable, Intern<Type>),

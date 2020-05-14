@@ -13,9 +13,6 @@ use std::path::PathBuf;
 /// and `string` are identified at parsing. We don't alias types to use these names.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum TypeKind {
-    Number,
-    String,
-    Boolean,
     List(Box<Type>),
     Tuple(Vec<Type>),
     Record(Vec<RecordTypeField>),
@@ -23,11 +20,24 @@ pub enum TypeKind {
     Reference(Ident, Option<Vec<Ident>>),
 }
 
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Type {
     pub span: Span,
     pub kind: TypeKind,
+}
+
+impl Debug for Type {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self.kind)
+    }
+
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct TypeDef {
+    pub name: Ident,
+    pub ty: Type,
+    pub span: Span,
 }
 
 pub fn expr(kind: ExprKind, span: Span) -> Result<Expr> {
@@ -85,7 +95,7 @@ pub enum ItemKind {
     /// An enum definition
     Enum(EnumDef),
     /// Type definition for records
-    Type(Type),
+    Type(TypeDef),
     /// Import declaration
     Import(Box<Import>),
     /// Exported declaration
@@ -173,14 +183,6 @@ pub enum TypeDefinitionKind {
 pub struct RecordTypeField {
     pub name: Ident,
     pub ty: Type,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct TypeDef {
-    pub name: Ident,
-    pub span: Span,
-    pub generics: Option<Generics>,
-    pub properties: Vec<TypeProperty>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

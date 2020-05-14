@@ -330,18 +330,19 @@ impl Parser<'_> {
     fn parse_type_definition(&mut self) -> Result<ast::Item> {
         self.expect(TokenKind::Reserved(Keyword::Type))?;
         let name = self.ident()?;
+        let lo = self.span;
         self.expect(TokenKind::Equals)?;
         let ty = self.parse_type()?;
-        let span = ty.span;
+        let span = lo.merge(self.span);
+        let typedef = ast::TypeDef { name, ty, span };
         Ok(ast::Item {
-            kind: ast::ItemKind::Type(ty),
+            kind: ast::ItemKind::Type(typedef),
             span,
         })
         // Err(Diagnostic::error().with_message("Cant parse type definition"))
     }
 
     fn parse_prefix_type(&mut self) -> Result<ast::Type> {
-        debug!("parse_prefix_type");
         let lo = self.span;
         let kind = match self.peek()?.kind {
             // // Record types

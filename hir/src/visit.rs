@@ -42,6 +42,10 @@ pub trait Visitor: Sized {
         Ok(())
     }
 
+    fn visit_type_def(&mut self, _typdef: &TypeDef) -> Result<()> {
+        Ok(())
+    }
+
     fn visit_lambda(&mut self, lambda: &Lambda) -> Result<()> {
         walk_lambda(self, lambda)?;
         Ok(())
@@ -122,7 +126,7 @@ pub fn walk_definition<V: Visitor>(
         }
         DefinitionKind::Type(ty) => {
             // TODO
-            visitor.visit_type(ty)?;
+            visitor.visit_type_def(ty)?;
         }
         // DefinitionKind::Import(imports) => {
         // }

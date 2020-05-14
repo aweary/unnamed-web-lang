@@ -1,16 +1,6 @@
-// Record types
-type User = {
-    name: string,
-    id: ID,
-};
-// Tuple types
-type Set = (string, number, bool);
-// Function types
-type Map = (string, number) => string;
-// Function types with optional argument names
-// type Log = (category: string, message: string) => boolean;
-// Function types, single argument with no parens
-type Foo = string => bar;
+type Foo = (number, string) => number;
 
-
-type UserMapping = { name: string } => bool;
+fn main(a: Foo) {
+    let c = a(1, "foo")
+    return c
+}
