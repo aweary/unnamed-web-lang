@@ -1,6 +1,14 @@
-type Foo = (number, string) => number;
+type Identity<T> = T => T;
 
-fn main(a: Foo) {
-    let c = a(1, "foo")
-    return c
+fn identity_proxy(identity: Identity) {
+    return identity;
+}
+
+fn foo(identity: Identity) {
+    // Pass the identity function to itself :D
+    let a = identity_proxy(identity);
+    let b = a("foo");
+    // let c = b(1);
+    // let f = b("foo");
+    return b;
 }

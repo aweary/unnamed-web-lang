@@ -45,6 +45,8 @@ pub enum TypeKind {
     Function(Box<Type>, Box<Type>),
     // An unresolved reference. Let the type checker figure it out
     UnresolvedReference(Ident),
+    // Type parameter
+    TypeParameter(UniqueName),
 }
 
 // A type definition, declared with the `type` keyword
@@ -52,6 +54,7 @@ pub enum TypeKind {
 pub struct TypeDef {
     pub name: Ident,
     pub unique_name: UniqueName,
+    pub parameters: Option<Vec<UniqueName>>,
     pub ty: Type,
     pub span: Span,
 }
@@ -84,6 +87,8 @@ pub enum Binding {
     Function(Arc<Mutex<Function>>),
     /// A parameter to a function
     Parameter(Arc<Param>),
+    /// A type parameter
+    TypeParameter(UniqueName),
     /// A component definition
     Component(Arc<Component>),
     /// An imported value

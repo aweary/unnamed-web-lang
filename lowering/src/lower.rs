@@ -261,13 +261,35 @@ impl LoweringContext {
         &mut self,
         typedef: ast::TypeDef,
     ) -> Result<Arc<hir::TypeDef>> {
-        let ast::TypeDef { name, ty, span } = typedef;
+        let ast::TypeDef {
+            name,
+            ty,
+            parameters,
+            span,
+        } = typedef;
+
+        let parameters = if let Some(parameters) = parameters {
+            let mut parameter_names = vec![];
+            for ident in parameters {
+                let unique_name = UniqueName::new();
+                self.scope.define(
+                    ident.symbol,
+                    hir::Binding::TypeParameter(unique_name),
+                );
+                parameter_names.push(unique_name);
+            }
+            Some(parameter_names)
+        } else {
+            None
+        };
+
         let ty = self.lower_type(ty)?;
         let unique_name = UniqueName::new();
         let symbol = name.symbol.clone();
         let typedef = hir::TypeDef {
             name,
             unique_name,
+            parameters,
             ty,
             span,
         };
@@ -424,6 +446,14 @@ impl LoweringContext {
                             span: ty.span,
                         };
                         return Ok(ty);
+                    }
+                    Some((Binding::TypeParameter(name), _)) => {
+                        let kind = hir::TypeKind::TypeParameter(name);
+                        let ty = hir::Type {
+                            kind,
+                            span: ty.span
+                        };
+                        return Ok(ty)
                     }
                     Some(_) => {
                         return Err(Diagnostic::error()

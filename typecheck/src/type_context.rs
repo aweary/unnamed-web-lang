@@ -1,6 +1,6 @@
 use diagnostics::ParseResult as Result;
 use hir::unique_name::UniqueName;
-use ty::{Existential, Type};
+use ty::{Existential, Type, Variable};
 
 use internment::Intern;
 use log::debug;
@@ -12,6 +12,8 @@ pub enum ElementKind {
     /// An unsolved type variable
     TypedVariable(UniqueName, Intern<Type>),
     Solved(Existential, Intern<Type>),
+    Marker(Existential),
+    Variable(Variable),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -23,24 +25,38 @@ pub struct Element {
 
 impl Element {
     #[inline]
+    pub fn new_variable(alpha: Variable) -> Self {
+        return Self {
+            kind: ElementKind::Variable(alpha),
+        };
+    }
+
+    #[inline]
     pub fn new_existential(alpha: Existential) -> Self {
         return Self {
             kind: ElementKind::Existential(alpha),
-        }
+        };
+    }
+
+    #[inline]
+    pub fn new_marker(alpha: Existential) -> Self {
+        return Self {
+            kind: ElementKind::Marker(alpha),
+        };
     }
 
     #[inline]
     pub fn new_typed_variable(name: UniqueName, ty: Intern<Type>) -> Self {
         return Self {
             kind: ElementKind::TypedVariable(name, ty),
-        }
+        };
     }
 
     #[inline]
     pub fn new_solved(alpha: Existential, ty: Intern<Type>) -> Self {
         return Self {
             kind: ElementKind::Solved(alpha, ty),
-        }
+        };
     }
 }
 
@@ -121,7 +137,7 @@ impl TypeContext {
             match &element.kind {
                 ElementKind::TypedVariable(a, ty) if a == name => {
                     debug!("get_annotation: {:?} is {:?}", name, ty);
-                    return Some(*ty)
+                    return Some(*ty);
                 }
                 _ => {}
             }
@@ -147,7 +163,12 @@ impl TypeContext {
         panic!("insert_in_place called with non-existent element")
     }
 
-    pub(crate) fn drop_from_index(&mut self, _index: usize) {
+    pub(crate) fn drop(&mut self, element: &Element) {
+        if let Some(index) = self.elements.iter().position(|ele| ele == element)
+        {
+            let mut eles = self.elements.clone();
+            eles.truncate(index);
+        }
         // ...
     }
 

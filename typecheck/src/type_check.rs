@@ -6,8 +6,10 @@ use ::hir::{
 };
 
 use ::hir::visit::{walk_function, Visitor};
+use data_structures::HashMap;
 use diagnostics::ParseResult as Result;
 use source::diagnostics::{Diagnostic, Label};
+use std::collections::hash_map::Entry;
 use ty::{boolean, number, string, Existential, LiteralType, Type, Variable};
 
 use internment::Intern;
@@ -29,6 +31,8 @@ pub struct TypeChecker {
     variables: u16,
     /// The return type for the function we're currently type checking
     tracked_return_ty: Option<InternType>,
+    /// Maps unique names to type variables
+    variable_map: HashMap<UniqueName, Variable>,
 }
 
 impl Visitor for TypeChecker {
@@ -59,22 +63,39 @@ impl Visitor for TypeChecker {
         Ok(())
     }
 
-    fn visit_type(&mut self, typealias: &hir::Type) -> Result<()> {
-        debug!("visit_type_alias");
-        // let hir::Type {
-        //     // unique_name,
-        //     // parameters,
-        //     // return_ty,
-        // } = typealias;
-        // let return_ty = self.hir_type_to_type(return_ty)?;
-        // let mut parameters_ty = vec![];
-        // for param in parameters {
-        //     let ty = self.hir_type_to_type(param)?;
-        //     parameters_ty.push(ty);
-        // }
-        // let ty = Type::Function(parameters_ty, return_ty);
-        // let element = Element::new_typed_variable(*unique_name, ty.into());
-        // self.context.add(element);
+    fn visit_type_def(&mut self, type_def: &hir::TypeDef) -> Result<()> {
+        debug!("visit_type_def");
+        let hir::TypeDef {
+            ty,
+            parameters,
+            unique_name,
+            ..
+        } = type_def;
+
+        let parameters = if let Some(parameters) = parameters {
+            let mut variables = vec![];
+            // TODO this doesn't account for duplicate paramter names
+            for name in parameters {
+                let variable = self.fresh_variable();
+                self.variable_map.entry(*name).or_insert(variable);
+                variables.push(variable)
+            }
+            Some(variables)
+        } else {
+            None
+        };
+
+        let mut ty = self.hir_type_to_type(ty)?;
+
+        // Make it a quantification type if we have parameters
+        if let Some(parameters) = parameters {
+            ty = Type::Quantification(parameters, ty).into()
+        }
+
+        let element = Element::new_typed_variable(*unique_name, ty);
+        self.context.add(element);
+
+        debug!("type: {:#?}", ty);
         Ok(())
     }
 
@@ -141,6 +162,7 @@ impl TypeChecker {
             existential: 0,
             variables: 0,
             tracked_return_ty: None,
+            variable_map: HashMap::default(),
         };
     }
 
@@ -201,7 +223,6 @@ impl TypeChecker {
             debug!("check param: {:?}, {:?}", param.local, param.unique_name);
             let name = param.unique_name;
             if let Some(ty) = &param.ty {
-                debug!("param has annotation: {:?}", ty);
                 let ty = self.hir_type_to_type(ty)?;
                 let element = Element::new_typed_variable(name, ty);
                 self.context.add(element);
@@ -238,7 +259,7 @@ impl TypeChecker {
 
     /// Infer the type of some expression, before applying the context
     fn synthesize(&mut self, expr: &Expr) -> Result<InternType> {
-        debug!("synthesize {:#?}", expr);
+        debug!("synthesize");
         match &expr.kind {
             ExprKind::Lit(lit) => Ok(infer_literal(lit)),
             ExprKind::Lambda(lambda) => {
@@ -312,6 +333,11 @@ impl TypeChecker {
                         );
                         Ok(ty)
                     }
+                    Binding::TypeParameter(unique_name) => {
+                        let ty =
+                            self.context.get_annotation(&unique_name).unwrap();
+                        Ok(ty)
+                    }
                     Binding::Function(function) => {
                         let function = function.lock().unwrap();
                         let name = function.unique_name;
@@ -356,6 +382,7 @@ impl TypeChecker {
                         let name = param.unique_name;
                         let param_ty =
                             self.context.get_annotation(&name).unwrap();
+                        debug!("calling parameter: {:#?}", param_ty);
                         let ty =
                             self.synthesize_application(param_ty, mapped_args)?;
                         Ok(ty)
@@ -390,7 +417,7 @@ impl TypeChecker {
                 let v = self.fresh_variable();
                 let ty_v = Intern::new(Type::Variable(v));
                 Type::Quantification(
-                    v,
+                    vec![v],
                     Type::Function(vec![ty_v, ty_v], boolean!()).into(),
                 )
             }
@@ -435,10 +462,17 @@ impl TypeChecker {
                 Ok(())
             }
             //forallI
-            (_, Type::Quantification(_alpha, _a)) => {
+            (_, Type::Quantification(alphas, a)) => {
                 debug!("\u{2200}I");
-                Err(Diagnostic::error()
-                    .with_message("Cant check against quantification yet"))
+                for alpha in alphas {
+                    let var = Element::new_variable(*alpha);
+                    self.context.add(var.clone());
+                    self.checks_against(expr, *a)?;
+                    self.context.drop(&var);
+                }
+                Ok(())
+                // Err(Diagnostic::error()
+                //     .with_message("Cant check against quantification yet"))
             }
             // Subtyping
             (_, _) => {
@@ -492,10 +526,29 @@ impl TypeChecker {
                 self.subtype(*a2, *b2)
             }
             // >:forallL
-            (Type::Quantification(_alpha, _a), _) => {
+            (Type::Quantification(alphas, a), _) => {
                 debug!("<:\u{2200}L");
-                Err(Diagnostic::error()
-                    .with_message("Cant subtype left quantification yet"))
+
+                // This is where we need to drop after we're done!
+                // TODO revert these changes
+                let mut substituted_a = *a;
+                let start_marker = Element::new_marker(self.fresh_existential());
+                self.context.add(start_marker.clone());
+                for alpha in alphas {
+                    let r1 = self.fresh_existential();
+                    self.context.add(Element::new_marker(r1));
+                    self.context.add(Element::new_existential(r1));
+                    substituted_a = self.substitution(
+                        alpha,
+                        *a,
+                        Type::Existential(r1).into(),
+                    )?;
+                }
+                self.subtype(substituted_a, b)?;
+                // self.context.drop(&start_marker);
+                Ok(())
+                // Err(Diagnostic::error()
+                //     .with_message("Cant subtype left quantification yet"))
             }
             // >:forallR
             (_, Type::Quantification(_alpha, _a)) => {
@@ -611,12 +664,18 @@ impl TypeChecker {
                 // If everything checks, return the output type
                 Ok(*output)
             }
-            Type::Quantification(v, ty) => {
+            Type::Quantification(vs, ty) => {
                 debug!("\u{2200}App");
                 let alpha = self.fresh_existential();
                 self.context.add(Element::new_existential(alpha));
-                let substituted =
-                    self.substitution(v, *ty, Type::Existential(alpha).into())?;
+                let mut substituted = *ty;
+                for v in vs {
+                    substituted = self.substitution(
+                        v,
+                        *ty,
+                        Type::Existential(alpha).into(),
+                    )?;
+                }
                 self.synthesize_application(substituted, args)
             }
             Type::Existential(oldalpha) => {
@@ -687,16 +746,22 @@ impl TypeChecker {
                     return Ok(a);
                 }
             }
-            Type::Quantification(var, ty) => {
-                if var == alpha {
-                    Ok(Type::Quantification(*var, b).into())
-                } else {
-                    Ok(Type::Quantification(
-                        *var,
-                        self.substitution(alpha, *ty, b)?,
-                    )
-                    .into())
+            Type::Quantification(vars, ty) => {
+                // TODO validate this is the right way to do it
+                let mut substituted = *ty;
+                for var in vars {
+                    if var == alpha {
+                        substituted =
+                            Type::Quantification(vars.clone(), b).into();
+                    } else {
+                        substituted = Type::Quantification(
+                            vars.clone(),
+                            self.substitution(alpha, *ty, b)?,
+                        )
+                        .into()
+                    }
                 }
+                return Ok(substituted);
             }
             Type::Function(t1, t2) => {
                 let mut s1 = vec![];
@@ -719,8 +784,8 @@ impl TypeChecker {
         }
     }
 
-    fn hir_type_to_type(&self, hir_type: &hir::Type) -> Result<InternType> {
-        debug!("hir_type_to_type {:?}", hir_type);
+    fn hir_type_to_type(&mut self, hir_type: &hir::Type) -> Result<InternType> {
+        debug!("hir_type_to_type {:#?}", hir_type);
         let ty = match &hir_type.kind {
             // Types that we can't resolve. These should be built-ins
             // that the HIR doesn't know about
@@ -737,8 +802,9 @@ impl TypeChecker {
             }
             TypeKind::Reference(typedef) => {
                 let ty = &typedef.ty;
-                self.hir_type_to_type(ty)?
-            },
+                let name = typedef.unique_name;
+                self.context.get_annotation(&name).unwrap()
+            }
             TypeKind::Tuple(hir_tys) => {
                 let mut tys = vec![];
                 for ty in hir_tys {
@@ -755,16 +821,21 @@ impl TypeChecker {
                         }
                         parameters
                     }
-                    TypeKind::Reference(_) | 
-                    TypeKind::Function(_, _) | 
-                    TypeKind::UnresolvedReference(_) => {
+                    TypeKind::Reference(_)
+                    | TypeKind::Function(_, _)
+                    | TypeKind::UnresolvedReference(_)
+                    | TypeKind::TypeParameter(_) => {
                         let ty = self.hir_type_to_type(input)?;
                         vec![ty]
                     }
                 };
                 let output = self.hir_type_to_type(output)?;
                 Type::Function(input, output).into()
-            },
+            }
+            TypeKind::TypeParameter(name) => {
+                let variable = self.variable_map.get(name).unwrap();
+                Type::Variable(*variable).into()
+            }
         };
         Ok(ty)
     }
@@ -790,9 +861,7 @@ fn occurs_in(alpha: &Existential, ty: InternType) -> bool {
             // TODO alpha == beta condition, but WHEN COULD THAT HAPPEN?
             occurs_in(alpha, *ty)
         }
-        Type::Tuple(tys) => {
-            tys.iter().any(|ty| occurs_in(alpha, *ty))
-        }
+        Type::Tuple(tys) => tys.iter().any(|ty| occurs_in(alpha, *ty)),
     }
 }
 

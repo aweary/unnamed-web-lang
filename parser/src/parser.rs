@@ -331,10 +331,33 @@ impl Parser<'_> {
         self.expect(TokenKind::Reserved(Keyword::Type))?;
         let name = self.ident()?;
         let lo = self.span;
+
+        let parameters = if self.eat(TokenKind::LessThan)? {
+            let mut parameters = vec![];
+            loop {
+                match self.peek()?.kind {
+                    TokenKind::Ident(_) => {
+                        let name = self.ident()?;
+                        parameters.push(name)
+                    }
+                    TokenKind::Comma => {
+                        self.expect(TokenKind::Comma)?;
+                        continue;
+                    },
+                    _ => break,
+                }
+            }
+            self.expect(TokenKind::GreaterThan)?;
+            Some(parameters)
+        // Type definition has generics
+        } else {
+            None
+        };
+
         self.expect(TokenKind::Equals)?;
         let ty = self.parse_type()?;
         let span = lo.merge(self.span);
-        let typedef = ast::TypeDef { name, ty, span };
+        let typedef = ast::TypeDef { name, ty, parameters, span };
         Ok(ast::Item {
             kind: ast::ItemKind::Type(typedef),
             span,

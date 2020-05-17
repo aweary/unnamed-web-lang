@@ -37,6 +37,7 @@ impl Debug for Type {
 pub struct TypeDef {
     pub name: Ident,
     pub ty: Type,
+    pub parameters: Option<Vec<Ident>>,
     pub span: Span,
 }
 

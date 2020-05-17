@@ -59,7 +59,7 @@ pub enum Type {
     Tuple(Vec<Intern<Type>>),
     /// An array of T items
     List(Intern<Type>),
-    Quantification(Variable, Intern<Type>),
+    Quantification(Vec<Variable>, Intern<Type>),
     Variable(Variable),
 }
 
