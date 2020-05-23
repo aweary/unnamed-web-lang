@@ -1,5 +1,5 @@
-use syntax::symbol::Symbol;
 use source::diagnostics::Span;
+use syntax::symbol::Symbol;
 
 use std::fmt;
 use std::path::PathBuf;
@@ -27,7 +27,6 @@ pub use syntax::ast::{
 pub type ModuleId = Id<Module>;
 
 impl Reference for UniqueName {}
-
 
 #[derive(Debug, Clone)]
 pub struct Type {
@@ -244,16 +243,20 @@ pub struct Constant {
 #[derive(Debug, Clone)]
 pub struct Param {
     pub span: Span,
-    // We don't currently require type annotation for function parameters,
-    // but we may require that soon
     pub ty: Option<Type>,
     pub local: LocalPattern,
     pub unique_name: UniqueName,
 }
 
 #[derive(Debug, Clone)]
+pub struct TypeParameter {
+    pub name: Ident,
+    pub unique_name: UniqueName,
+}
+
+#[derive(Debug, Clone)]
 pub struct Function {
-    pub generics: Option<Generics>,
+    pub generics: Option<Vec<TypeParameter>>,
     pub params: Vec<Arc<Param>>,
     pub graph: ControlFlowGraph<Statement>,
     pub name: Ident,
@@ -282,8 +285,10 @@ pub struct Component {
     pub params: Vec<Arc<Param>>,
     pub graph: ControlFlowGraph<Statement>,
     pub name: Ident,
+    pub unique_name: UniqueName,
     pub span: Span,
     pub body: Block,
+    pub ty: Option<Type>,
 }
 
 #[derive(Clone, Debug)]
@@ -350,6 +355,8 @@ pub enum StatementKind {
     LoopingCondition,
     // Return some value from the current function
     Return(Expr),
+    // Throw some arbitrary expression
+    Throw(Expr),
     // If statement
     If(IfExpr),
 }
@@ -413,6 +420,26 @@ pub struct MatchArm {
 }
 
 #[derive(Clone, Debug)]
+pub enum CallArgumentType {
+    Named,
+    Positional,
+}
+
+#[derive(Clone, Debug)]
+pub struct CallArgument {
+    pub name: Option<Ident>,
+    pub value: Expr,
+}
+
+/// An argument can either be positional or named.
+#[derive(Clone, Debug)]
+pub struct Argument {
+    pub span: Span,
+    pub name: Option<Ident>,
+    pub value: Expr,
+}
+
+#[derive(Clone, Debug)]
 pub enum ExprKind {
     Array(Vec<Expr>),
     Object(Vec<(Ident, Expr)>),
@@ -426,9 +453,9 @@ pub enum ExprKind {
     /// Conditional expression, e.g., ternary
     Cond(Box<Expr>, Box<Expr>, Box<Expr>),
     /// Call expression
-    Call(Binding, Vec<Expr>),
+    Call(Binding, Vec<Argument>),
     /// Member call expression
-    MemberCall(Box<Expr>, Ident, Vec<Expr>),
+    MemberCall(Box<Expr>, Ident, Vec<Argument>),
     /// Assignment expression
     // TODO the left hand side should be a LeftExpr or something
     Assign(AssignOp, Arc<Local>, Box<Expr>),

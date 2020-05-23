@@ -10,3 +10,4 @@ edition = "2018"
 syntax = { path = "../syntax" }
 serde = { version = "1.0", features = ["derive"] }
 internment = "0.3.12"
+data_structures = { path = "../data_structures" }

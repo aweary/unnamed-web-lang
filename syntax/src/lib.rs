@@ -8,4 +8,4 @@ pub mod ast;
 pub mod precedence;
 pub mod symbol;
 pub mod token;
-pub mod visitor;
+// pub mod visitor;

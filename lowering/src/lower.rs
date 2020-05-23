@@ -50,6 +50,7 @@ impl LoweringContext {
         // Populate the global scope. TODO this should go somewhere else?
         let mut scope_map = ScopeMap::default();
         scope_map.enter_scope();
+
         // The empty binding symbol, `_`. Used for unused variables and
         // in pattern matching.
         // scope_map.define(
@@ -112,6 +113,9 @@ impl LoweringContext {
 
     fn lower_item(&mut self, item: ast::Item) -> Result<hir::Definition> {
         match item.kind {
+            ast::ItemKind::Struct(_) => {
+                todo!("Cant lower structs right now");
+            }
             ast::ItemKind::Fn(fndef) => {
                 let span = fndef.span;
                 let fn_def = self.lower_fn(fndef)?;
@@ -587,17 +591,25 @@ impl LoweringContext {
         // Push a new scope before we lower the block, so the params are included
         // self.ignore_next_scope = true;
         self.scope.enter_scope();
+        let unique_name = UniqueName::new();
         let params = self.lower_fn_params(compdef.params)?;
         let block = self.lower_block(compdef.body)?;
+        let ty = if let Some(ty) = compdef.return_ty {
+            Some(self.lower_type(ty)?)
+        } else {
+            None
+        };
         self.scope.exit_scope();
         self.ignore_next_scope = false;
         self.in_component = false;
         let compdef = Arc::new(hir::Component {
             params,
+            unique_name,
             name: compdef.name,
             span: compdef.span,
             graph: cfg,
             body: block,
+            ty,
         });
 
         self.scope
@@ -618,11 +630,32 @@ impl LoweringContext {
 
         // Lower the generics, adding them to the function scope
 
+        println!("{:#?}", fndef.generics);
+
+        let generics = if let Some(generics) = fndef.generics {
+            let mut tvars = vec![];
+            for param in &generics.params {
+                // Create a new unique name for it
+                let unique_name = UniqueName::new();
+                let name = param.symbol.clone();
+                let tvar = hir::TypeParameter {
+                    name: param.clone(),
+                    unique_name,
+                };
+                tvars.push(tvar);
+                self.scope
+                    .define(name, hir::Binding::TypeParameter(unique_name));
+            }
+            Some(tvars)
+        } else {
+            None
+        };
+
         // Need to revisit generics
-        if fndef.generics.is_some() {
-            return Err(Diagnostic::error()
-                .with_message("Can't lower generics right now"));
-        }
+        // if fndef.generics.is_some() {
+        //     return Err(Diagnostic::error()
+        // .with_message("Can't lower generics right now"));
+        // }
         // let generics = fndef.generics.map(|generics| {
         //     for ty in &generics.params {
         //         self.scope.define(
@@ -657,7 +690,7 @@ impl LoweringContext {
             graph: cfg,
             body: block,
             ty: return_ty,
-            generics: None,
+            generics,
         }));
         self.scope
             .define(name, hir::Binding::Function(fndef.clone()));
@@ -765,25 +798,20 @@ impl LoweringContext {
                 unimplemented!("Cond expression not implemented");
             }
             // Call expression
-            ExprKind::Call(expr, args) => match self.lower_expr(*expr)?.kind {
-                hir::ExprKind::Reference(_, binding) => {
-                    let mut hir_args = vec![];
-                    for arg in args {
-                        hir_args.push(self.lower_expr(arg)?);
+            ExprKind::Call(expr, args) => {
+                let args = self.lower_call_arguments(args)?;
+                match self.lower_expr(*expr)?.kind {
+                    hir::ExprKind::Reference(_, binding) => {
+                        hir::ExprKind::Call(binding, args)
                     }
-                    hir::ExprKind::Call(binding, hir_args)
-                }
-                hir::ExprKind::Member(expr, ident) => {
-                    let mut hir_args = vec![];
-                    for arg in args {
-                        hir_args.push(self.lower_expr(arg)?);
+                    hir::ExprKind::Member(expr, ident) => {
+                        hir::ExprKind::MemberCall(expr, ident, args)
                     }
-                    hir::ExprKind::MemberCall(expr, ident, hir_args)
+                    _ => {
+                        unimplemented!("Can't call computed functions yet");
+                    }
                 }
-                _ => {
-                    unimplemented!("Can't call computed functions yet");
-                }
-            },
+            }
             // Assignment expression
             // TODO the left hand side should be a LeftExpr or something
             ExprKind::Assign(op, reference, value) => {
@@ -923,6 +951,34 @@ impl LoweringContext {
             span: expr.span,
             kind,
         })
+    }
+
+    /// When we lower call arguments we transform named arguments into
+    /// positional arguments. That way the type checker doesn't have
+    /// to worry about named vs. positional.
+    fn lower_call_arguments(
+        &mut self,
+        args: Vec<ast::Argument>,
+    ) -> Result<Vec<hir::Argument>> {
+        let mut hir_args = vec![];
+        for ast::Argument { name, value, span } in args {
+            let value = self.lower_expr(value)?;
+            hir_args.push(hir::Argument { name, value, span });
+        }
+        Ok(hir_args)
+        // let mut arguments = vec![];
+        // let mut kind = hir::CallArgumentType::Positional;
+        // for ast::CallArgument { name, value } in args {
+        //     // The parser should already ensure that positional/named arguments
+        //     // aren't mixed.
+        //     if name.is_some() {
+        //         kind = hir::CallArgumentType::Named;
+        //     }
+        //     let value = self.lower_expr(value)?;
+        //     let arg = hir::CallArgument { name, value };
+        //     arguments.push(arg);
+        // }
+        // Ok(hir::CallArguments { arguments, kind })
     }
 
     fn lower_match_arms(
@@ -1131,6 +1187,10 @@ impl LoweringContext {
     fn lower_stmt(&mut self, stmt: ast::Stmt) -> Result<hir::Statement> {
         use ast::StmtKind;
         let kind = match stmt.kind {
+            StmtKind::Throw(expr) => {
+                let expr = self.lower_expr(expr)?;
+                hir::StatementKind::Throw(expr)
+            }
             // A local, let binding
             StmtKind::Local(local) => {
                 let local = self.lower_local(*local)?;
@@ -1148,12 +1208,14 @@ impl LoweringContext {
                 hir::StatementKind::Local(local)
             }
             StmtKind::State(local) => {
+                // Allow state in functions now that we can track effects.
+
                 // State is only allowed in components right now.
-                if !self.in_component {
-                    return Err(Diagnostic::error()
-                        .with_message("State can only be used in components")
-                        .with_labels(vec![Label::primary(local.span)]));
-                }
+                // if !self.in_component {
+                //     return Err(Diagnostic::error()
+                //         .with_message("State can only be used in components")
+                //         .with_labels(vec![Label::primary(local.span)]));
+                // }
                 let local = self.lower_local(*local)?;
                 let name: Symbol = local.name.clone().into();
                 self.scope.define(name, hir::Binding::State(local.clone()));

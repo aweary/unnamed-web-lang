@@ -105,8 +105,8 @@ pub fn walk_expr<V: Visitor>(visitor: &mut V, Expr { kind, .. }: &mut Expr) {
         }
         Call(ref mut fn_ref, ref mut arguments) => {
             visitor.visit_expr(fn_ref);
-            for arg in arguments {
-                visitor.visit_expr(arg);
+            for CallArgument { name, value } in arguments {
+                visitor.visit_expr(value);
             }
         }
         Array(ref mut exprs) => {

@@ -23,3 +23,4 @@ pub use fxhash::FxHashMap as HashMap;
 pub use fxhash::FxHashSet as HashSet;
 
 pub use petgraph::*;
+pub use hashbag::{*, HashBag as MultiSet};

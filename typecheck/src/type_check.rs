@@ -5,11 +5,11 @@ use ::hir::{
     TypeKind,
 };
 
-use ::hir::visit::{walk_function, Visitor};
+use ::hir::visit::{walk_block, walk_component, walk_function, Visitor};
 use data_structures::HashMap;
 use diagnostics::ParseResult as Result;
 use source::diagnostics::{Diagnostic, Label};
-use std::collections::hash_map::Entry;
+use ty::effects::{EffectConstant, EffectType};
 use ty::{boolean, number, string, Existential, LiteralType, Type, Variable};
 
 use internment::Intern;
@@ -31,6 +31,8 @@ pub struct TypeChecker {
     variables: u16,
     /// The return type for the function we're currently type checking
     tracked_return_ty: Option<InternType>,
+    /// A set of effects being tracked for the function we're currently checking
+    tracked_effect_ty: Option<EffectType>,
     /// Maps unique names to type variables
     variable_map: HashMap<UniqueName, Variable>,
 }
@@ -39,6 +41,10 @@ impl Visitor for TypeChecker {
     fn visit_statement(&mut self, statement: &hir::Statement) -> Result<()> {
         debug!("visit_statement");
         match &statement.kind {
+            StatementKind::Expr(expr) => {
+                // Just check the expression can be inferred
+                self.synth(expr)?;
+            }
             StatementKind::Local(local) => {
                 debug!("checking local: {:?}", local.name);
                 let Local {
@@ -52,6 +58,51 @@ impl Visitor for TypeChecker {
                     let element = Element::new_typed_variable(*unique_name, ty);
                     self.context.add(element);
                 }
+            }
+            StatementKind::If(ifexpr) => {
+                let hir::IfExpr {
+                    condition,
+                    block,
+                    alt,
+                    ..
+                } = ifexpr;
+
+                // Check that the condition evaluates to a boolean
+                self.checks_against(&*condition, boolean!())?;
+
+                // TODO could we check if this condition will *always* evaluate
+                // to `true` or `false`? If we can statically exclude the easy cases
+                // maybe we can give better effect inference.
+
+                walk_block(self, block)?;
+            }
+            StatementKind::State(local) => {
+                // A state variable introduces a state effect into the effect row.
+                let tracked_effect_ty =
+                    self.tracked_effect_ty.as_mut().unwrap();
+                tracked_effect_ty.add(EffectConstant::State);
+                // TODO dedupe with above branch
+                let Local {
+                    unique_name, init, ..
+                } = &**local;
+                // TODO handle cases where there is no `init`. Maybe we should
+                // require initialization?
+                if let Some(expr) = init {
+                    let ty = self.synth(&*expr)?;
+                    debug!("synth local type: {:?}", ty);
+                    let element = Element::new_typed_variable(*unique_name, ty);
+                    self.context.add(element);
+                }
+            }
+            StatementKind::Throw(expr) => {
+                debug!("visit throw statement");
+                let ty = self.synth(expr)?;
+                debug!("throwing a {:?}", ty);
+                let effect = EffectConstant::Exn(ty);
+                let tracked_effect_ty =
+                    self.tracked_effect_ty.as_mut().unwrap();
+                tracked_effect_ty.add(effect);
+                // Add this to the effect row for the current function
             }
             StatementKind::Return(expr) => {
                 debug!("return statement");
@@ -99,7 +150,56 @@ impl Visitor for TypeChecker {
         Ok(())
     }
 
+    fn visit_component(&mut self, component: &hir::Component) -> Result<()> {
+        debug!("visit_component");
+        self.add_fn_params_to_context(&component.params)?;
+        // Create a new unique name for the return type.
+        let return_ty_name = UniqueName::new();
+
+        // Read the return type
+        let return_ty = match &component.ty {
+            Some(ty) => {
+                let _name = component.unique_name;
+                self.hir_type_to_type(ty)?
+            }
+            None => {
+                // New existential for the return type
+                debug!("new existential for retutrn type");
+                let alpha = self.fresh_existential();
+                let existential = Element::new_existential(alpha);
+                let existential_ty = Type::Existential(alpha).into();
+                let element =
+                    Element::new_typed_variable(return_ty_name, existential_ty);
+                self.context.add(existential);
+                self.context.add(element);
+                existential_ty
+            }
+        };
+
+        // Track it so we can refine it / check against it
+        self.tracked_return_ty = Some(return_ty);
+
+        walk_component(self, component)?;
+
+        Ok(())
+    }
+
     fn visit_function(&mut self, function: &hir::Function) -> Result<()> {
+        // If there are generics, we need to treat this as a quantification type
+        let tvars = if let Some(tvars) = &function.generics {
+            let mut variables = vec![];
+            for tvar in tvars {
+                let variable = self.fresh_variable();
+                self.variable_map
+                    .entry(tvar.unique_name)
+                    .or_insert(variable);
+                variables.push(variable)
+            }
+            Some(variables)
+        } else {
+            None
+        };
+
         debug!("visit_function: {:?}", function.name);
         self.add_fn_params_to_context(&function.params)?;
         // Create a new unique name for the return type.
@@ -125,20 +225,37 @@ impl Visitor for TypeChecker {
             }
         };
 
+        let effect_ty = EffectType::default();
+
         // Track it so we can refine it / check against it
         self.tracked_return_ty = Some(return_ty);
+        self.tracked_effect_ty = Some(effect_ty);
 
         walk_function(self, function)?;
 
         // Return type should be solved now
         let return_ty = self.apply_context(return_ty)?;
+
+        // Effect row should be populated
+
+        // if there were no return statements, check the value of the last statement
+
         let input_ty = self.synth_fn_params(&function.params)?;
 
         debug!("complete visit_function: {:?}", function.name);
         debug!("return type: {:?}", return_ty);
+        let effect_ty = self.tracked_effect_ty.as_ref().unwrap().clone();
+        debug!("effect_ty type: {:?}", effect_ty);
 
-        let function_ty =
-            self.apply_context(Type::Function(input_ty, return_ty).into())?;
+        let function_ty = self.apply_context(
+            Type::new_function_with_effect(input_ty, return_ty, effect_ty),
+        )?;
+
+        let function_ty = if let Some(tvars) = tvars {
+            Type::new_quantification(tvars, function_ty)
+        } else {
+            function_ty
+        };
 
         debug!(
             "inferred function {:?} as {:#?}",
@@ -162,6 +279,7 @@ impl TypeChecker {
             existential: 0,
             variables: 0,
             tracked_return_ty: None,
+            tracked_effect_ty: None,
             variable_map: HashMap::default(),
         };
     }
@@ -245,14 +363,19 @@ impl TypeChecker {
     fn synth_fn_params(
         &mut self,
         params: &Vec<Arc<hir::Param>>,
-    ) -> Result<Vec<InternType>> {
+    ) -> Result<Vec<ty::Parameter>> {
         // Get the solved input types
         let mut input_ty = vec![];
         for param in params {
+            let symbol: syntax::symbol::Symbol = param.local.clone().into();
             let name = param.unique_name;
             let ty = self.context.get_annotation(&name).unwrap();
             let ty = self.apply_context(ty)?;
-            input_ty.push(ty)
+            let param_ty = ty::Parameter {
+                name: Some(symbol),
+                ty,
+            };
+            input_ty.push(param_ty)
         }
         Ok(input_ty)
     }
@@ -310,16 +433,16 @@ impl TypeChecker {
                 };
 
                 let input_ty = self.synth_fn_params(&params)?;
-                let ty = Type::Function(input_ty, return_ty);
+                let ty = Type::new_function(input_ty, return_ty);
                 debug!("Lambda type: {:#?}", ty);
-                Ok(ty.into())
+                Ok(ty)
                 // Err(Diagnostic::error()
                 //     .with_message("Cant infer lambdas right now"))
             }
             ExprKind::Reference(_ident, binding) => {
                 debug!("synthesizing a reference!");
                 match binding {
-                    Binding::Local(local) => {
+                    Binding::Local(local) | Binding::State(local) => {
                         let name = local.unique_name;
                         let ty = self.context.get_annotation(&name).unwrap();
                         Ok(ty)
@@ -344,8 +467,7 @@ impl TypeChecker {
                         let ty = self.context.get_annotation(&name).unwrap();
                         Ok(ty)
                     }
-                    Binding::State(_)
-                    | Binding::Component(_)
+                    Binding::Component(_)
                     | Binding::Import(_)
                     | Binding::Constant(_)
                     | Binding::Type(_)
@@ -357,8 +479,20 @@ impl TypeChecker {
             }
             ExprKind::Binary(op, left, right) => {
                 // Synthesize a function type for the binary operator
-                let op_ty = Intern::new(self.bin_op_ty(op));
-                let args = vec![&**left, &**right];
+
+                // TODO don't clone both expressions everytime!
+                let op_ty = self.bin_op_ty(op);
+                let left = hir::Argument {
+                    span: left.span,
+                    value: *left.clone(),
+                    name: None,
+                };
+                let right = hir::Argument {
+                    span: right.span,
+                    value: *right.clone(),
+                    name: None,
+                };
+                let args = vec![&left, &right];
                 let synth_ty = self.synthesize_application(op_ty, args)?;
                 Ok(synth_ty)
             }
@@ -374,6 +508,16 @@ impl TypeChecker {
                         let function = function.lock().unwrap();
                         let name = function.unique_name;
                         let fn_ty = self.context.get_annotation(&name).unwrap();
+
+                        // Check if we're using positional arguments and validate that they're
+                        // complete and correct.
+
+                        // Add this effect to the tracked effects
+                        // TODO.
+                        // We should have another way of tying effects and types
+                        // We shouldn't depend on only the Function case itself to hold
+                        // the type. It should be opaque. Maybe interned too.
+
                         let synth_ty =
                             self.synthesize_application(fn_ty, mapped_args)?;
                         Ok(synth_ty)
@@ -387,7 +531,7 @@ impl TypeChecker {
                             self.synthesize_application(param_ty, mapped_args)?;
                         Ok(ty)
                     }
-                    Binding::Local(local) => {
+                    Binding::Local(local) | Binding::State(local) => {
                         let name = local.unique_name;
                         let ty = self.context.get_annotation(&name).unwrap();
                         self.synthesize_application(ty, mapped_args)
@@ -396,11 +540,14 @@ impl TypeChecker {
                         .with_message("Cant call this type as a function")),
                 }
             }
+            ExprKind::TrailingClosure(a, b) => {
+                todo!("cant synth type for trailing closure expressions");
+            }
             _ => unimplemented!(""),
         }
     }
 
-    fn bin_op_ty(&mut self, op: &BinOp) -> Type {
+    fn bin_op_ty(&mut self, op: &BinOp) -> InternType {
         match op {
             // Numeric operators
             BinOp::Sub
@@ -410,16 +557,39 @@ impl TypeChecker {
             | BinOp::BinOr
             | BinOp::GreaterThan
             | BinOp::LessThan
-            | BinOp::BinAdd => {
-                Type::Function(vec![number!(), number!()], number!())
-            }
+            | BinOp::BinAdd => Type::new_function(
+                vec![
+                    ty::Parameter {
+                        ty: number!(),
+                        name: None,
+                    },
+                    ty::Parameter {
+                        ty: number!(),
+                        name: None,
+                    },
+                ],
+                number!(),
+            ),
             BinOp::DblEquals => {
                 let v = self.fresh_variable();
                 let ty_v = Intern::new(Type::Variable(v));
                 Type::Quantification(
                     vec![v],
-                    Type::Function(vec![ty_v, ty_v], boolean!()).into(),
+                    Type::new_function(
+                        vec![
+                            ty::Parameter {
+                                ty: ty_v,
+                                name: None,
+                            },
+                            ty::Parameter {
+                                ty: ty_v,
+                                name: None,
+                            },
+                        ],
+                        boolean!(),
+                    ),
                 )
+                .into()
             }
             // Others
             BinOp::Equals
@@ -450,14 +620,11 @@ impl TypeChecker {
                 }
             }
             //->I, lambdas
-            (
-                ExprKind::Lambda(lambda),
-                Type::Function(input_tys, _return_ty),
-            ) => {
+            (ExprKind::Lambda(lambda), Type::Function { parameters, .. }) => {
                 let hir::Lambda {
                     params, span: _, ..
                 } = lambda;
-                assert_eq!(params.len(), input_tys.len());
+                assert_eq!(params.len(), parameters.len());
                 debug!("->I");
                 Ok(())
             }
@@ -518,10 +685,21 @@ impl TypeChecker {
                 Ok(())
             }
             // <:->
-            (Type::Function(a1, a2), Type::Function(b1, b2)) => {
+            (
+                Type::Function {
+                    parameters: a1,
+                    out: a2,
+                    ..
+                },
+                Type::Function {
+                    parameters: b1,
+                    out: b2,
+                    ..
+                },
+            ) => {
                 debug!("<:->");
                 for (a, b) in a1.iter().zip(b1) {
-                    self.subtype(*a, *b)?;
+                    self.subtype(a.ty, b.ty)?;
                 }
                 self.subtype(*a2, *b2)
             }
@@ -532,7 +710,8 @@ impl TypeChecker {
                 // This is where we need to drop after we're done!
                 // TODO revert these changes
                 let mut substituted_a = *a;
-                let start_marker = Element::new_marker(self.fresh_existential());
+                let start_marker =
+                    Element::new_marker(self.fresh_existential());
                 self.context.add(start_marker.clone());
                 for alpha in alphas {
                     let r1 = self.fresh_existential();
@@ -631,14 +810,25 @@ impl TypeChecker {
                     Ok(ty)
                 }
             }
-            Type::Function(inputs, output) => {
+            Type::Function {
+                parameters,
+                out,
+                effect,
+            } => {
                 // panic!("exit function apply_context");
-                let mut mapped_inputs = vec![];
-                for input in inputs {
-                    mapped_inputs.push(self.apply_context(*input)?);
+                let mut mapped_parameters = vec![];
+                for param in parameters {
+                    mapped_parameters.push(ty::Parameter {
+                        ty: self.apply_context(param.ty)?,
+                        name: param.name.clone(),
+                    });
                 }
-                let output = self.apply_context(*output)?;
-                Ok(Type::Function(mapped_inputs, output).into())
+                let output = self.apply_context(*out)?;
+                Ok(Type::new_function_with_effect(
+                    mapped_parameters,
+                    output,
+                    effect.clone(),
+                ))
             }
             _ => Ok(ty),
         }
@@ -647,22 +837,83 @@ impl TypeChecker {
     fn synthesize_application(
         &mut self,
         ty: InternType,
-        args: Vec<&Expr>,
+        args: Vec<&hir::Argument>,
     ) -> Result<InternType> {
+        // Application is the primary point where new effects are introduced.
+
         // TODO is this right?
+
         let ty = self.apply_context(ty)?;
+
         debug!("synthesize_application: {:#?}", ty);
         debug!("synthesize_application, args: {:#?}", args);
         match &*ty {
-            Type::Function(inputs, output) => {
-                // TODO error handling for too many/few arguments
-                assert_eq!(inputs.len(), args.len());
-                // Check the arguments against the input types
-                for (ty, expr) in inputs.iter().zip(args) {
-                    self.checks_against(expr, *ty)?;
+            Type::Function {
+                parameters,
+                out,
+                effect,
+            } => {
+                if parameters.len() != args.len() {
+                    return Err(Diagnostic::error()
+                        .with_message("Wrong number of arguments provided"));
                 }
+                // TODO error handling for too many/few arguments
+                assert_eq!(parameters.len(), args.len());
+
+                // Checking the first argument will tell us if we're using named or
+                // positional arguments, as the parser ensures the two aren't mixed.
+                let is_named_arguments =
+                    args.first().map(|arg| arg.name.is_some()).unwrap_or(false);
+
+                if is_named_arguments {
+                    use std::collections::HashMap;
+                    let mut parameter_map: HashMap<
+                        syntax::symbol::Symbol,
+                        InternType,
+                    > = HashMap::new();
+
+                    for param in parameters {
+                        let name = param.name.clone().expect("You are passing named arguments to a function type with no argument names. This is a compiler bug.");
+                        parameter_map.insert(name, param.ty);
+                    }
+
+                    for argument in args {
+                        let ident = argument.name.clone().unwrap().symbol;
+                        match parameter_map.remove(&ident) {
+                            Some(ty) => {
+                                self.checks_against(&argument.value, ty)?;
+                            }
+                            None => panic!("Oops"),
+                        }
+                    }
+
+                    // Parameter map should be cleared now. If not that means we're missing parameters
+                    if !parameter_map.is_empty() {
+                        return Err(Diagnostic::error().with_message(
+                            "Missing parameter for function call",
+                        ));
+                    }
+
+                // Check named arguments
+                } else {
+                    for (param, hir::Argument { value, .. }) in
+                        parameters.iter().zip(args)
+                    {
+                        self.checks_against(value, param.ty)?;
+                    }
+                }
+
+                // Check the arguments against the input types
+
+                // This is the primary place where we combine effects; we know the effect
+                // of this function, all arguments have checked, so now we extend the current
+                // tracked effect with the effect of this function.
+
+                let tracked_effet_ty = self.tracked_effect_ty.as_mut().unwrap();
+                tracked_effet_ty.extend(effect);
+
                 // If everything checks, return the output type
-                Ok(*output)
+                Ok(*out)
             }
             Type::Quantification(vs, ty) => {
                 debug!("\u{2200}App");
@@ -678,6 +929,7 @@ impl TypeChecker {
                 }
                 self.synthesize_application(substituted, args)
             }
+
             Type::Existential(oldalpha) => {
                 debug!("synthesize_application for existential {:?}", oldalpha);
                 // Create an existential for the return type
@@ -693,14 +945,20 @@ impl TypeChecker {
                     .iter()
                     .map(|alpha| Element::new_existential(*alpha))
                     .collect();
-                let beta_ty: Vec<InternType> = beta
+                let beta_params: Vec<ty::Parameter> = beta
                     .iter()
                     .map(|alpha| Type::Existential(*alpha).into())
+                    .zip(args.iter())
+                    .map(|(ty, argument)| ty::Parameter {
+                        ty,
+                        // Use the argument name as the inferred parameter name
+                        name: argument.name.clone().map(|ident| ident.symbol),
+                    })
                     .collect();
 
                 // Create an existential function type
-                let fn_ty = Type::Function(
-                    beta_ty.clone(),
+                let fn_ty = Type::new_function(
+                    beta_params.clone(),
                     Type::Existential(alpha).into(),
                 );
 
@@ -721,8 +979,10 @@ impl TypeChecker {
                     new_elements,
                 );
 
-                for (expr, ty) in args.iter().zip(beta_ty) {
-                    self.checks_against(expr, ty)?;
+                for (hir::Argument { value, .. }, ref param) in
+                    args.iter().zip(beta_params)
+                {
+                    self.checks_against(value, param.ty)?;
                 }
                 Ok(Type::Existential(alpha).into())
             }
@@ -763,12 +1023,18 @@ impl TypeChecker {
                 }
                 return Ok(substituted);
             }
-            Type::Function(t1, t2) => {
+            Type::Function {
+                parameters, out, ..
+            } => {
                 let mut s1 = vec![];
-                for t in t1 {
-                    s1.push(self.substitution(alpha, *t, b)?);
+                for param in parameters {
+                    let ty = self.substitution(alpha, param.ty, b)?;
+                    s1.push(ty::Parameter {
+                        ty,
+                        name: param.name.clone(),
+                    })
                 }
-                Ok(Type::Function(s1, self.substitution(alpha, *t2, b)?).into())
+                Ok(Type::new_function(s1, self.substitution(alpha, *out, b)?))
                 // let mut t1 = vec![];
             }
             Type::Existential(_var) => {
@@ -830,7 +1096,15 @@ impl TypeChecker {
                     }
                 };
                 let output = self.hir_type_to_type(output)?;
-                Type::Function(input, output).into()
+                let params: Vec<ty::Parameter> = input
+                    .iter()
+                    .map(|ty| ty::Parameter {
+                        ty: *ty,
+                        name: None,
+                    })
+                    .collect();
+                Type::new_function(params, output)
+                // Type::Function { parameters: input, out: output, effect: }.into()
             }
             TypeKind::TypeParameter(name) => {
                 let variable = self.variable_map.get(name).unwrap();
@@ -845,13 +1119,18 @@ fn occurs_in(alpha: &Existential, ty: InternType) -> bool {
     debug!("occurs_in: {:?} - {:?}", alpha, ty);
     // false
     match &*ty {
+        Type::Component { .. } => todo!("occurs_in for component"),
         Type::Unit => false,
         Type::Literal(_) => false,
         // TODO when is it possible for an existential to equal a type variable?
         Type::Variable(_) => false,
-        Type::Function(inputs, ty) => {
-            return occurs_in(alpha, *ty)
-                || inputs.iter().any(|t| return occurs_in(alpha, *t))
+        Type::Function {
+            parameters, out, ..
+        } => {
+            return occurs_in(alpha, *out)
+                || parameters
+                    .iter()
+                    .any(|param| return occurs_in(alpha, param.ty))
         }
         Type::Existential(beta) => alpha == beta,
         Type::SolvableExistential(beta, _) => alpha == beta,

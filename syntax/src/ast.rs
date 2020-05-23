@@ -33,6 +33,7 @@ impl Debug for Type {
 
 }
 
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct TypeDef {
     pub name: Ident,
@@ -101,6 +102,8 @@ pub enum ItemKind {
     Import(Box<Import>),
     /// Exported declaration
     Export(Box<Item>),
+    /// Struct definition
+    Struct(Struct),
 }
 
 //  TODO(brandondail) currently just supports function type aliases
@@ -215,6 +218,13 @@ impl IntoIterator for ParamType {
     }
 }
 
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct Struct {
+    pub name: Ident,
+    pub span: Span,
+}
+
 /// A function definition
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Function {
@@ -313,6 +323,8 @@ pub enum StmtKind {
     Return(Box<Expr>),
     // Try/catch statement
     TryCatch(Box<Block>, Option<LocalPattern>, Box<Block>),
+    // Throw
+    Throw(Expr),
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -419,6 +431,13 @@ pub struct Expr {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct Argument {
+    pub span: Span,
+    pub name: Option<Ident>,
+    pub value: Expr,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum ExprKind {
     Array(Vec<Expr>),
     Object(Vec<(Ident, Expr)>),
@@ -432,7 +451,7 @@ pub enum ExprKind {
     /// Conditional expression, e.g., ternary
     Cond(Box<Expr>, Box<Expr>, Box<Expr>),
     /// Call expression
-    Call(Box<Expr>, Vec<Expr>),
+    Call(Box<Expr>, Vec<Argument>),
     /// Assignment expression
     // TODO the left hand side should be a LeftExpr or something
     Assign(AssignOp, Box<Expr>, Box<Expr>),

@@ -86,7 +86,64 @@ type Identity<T> = T => T
 ```
 
 
-## Component System
+## Components
+
+### Basics
+
+Components are defined with the `component` keyword.
+
+```ts
+component Greeting() {
+    // ...
+}
+```
+
+Most of the syntax and semantics are the same as functions; you can define parameters, use generics, and add type annotations just like functions
+
+```ts
+component Map<T>(input: T) : View {
+   // ...
+}
+```
+
+
+### Composing Views
+
+Components can return other components. In the simplest case this looks like a regular function call
+
+```ts
+component Greeting() {
+    Text("Hello there")
+}
+```
+
+In this case we assume text is a component with the signature `(content: string) -> Text`, where `Text` is the primitive component type for rendering text. You can also use the named argument syntax
+
+```ts
+Text(content: "Hello there")
+```
+
+This is mostly useful for components with many parameters.
+
+In many cases we need to compose components and using _nesting_. In JSX this is what `children` was for
+
+```jsx
+<View>
+  <Text>Hello there</Text>
+</View>
+```
+
+In this example `View` nests `Text`; in other words this expresson is a `View` component that itself renders a `Text`.
+
+For this case we use the _trailing closure_ syntax.
+
+```ts
+View {
+    Text("Hello there")
+}
+```
+
+
 
 ## Design System
 

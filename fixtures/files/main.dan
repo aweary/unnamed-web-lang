@@ -1,14 +1,14 @@
-type Identity<T> = T => T;
-
-fn identity_proxy(identity: Identity) {
-    return identity;
+fn main(some_fn) {
+    // some_fn will be inferred as (a: number, b: string) -> ?
+    let a = some_fn(a: 1, b: "1");
+    // So this works!
+    let b = some_fn(b: "1", a: 1);
+    // and this does too. It assumes the first function call uses
+    // a standard ordering for parameter positions
+    let c = some_fn(1, "1");
+    // But this will fail
+    let c = some_fn(a: "1", b: "2");
 }
 
-fn foo(identity: Identity) {
-    // Pass the identity function to itself :D
-    let a = identity_proxy(identity);
-    let b = a("foo");
-    // let c = b(1);
-    // let f = b("foo");
-    return b;
-}
+
+

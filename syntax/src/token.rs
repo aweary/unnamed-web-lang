@@ -172,6 +172,7 @@ impl fmt::Display for TokenKind {
 pub enum Keyword {
     Try,
     Catch,
+    Throw,
     Component,
     Else,
     Type,
@@ -190,6 +191,7 @@ pub enum Keyword {
     While,
     Pub,
     Const,
+    Struct,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]

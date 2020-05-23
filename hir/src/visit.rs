@@ -24,7 +24,7 @@ pub trait Visitor: Sized {
         walk_function(self, fndef)?;
         Ok(())
     }
-    fn visit_component(&mut self, _fndef: &Arc<Component>) -> Result<()> {
+    fn visit_component(&mut self, _fndef: &Component) -> Result<()> {
         Ok(())
         // ...
     }
@@ -150,8 +150,18 @@ pub fn walk_block<V: Visitor>(visitor: &mut V, block: &Block) -> Result<()> {
             crate::StatementKind::LoopingCondition => {}
             crate::StatementKind::Return(_) => {}
             crate::StatementKind::If(_) => {}
+            crate::StatementKind::Throw(_) => {}
         }
     }
+    Ok(())
+}
+
+pub fn walk_component<V: Visitor>(
+    visitor: &mut V,
+    component: &Component,
+) -> Result<()> {
+    // TODO walk params / function header stuff
+    visitor.visit_block(&component.body)?;
     Ok(())
 }
 

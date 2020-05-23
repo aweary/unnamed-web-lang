@@ -201,10 +201,7 @@ impl<'a> Lexer<'a> {
         let end = self.reader.offset();
         let span = self.reader.end(span_start);
         let ident = &self.source[start.to_usize()..end.to_usize()];
-        use Keyword::{
-            As, Catch, Component, Const, Else, Enum, For, Func, If, Import,
-            ImportFrom, In, Let, Match, Pub, Return, State, Try, Type, While,
-        };
+        use Keyword::*;
         let kind = match ident {
             "true" | "false" => {
                 let lit = Lit {
@@ -226,11 +223,13 @@ impl<'a> Lexer<'a> {
             "while" => Reserved(While),
             "enum" => Reserved(Enum),
             "type" => Reserved(Type),
+            "struct" => Reserved(Struct),
             "for" => Reserved(For),
             "in" => Reserved(In),
             "try" => Reserved(Try),
             "catch" => Reserved(Catch),
             "const" => Reserved(Const),
+            "throw" => Reserved(Throw),
             // Allow `export` for now, not sure what keyword to use
             "pub" | "export" => Reserved(Pub),
             "as" => Reserved(As),

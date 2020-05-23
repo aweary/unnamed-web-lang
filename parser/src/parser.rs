@@ -175,6 +175,8 @@ impl Parser<'_> {
             TokenKind::Reserved(Keyword::Import) => self.import(),
             // Constant declaration
             TokenKind::Reserved(Keyword::Const) => self.constant(),
+            // Struct definition
+            TokenKind::Reserved(Keyword::Struct) => self.parse_struct(),
             // Item declaration, but public
             TokenKind::Reserved(Keyword::Pub) => {
                 self.expect(TokenKind::Reserved(Keyword::Pub))?;
@@ -185,6 +187,7 @@ impl Parser<'_> {
                     kind: ast::ItemKind::Export(Box::new(item)),
                 })
             }
+
             // Everything else
             _ => {
                 let token = self.next_token()?;
@@ -343,7 +346,7 @@ impl Parser<'_> {
                     TokenKind::Comma => {
                         self.expect(TokenKind::Comma)?;
                         continue;
-                    },
+                    }
                     _ => break,
                 }
             }
@@ -357,7 +360,12 @@ impl Parser<'_> {
         self.expect(TokenKind::Equals)?;
         let ty = self.parse_type()?;
         let span = lo.merge(self.span);
-        let typedef = ast::TypeDef { name, ty, parameters, span };
+        let typedef = ast::TypeDef {
+            name,
+            ty,
+            parameters,
+            span,
+        };
         Ok(ast::Item {
             kind: ast::ItemKind::Type(typedef),
             span,
@@ -653,6 +661,22 @@ impl Parser<'_> {
         })
     }
 
+    fn parse_struct(&mut self) -> Result<ast::Item> {
+        let struct_def = self.struct_def()?;
+        let span = struct_def.span;
+        Ok(ast::Item {
+            kind: ast::ItemKind::Struct(struct_def),
+            span,
+        })
+    }
+
+    fn struct_def(&mut self) -> Result<ast::Struct> {
+        self.expect(TokenKind::Reserved(Keyword::Struct))?;
+        let name = self.ident()?;
+        let span = name.span;
+        Ok(ast::Struct { name, span })
+    }
+
     /// Parse a function definition
     fn parse_fn(&mut self) -> Result<ast::Item> {
         let fn_def = self.fn_def()?;
@@ -721,6 +745,7 @@ impl Parser<'_> {
             ast::LocalPattern::Object(_, span) => span,
             ast::LocalPattern::List(_, span) => span,
         };
+
         let ty = {
             match self.peek()?.kind {
                 TokenKind::Colon => {
@@ -818,6 +843,14 @@ impl Parser<'_> {
                 let expr = self.expr(Precedence::NONE)?;
                 let span = lo.merge(expr.span);
                 stmt(ast::StmtKind::Return(Box::new(expr)), span)
+            }
+            // Throw statement
+            TokenKind::Reserved(Keyword::Throw) => {
+                self.expect(TokenKind::Reserved(Keyword::Throw))?;
+                let lo = self.span;
+                let expr = self.expr(Precedence::NONE)?;
+                let span = lo.merge(self.span);
+                stmt(ast::StmtKind::Throw(expr), span)
             }
             // While statement
             TokenKind::Reserved(Keyword::While) => {
@@ -1167,11 +1200,14 @@ impl Parser<'_> {
             }
             // Match expression
             TokenKind::Reserved(Keyword::Match) => self.match_expr(),
-            _ => Err(self.fatal(
-                "Failed to parse an expression",
-                "We expected an expression here",
-                self.span,
-            )),
+            _ => {
+                self.skip()?;
+                Err(self.fatal(
+                    "Failed to parse an expression",
+                    "We expected an expression here",
+                    self.span,
+                ))
+            }
         }
     }
 
@@ -1625,11 +1661,72 @@ impl Parser<'_> {
     }
 
     fn call_expr(&mut self, callee: ast::Expr) -> Result<ast::Expr> {
+        #[derive(Debug, PartialEq, Eq)]
+        enum CallFormat {
+            Unknown,
+            Named,
+            Positional,
+        };
         self.expect(TokenKind::LParen)?;
         let lo = callee.span;
-        let args = self.expr_list(TokenKind::RParen)?;
+        let mut arguments = vec![];
+        let mut call_format = CallFormat::Unknown;
+        loop {
+            let expr = self.expr(Precedence::NONE)?;
+            let lo = self.span;
+
+            // Named arguments
+            if self.eat(TokenKind::Colon)? {
+                let colon_span = self.span;
+                if call_format == CallFormat::Positional {
+                    return Err(Diagnostic::error()
+                        .with_message(
+                            "Cannot mix positional and named arguments",
+                        )
+                        .with_labels(vec![Label::primary(expr.span)]));
+                }
+
+                // Make sure the expression we pased is a reference (ident)
+                let ident = match expr.kind {
+                    ast::ExprKind::Reference(ident) => ident,
+                    _ => {
+                        return Err(Diagnostic::error().with_message("Argument name must be an identifier").with_labels(vec![
+                            Label::primary(expr.span),
+                            Label::secondary(colon_span).with_message("We expect this to be a named argument because of this colon")
+                        ]))
+                    }
+                };
+
+                let value = self.expr(Precedence::NONE)?;
+                let span = lo.merge(self.span);
+                call_format = CallFormat::Named;
+                arguments.push(ast::Argument { name: Some(ident), value, span });
+
+            // args.push(expr);
+            // These are named arguments now
+            } else {
+                if call_format == CallFormat::Named {
+                    return Err(Diagnostic::error()
+                        .with_message(
+                            "Cannot mix positional and named arguments",
+                        )
+                        .with_labels(vec![Label::primary(expr.span)]));
+                }
+                call_format = CallFormat::Positional;
+                let span = expr.span;
+                arguments.push(ast::Argument { name: None, value: expr, span });
+            }
+
+            if self.eat(TokenKind::Comma)? {
+                continue;
+            }
+
+            if self.eat(TokenKind::RParen)? {
+                break;
+            }
+        }
         let span = lo.merge(self.span);
-        ast::expr(ast::ExprKind::Call(Box::new(callee), args), span)
+        ast::expr(ast::ExprKind::Call(Box::new(callee), arguments), span)
     }
 
     fn binary_expr(&mut self, left: ast::Expr) -> Result<ast::Expr> {
