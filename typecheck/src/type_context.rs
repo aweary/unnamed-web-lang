@@ -110,7 +110,7 @@ pub struct TypeContext {
 impl TypeContext {
     /// Adds a new element to the ordered type context
     pub(crate) fn add(&mut self, element: Element) {
-        debug!("adding context element: {:?}", element);
+        // debug!("adding context element: {:?}", element);
         self.elements.push(element)
     }
     /// Create a new scope, which will be contain

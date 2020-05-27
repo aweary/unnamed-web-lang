@@ -192,6 +192,9 @@ pub enum Keyword {
     Pub,
     Const,
     Struct,
+    Number,
+    String,
+    Bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]

@@ -41,7 +41,6 @@ impl DiagnosticReporting for Parser<'_> {
         Diagnostic::error()
             .with_message(message)
             .with_labels(vec![label])
-        // Diagnostic::new_error(message, Label::new(self.file_id, span, label))
     }
 }
 
@@ -107,10 +106,10 @@ impl Parser<'_> {
     }
 
     fn peek_precedence(&mut self) -> Result<Precedence> {
-        debug!("peek_precedence");
         let allow_trailing_closure = self.allow_trailing_closure;
         debug!("allow_trailing_closure: {}", allow_trailing_closure);
         let token = self.peek()?;
+        debug!("peek_precedence of {:#?}", token);
         match token.kind {
             // Check if trailing closures are allowed
             TokenKind::LCurlyBrace => {
@@ -170,7 +169,7 @@ impl Parser<'_> {
             // Enum definition
             TokenKind::Reserved(Keyword::Enum) => self.parse_enum(),
             // Type definition
-            TokenKind::Reserved(Keyword::Type) => self.parse_type_definition(),
+            TokenKind::Reserved(Keyword::Type) => self.parse_type_alias(),
             // Import declaration
             TokenKind::Reserved(Keyword::Import) => self.import(),
             // Constant declaration
@@ -330,7 +329,7 @@ impl Parser<'_> {
         Err(self.fatal("Expected import path", "found this", self.span))
     }
 
-    fn parse_type_definition(&mut self) -> Result<ast::Item> {
+    fn parse_type_alias(&mut self) -> Result<ast::Item> {
         self.expect(TokenKind::Reserved(Keyword::Type))?;
         let name = self.ident()?;
         let lo = self.span;
@@ -360,7 +359,7 @@ impl Parser<'_> {
         self.expect(TokenKind::Equals)?;
         let ty = self.parse_type()?;
         let span = lo.merge(self.span);
-        let typedef = ast::TypeDef {
+        let typedef = ast::TypeAlias {
             name,
             ty,
             parameters,
@@ -375,25 +374,11 @@ impl Parser<'_> {
 
     fn parse_prefix_type(&mut self) -> Result<ast::Type> {
         let lo = self.span;
-        let kind = match self.peek()?.kind {
+        match self.peek()?.kind {
             // // Record types
-            TokenKind::LCurlyBrace => {
-                self.expect(TokenKind::LCurlyBrace)?;
-                let mut properties = vec![];
-                loop {
-                    if let TokenKind::Ident(_) = self.peek()?.kind {
-                        let name = self.ident()?;
-                        self.expect(TokenKind::Colon)?;
-                        let ty = self.parse_type()?;
-                        properties.push(ast::RecordTypeField { name, ty });
-                        // TODO this makes commas optional, should be required?
-                        self.eat(TokenKind::Comma)?;
-                    } else {
-                        break;
-                    }
-                }
-                ast::TypeKind::Record(properties)
-            }
+            TokenKind::LCurlyBrace => Err(Diagnostic::error()
+                .with_message("We dont support record types yet")
+                .with_labels(vec![Label::primary(lo)])),
             // Tuple type
             TokenKind::LParen => {
                 self.expect(TokenKind::LParen)?;
@@ -409,13 +394,47 @@ impl Parser<'_> {
                     self.eat(TokenKind::Comma)?;
                 }
                 self.expect(TokenKind::RParen)?;
-                ast::TypeKind::Tuple(types)
+                let span = lo.merge(self.span);
+                Ok(ast::Type::Tuple(types, span))
             }
-            // Alias to some type
             TokenKind::Ident(_) => {
                 let name = self.ident()?;
-                let parameters = self.type_parameter_list()?;
-                ast::TypeKind::Reference(name, parameters)
+                let lo = self.span;
+
+                match name.symbol.as_str() {
+                    "number" => Ok(ast::Type::Number(name.span)),
+                    "bool" => Ok(ast::Type::Boolean(name.span)),
+                    "string" => Ok(ast::Type::String(name.span)),
+                    _ => {
+                        let arguments = if self.eat(TokenKind::LessThan)? {
+                            let mut arguments = vec![];
+                            loop {
+                                match self.peek()?.kind {
+                                    TokenKind::Ident(_) => {
+                                        let ty = self.parse_type()?;
+                                        arguments.push(ty);
+                                    }
+                                    TokenKind::Comma => {
+                                        self.eat(TokenKind::Comma)?;
+                                    }
+                                    _ => break,
+                                }
+                            }
+                            self.expect(TokenKind::GreaterThan)?;
+                            Some(arguments)
+                        } else {
+                            None
+                        };
+                        let span = lo.merge(self.span);
+
+                        debug!("reference type {:?} : {:?}", name, arguments);
+                        Ok(ast::Type::Reference {
+                            name,
+                            arguments,
+                            span,
+                        })
+                    }
+                }
             }
             _ => {
                 let token = self.next_token()?;
@@ -425,9 +444,7 @@ impl Parser<'_> {
                     token.span,
                 ));
             }
-        };
-        let span = lo.merge(self.span);
-        Ok(ast::Type { kind, span })
+        }
     }
 
     fn parse_type(&mut self) -> Result<ast::Type> {
@@ -436,23 +453,9 @@ impl Parser<'_> {
         let ty = self.parse_prefix_type()?;
         match self.peek()?.kind {
             TokenKind::Arrow => {
-                let lo = ty.span;
                 self.expect(TokenKind::Arrow)?;
                 let out_ty = self.parse_type()?;
-                let span = lo.merge(self.span);
-                Ok(ast::Type {
-                    kind: ast::TypeKind::Function(ty.into(), out_ty.into()),
-                    span,
-                })
-                // let parameters = if let ast::TypeKind::Tuple(parameters) = ty {
-                //     parameters
-                // } else {
-                //     return Err(Diagnostic::error()
-                //         .with_message("Cant define an arrow type"));
-                // };
-                // self.expect(TokenKind::Arrow)?;
-                // let output = self.parse_type()?;
-                // return ast::TypeKind::Function(parameters, output.into());
+                Ok(ast::Type::Function(ty.into(), out_ty.into()))
             }
             _ => Ok(ty),
         }
@@ -550,6 +553,7 @@ impl Parser<'_> {
 
     /// TODO dedupe with generics
     fn type_parameter_list(&mut self) -> Result<Option<Vec<ast::Ident>>> {
+        debug!("type_parameter_list");
         Ok(match self.peek()?.kind {
             // This function has a generic
             TokenKind::LessThan => {
@@ -698,6 +702,7 @@ impl Parser<'_> {
 
     /// Parse a list of function parameters
     fn parse_fn_params(&mut self) -> Result<ast::ParamType> {
+        debug!("parse_fn_params");
         use TokenKind::{Comma, Ident, LBrace, LCurlyBrace, RParen};
         let mut params = vec![];
         self.expect(TokenKind::LParen)?;
@@ -1049,6 +1054,7 @@ impl Parser<'_> {
     pub(crate) fn expr(&mut self, precedence: Precedence) -> Result<ast::Expr> {
         debug!("expr (precedence: {:?})", precedence);
         let mut expr = self.prefix_expr()?;
+        debug!("prefix expr: {:?}", expr);
         while precedence < self.peek_precedence()? {
             expr = self.infix_expr(expr)?;
         }
@@ -1529,11 +1535,8 @@ impl Parser<'_> {
     }
 
     fn infix_expr(&mut self, left: ast::Expr) -> Result<ast::Expr> {
-        use TokenKind::{
-            And, BinOr, DblEquals, Div, Dot, Equals, GreaterThan, LCurlyBrace,
-            LParen, LessThan, Minus, Mul, Or, Pipeline, Plus, PlusEquals,
-            Question, QuestionDot,
-        };
+        debug!("infix_expr: {:?}", left);
+        use TokenKind::*;
         match self.peek()?.kind {
             // Binary
             Plus | Minus | Div | Mul | LessThan | GreaterThan | DblEquals
@@ -1661,6 +1664,7 @@ impl Parser<'_> {
     }
 
     fn call_expr(&mut self, callee: ast::Expr) -> Result<ast::Expr> {
+        debug!("CALL EXPR");
         #[derive(Debug, PartialEq, Eq)]
         enum CallFormat {
             Unknown,
@@ -1671,6 +1675,16 @@ impl Parser<'_> {
         let lo = callee.span;
         let mut arguments = vec![];
         let mut call_format = CallFormat::Unknown;
+
+        // TODO dedupe
+        if self.eat(TokenKind::RParen)? {
+            let span = lo.merge(self.span);
+            return ast::expr(
+                ast::ExprKind::Call(Box::new(callee), arguments),
+                span,
+            );
+        }
+
         loop {
             let expr = self.expr(Precedence::NONE)?;
             let lo = self.span;
@@ -1700,7 +1714,11 @@ impl Parser<'_> {
                 let value = self.expr(Precedence::NONE)?;
                 let span = lo.merge(self.span);
                 call_format = CallFormat::Named;
-                arguments.push(ast::Argument { name: Some(ident), value, span });
+                arguments.push(ast::Argument {
+                    name: Some(ident),
+                    value,
+                    span,
+                });
 
             // args.push(expr);
             // These are named arguments now
@@ -1714,7 +1732,11 @@ impl Parser<'_> {
                 }
                 call_format = CallFormat::Positional;
                 let span = expr.span;
-                arguments.push(ast::Argument { name: None, value: expr, span });
+                arguments.push(ast::Argument {
+                    name: None,
+                    value: expr,
+                    span,
+                });
             }
 
             if self.eat(TokenKind::Comma)? {

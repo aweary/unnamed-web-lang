@@ -28,26 +28,11 @@ These types are intrinisic and *cannot be overwritten*. `void` is similar to Rus
 
 We may extend the numeric types in the future to support `BigInt` or other more specific numeric types like `float` and `int`.
 
-### Composite Types
+### Schemes and Aliases
 
-You can use the `type` keyword to declare _composite types_. 
+You can use the `type` keyword to declare both *type schemes* and *type aliases*. From a user's perspective there are almost never worth distinguishing, but they are semantically different for the type system.
 
-
-### Tuples
-
-You can use parens to define a tuple type.
-
-```ts
-type Coordinates = (number, number)
-```
-
-### Aliases
-
-You can alias one type to another by simply referencing it in the type definition.
-
-```ts
-type Input = Coordinates
-```
+A *type scheme* is a *polytype* which contains 
 
 ### Function 
 A function type is a mapping of `Type` to `Type` using the `=>` token.

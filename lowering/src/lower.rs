@@ -148,11 +148,11 @@ impl LoweringContext {
                     span,
                 })
             }
-            ast::ItemKind::Type(typedef) => {
+            ast::ItemKind::Type(type_alias) => {
                 let span = item.span;
-                let typedef = self.lower_type_def(typedef)?;
+                let type_alias = self.lower_type_alias(type_alias)?;
                 Ok(hir::Definition {
-                    kind: hir::DefinitionKind::Type(typedef),
+                    kind: hir::DefinitionKind::Type(type_alias),
                     visibility: hir::DefinitionVisibility::Private,
                     span,
                 })
@@ -184,10 +184,25 @@ impl LoweringContext {
             parameters,
             span,
         } = enumdef;
-        if parameters.is_some() {
-            return Err(Diagnostic::error()
-                .with_message("Cant lower parameters in enums right now"));
-        }
+
+        let parameters = if let Some(parameters) = parameters {
+            let mut parameter_names = vec![];
+            for ident in parameters {
+                let unique_name = UniqueName::new();
+                self.scope.define(
+                    ident.symbol.clone(),
+                    hir::Binding::TypeParameter(unique_name),
+                );
+                let tvar = hir::TVar {
+                    name: ident,
+                    unique_name,
+                };
+                parameter_names.push(tvar);
+            }
+            Some(parameter_names)
+        } else {
+            None
+        };
         // if let Some(parameters) = &parameters {
         //     for parameter in parameters {
         //         self.scope.define(
@@ -230,22 +245,16 @@ impl LoweringContext {
             span,
         } = variant;
 
-        if fields.is_some() {
-            return Err(Diagnostic::error().with_message(
-                "Cant lower enum variants with fields right now",
-            ));
-        }
-
-        // let fields = if let Some(fields) = fields {
-        //     let mut hir_ty = vec![];
-        //     for ty in fields {
-        //         // TODO anyway to not wrap in Some here?
-        //         hir_ty.push(self.lower_type(Some(ty))?);
-        //     }
-        //     Some(hir_ty)
-        // } else {
-        //     None
-        // };
+        let fields = if let Some(fields) = fields {
+            let mut hir_ty = vec![];
+            for ty in fields {
+                // TODO anyway to not wrap in Some here?
+                hir_ty.push(self.lower_type(ty)?);
+            }
+            Some(hir_ty)
+        } else {
+            None
+        };
 
         let discriminant = if let Some(expr) = discriminant {
             Some(self.lower_expr(expr)?)
@@ -255,32 +264,39 @@ impl LoweringContext {
 
         Ok(hir::Variant {
             ident,
-            fields: None,
+            fields,
             discriminant,
             span,
         })
     }
 
-    fn lower_type_def(
+    fn lower_type_alias(
         &mut self,
-        typedef: ast::TypeDef,
-    ) -> Result<Arc<hir::TypeDef>> {
-        let ast::TypeDef {
+        type_alias: ast::TypeAlias,
+    ) -> Result<Arc<hir::TypeAlias>> {
+        let ast::TypeAlias {
             name,
             ty,
             parameters,
             span,
-        } = typedef;
+        } = type_alias;
+
+        // New scope for the type parameters
+        self.scope.enter_scope();
 
         let parameters = if let Some(parameters) = parameters {
             let mut parameter_names = vec![];
             for ident in parameters {
                 let unique_name = UniqueName::new();
                 self.scope.define(
-                    ident.symbol,
+                    ident.symbol.clone(),
                     hir::Binding::TypeParameter(unique_name),
                 );
-                parameter_names.push(unique_name);
+                let tvar = hir::TVar {
+                    name: ident,
+                    unique_name,
+                };
+                parameter_names.push(tvar);
             }
             Some(parameter_names)
         } else {
@@ -288,19 +304,21 @@ impl LoweringContext {
         };
 
         let ty = self.lower_type(ty)?;
+
+        self.scope.exit_scope();
+
         let unique_name = UniqueName::new();
         let symbol = name.symbol.clone();
-        let typedef = hir::TypeDef {
+        let type_alias = hir::TypeAlias {
             name,
             unique_name,
             parameters,
             ty,
-            span,
         };
-        let typedef = Arc::new(typedef);
+        let type_alias = Arc::new(type_alias);
         self.scope
-            .define(symbol, hir::Binding::Type(typedef.clone()));
-        Ok(typedef)
+            .define(symbol, hir::Binding::Type(type_alias.clone()));
+        Ok(type_alias)
     }
 
     fn lower_constant(
@@ -401,13 +419,13 @@ impl LoweringContext {
         &mut self,
         arguments: Option<Vec<ast::Type>>,
     ) -> Result<Option<Vec<hir::Type>>> {
-        if let Some(arguments) = arguments {
-            let mut hir_arguments = vec![];
-            for ty in arguments {
+        if let Some(tys) = arguments {
+            let mut hir_tys = vec![];
+            for ty in tys {
                 let ty = self.lower_type(ty)?;
-                hir_arguments.push(ty);
+                hir_tys.push(ty);
             }
-            Ok(Some(hir_arguments))
+            Ok(Some(hir_tys))
         } else {
             Ok(None)
         }
@@ -415,167 +433,83 @@ impl LoweringContext {
 
     fn lower_type(&mut self, ty: ast::Type) -> Result<hir::Type> {
         debug!("lower_type {:#?}", ty);
-        match ty.kind {
-            ast::TypeKind::List(_) => {}
-            ast::TypeKind::Tuple(tys) => {
-                let mut hir_tys = vec![];
-                for ty in tys {
-                    hir_tys.push(self.lower_type(ty)?)
-                }
-                let kind = hir::TypeKind::Tuple(hir_tys);
-                return Ok(hir::Type {
-                    span: ty.span,
-                    kind,
-                });
-            }
-            ast::TypeKind::Record(_) => {
-                panic!("Record types are expiermental and unsupported in the IR for now")
-            }
-            ast::TypeKind::Function(input, output) => {
-                let input = self.lower_type(*input)?;
-                let output = self.lower_type(*output)?;
-                let kind = hir::TypeKind::Function(input.into(), output.into());
-                return Ok(hir::Type {
-                    span: ty.span,
-                    kind
-                })
-            }
-            ast::TypeKind::Reference(name, _arguments) => {
-                use hir::Binding;
+        match ty {
+            ast::Type::Number(span) => Ok(hir::Type::Number(span)),
+            ast::Type::Boolean(span) => Ok(hir::Type::Bool(span)),
+            ast::Type::String(span) => Ok(hir::Type::String(span)),
+            ast::Type::Reference {
+                name,
+                arguments,
+                span,
+            } => {
+                debug!("resolving type reference: {:?}", name);
                 match self.scope.resolve(&name.symbol) {
-                    Some((Binding::Type(typedef), _)) => {
-                        let kind = hir::TypeKind::Reference(typedef.clone());
-                        let ty = hir::Type {
-                            kind,
-                            span: ty.span,
-                        };
-                        return Ok(ty);
-                    }
-                    Some((Binding::TypeParameter(name), _)) => {
-                        let kind = hir::TypeKind::TypeParameter(name);
-                        let ty = hir::Type {
-                            kind,
-                            span: ty.span
-                        };
-                        return Ok(ty)
-                    }
-                    Some(_) => {
-                        return Err(Diagnostic::error()
-                            .with_message("Cant use this as a type")
-                            .with_labels(vec![Label::primary(ty.span)]));
+                    Some((binding, _)) => {
+                        debug!("reference to: {:?}", binding);
+                        match binding {
+                            hir::Binding::Type(type_alias) => {
+                                let arguments =
+                                    self.lower_type_arguments(arguments)?;
+                                Ok(hir::Type::Reference {
+                                    alias: type_alias.clone(),
+                                    span,
+                                    arguments,
+                                })
+                            }
+                            hir::Binding::TypeParameter(unique_name) => {
+                                Ok(hir::Type::Var(name, unique_name))
+                            }
+                            _ => Err(Diagnostic::error()
+                                .with_message("Wrong binding")),
+                        }
                     }
                     None => {
-                        let kind = hir::TypeKind::UnresolvedReference(name);
-                        return Ok(hir::Type {
-                            kind,
-                            span: ty.span,
-                        });
+                        let msg = format!("Cannot resolve type '{:?}'", name);
+                        Err(Diagnostic::error()
+                            .with_message(msg)
+                            .with_labels(vec![Label::primary(name.span)]))
                     }
                 }
-                // TODO handle arguments
-                // let arguments = self.lower_type_arguments(arguments)?;
             }
-        };
-        Err(Diagnostic::error().with_message("lower_type"))
-        // if let Some(ast::Type { name, arguments }) = ty {
-        //     let arguments = self.lower_type_arguments(arguments)?;
-        //     if let Some((binding, _unique_name)) =
-        //         self.scope.resolve(&name.symbol)
-        //     {
-        //         match binding {
-        //             hir::Binding::Type(typedef) => {
-        //                 let kind = hir::TypeKind::TypeDef(typedef);
-        //                 Ok(Some(hir::Type {
-        //                     kind,
-        //                     span: name.span,
-        //                     arguments,
-        //                 }))
-        //             }
-        //             hir::Binding::TypeAlias(typealias) => {
-        //                 let kind = hir::TypeKind::TypeAlias(typealias);
-        //                 Ok(Some(hir::Type {
-        //                     kind,
-        //                     span: name.span,
-        //                     arguments,
-        //                 }))
-        //             }
-        //             // Can't use the wildcard as a type
-        //             hir::Binding::Wildcard => {
-        //                 Err(Diagnostic::error()
-        //                     .with_message("_ can't be used as a type")
-        //                     .with_labels(vec![Label::primary(name.span)]))
-        //             }
-        //             // Value types, can't be referenced as types
-        //             hir::Binding::Component(_)
-        //             | hir::Binding::Enum(_)
-        //             | hir::Binding::Constant(_)
-        //             | hir::Binding::Function(_)
-        //             | hir::Binding::Local(_)
-        //             | hir::Binding::State(_)
-        //             | hir::Binding::Parameter(_)
-        //             | hir::Binding::Import(_) => {
-        //                 Err(Diagnostic::error()
-        //                     .with_message(format!(
-        //                         "`{:?}` is a value and can't be used as a type",
-        //                         name.symbol
-        //                     ))
-        //                     .with_labels(vec![Label::primary(name.span)]))
-        //             }
-        //         }
-        //     } else {
-        //         // If we can't resolve this type, it might be a built-in type.
-        //         // We could hardcode those here, but then the lower step would
-        //         // control a key part of the type system. Return an unresolved
-        //         // type kind that the type checker can attempt to resolve later
-        //         let span = name.span;
-        //         Ok(Some(hir::Type {
-        //             kind: hir::TypeKind::Unresolved(name),
-        //             span,
-        //             arguments,
-        //         }))
-        //     }
-        // } else {
-        //     Ok(None)
-        //     // Ok(None)
-        //     // No type in the AST means we'll need to infer it
-        // }
-        // Attempt to resolve the type
-        // match ty {
-        //     // Referencing some named type
-        //     ast::Type::Variable(ident, type_args) => {
-        //         // Map the type arguments to HIR if they exist
-        //         let arguments = if let Some(type_args) = type_args {
-        //             let mut hir_type_args = vec![];
-        //             for arg in type_args {
-        //                 let ty = self.lower_type(arg)?;
-        //                 hir_type_args.push(ty);
-        //             }
-        //             Some(hir_type_args)
-        //         } else {
-        //             None
-        //         };
-        //         let ty = match self.scope.resolve(&ident.name) {
-        //             Some((binding, unique_name)) => match binding {
-        //                 // Referencing some type
-        //                 hir::Binding::Type(ty) => hir::Type::TypeDef(ty.clone()),
-        //                 _ => {
-        //                     return Err(Diagnostic::error()
-        //                         .with_message("Cannot use non-type as an annotation")
-        //                         .with_labels(vec![Label::primary(ident.span).with_message(
-        //                         "This value is being used as a type annotation, but its not a type",
-        //                     )]))
-        //                 }
-        //             },
-        //             None => {
-        //                 return Err(Diagnostic::error()
-        //                     .with_message("Unable to resolve type reference")
-        //                     .with_labels(vec![Label::primary(ident.span)
-        //                         .with_message("Cannot find a type with this name")]))
-        //             }
-        //         };
-        //         Ok(ty)
-        //     }
-        // }
+            ast::Type::Function(input, output) => {
+                // Assume we can't name these parameters for now
+                match *input {
+                    ast::Type::Tuple(tys, _) => {
+                        let mut parameters = vec![];
+                        for ty in tys {
+                            let ty = self.lower_type(ty)?;
+                            let param =
+                                hir::FunctionParameter { name: None, ty };
+                            parameters.push(param);
+                        }
+                        let out = self.lower_type(*output)?;
+                        Ok(hir::Type::Function {
+                            parameters,
+                            out: out.into(),
+                        })
+                    }
+                    _ => {
+                        let parameters = vec![hir::FunctionParameter {
+                            name: None,
+                            ty: self.lower_type(*input)?,
+                        }];
+                        let out = self.lower_type(*output)?;
+                        Ok(hir::Type::Function {
+                            parameters,
+                            out: out.into(),
+                        })
+                    }
+                }
+            }
+            ast::Type::Tuple(hir_tys, span) => {
+                let mut tys = vec![];
+                for ty in hir_tys {
+                    let ty = self.lower_type(ty)?;
+                    tys.push(ty);
+                }
+                Ok(hir::Type::Tuple(tys, span))
+            }
+        }
     }
 
     /// Currently identical to lower_fn, except it returns hir::Component instead of hir::Function.
@@ -629,8 +563,6 @@ impl LoweringContext {
         self.scope.enter_scope();
 
         // Lower the generics, adding them to the function scope
-
-        println!("{:#?}", fndef.generics);
 
         let generics = if let Some(generics) = fndef.generics {
             let mut tvars = vec![];
@@ -1208,14 +1140,6 @@ impl LoweringContext {
                 hir::StatementKind::Local(local)
             }
             StmtKind::State(local) => {
-                // Allow state in functions now that we can track effects.
-
-                // State is only allowed in components right now.
-                // if !self.in_component {
-                //     return Err(Diagnostic::error()
-                //         .with_message("State can only be used in components")
-                //         .with_labels(vec![Label::primary(local.span)]));
-                // }
                 let local = self.lower_local(*local)?;
                 let name: Symbol = local.name.clone().into();
                 self.scope.define(name, hir::Binding::State(local.clone()));

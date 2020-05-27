@@ -42,7 +42,7 @@ pub trait Visitor: Sized {
         Ok(())
     }
 
-    fn visit_type_def(&mut self, _typdef: &TypeDef) -> Result<()> {
+    fn visit_type_alias(&mut self, _: &TypeAlias) -> Result<()> {
         Ok(())
     }
 
@@ -126,7 +126,7 @@ pub fn walk_definition<V: Visitor>(
         }
         DefinitionKind::Type(ty) => {
             // TODO
-            visitor.visit_type_def(ty)?;
+            visitor.visit_type_alias(ty)?;
         }
         // DefinitionKind::Import(imports) => {
         // }

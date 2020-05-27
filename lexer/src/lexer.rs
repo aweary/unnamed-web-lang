@@ -230,6 +230,9 @@ impl<'a> Lexer<'a> {
             "catch" => Reserved(Catch),
             "const" => Reserved(Const),
             "throw" => Reserved(Throw),
+            // "number" => Reserved(Number),
+            // "string" => Reserved(String),
+            // "bool" => Reserved(Bool),
             // Allow `export` for now, not sure what keyword to use
             "pub" | "export" => Reserved(Pub),
             "as" => Reserved(As),

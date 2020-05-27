@@ -1,7 +1,6 @@
 use source::diagnostics::Span;
 use syntax::symbol::Symbol;
 
-use std::fmt;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -29,40 +28,59 @@ pub type ModuleId = Id<Module>;
 impl Reference for UniqueName {}
 
 #[derive(Debug, Clone)]
-pub struct Type {
-    pub span: Span,
-    pub kind: TypeKind,
+pub enum Type {
+    Tuple(Vec<Type>, Span),
+    Number(Span),
+    Bool(Span),
+    String(Span),
+    Reference {
+        alias: Arc<TypeAlias>,
+        arguments: Option<Vec<Type>>,
+        span: Span,
+    },
+    Function {
+        parameters: Vec<FunctionParameter>,
+        out: Box<Type>,
+    },
+    Var(Ident, UniqueName),
 }
 
 #[derive(Debug, Clone)]
-pub enum TypeKind {
-    // A reference to some resolved user type
-    Reference(Arc<TypeDef>),
-    // A tuple
-    Tuple(Vec<Type>),
-    // A function
-    Function(Box<Type>, Box<Type>),
-    // An unresolved reference. Let the type checker figure it out
-    UnresolvedReference(Ident),
-    // Type parameter
-    TypeParameter(UniqueName),
+pub struct FunctionParameter {
+    pub name: Option<Symbol>,
+    pub ty: Type,
 }
 
-// A type definition, declared with the `type` keyword
+impl Type {
+    pub fn span(&self) -> Span {
+        match self {
+            Type::Tuple(_, span) => *span,
+            Type::Number(span) | Type::Bool(span) | Type::String(span) => *span,
+            Type::Reference { span, .. } => *span,
+            Type::Function { parameters, out } => {
+                let mut span = out.span();
+                for param in parameters {
+                    span = span.merge(param.ty.span())
+                }
+                span
+            }
+            Type::Var(ident, _) => ident.span,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
-pub struct TypeDef {
+pub struct TypeAlias {
     pub name: Ident,
     pub unique_name: UniqueName,
-    pub parameters: Option<Vec<UniqueName>>,
+    pub parameters: Option<Vec<TVar>>,
     pub ty: Type,
-    pub span: Span,
 }
 
 #[derive(Debug, Clone)]
-pub struct RecordTypeField {
-    name: Ident,
-    unique_name: UniqueName,
-    ty: Type,
+pub struct TVar {
+    pub unique_name: UniqueName,
+    pub name: Ident,
 }
 
 /// The top-level container for the entire module graph.
@@ -94,8 +112,8 @@ pub enum Binding {
     Import(Arc<Mutex<Import>>),
     /// A constant definition
     Constant(Arc<Constant>),
-    /// A type definition
-    Type(Arc<TypeDef>),
+    /// A type alias
+    Type(Arc<TypeAlias>),
     /// Enum definition
     Enum(Arc<EnumDef>),
     /// A special identifier, denoted by `_`, for unused values and catch-all case
@@ -225,7 +243,7 @@ pub enum DefinitionKind {
     Component(Arc<Component>),
     Constant(Arc<Constant>),
     Enum(Arc<EnumDef>),
-    Type(Arc<TypeDef>),
+    Type(Arc<TypeAlias>),
 }
 
 #[derive(Clone, Debug)]
@@ -296,7 +314,7 @@ pub struct EnumDef {
     pub name: Ident,
     pub variants: Vec<Variant>,
     // TODO a better data structure for parameter lists
-    pub parameters: Option<Vec<Ident>>,
+    pub parameters: Option<Vec<TVar>>,
     pub span: Span,
 }
 

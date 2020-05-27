@@ -7,35 +7,22 @@ use source::diagnostics::Span;
 use std::fmt::{Debug, Error, Formatter};
 use std::path::PathBuf;
 
-
-
-/// How types are represented in the AST. Intrinsic primitive types like `number`
-/// and `string` are identified at parsing. We don't alias types to use these names.
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub enum TypeKind {
-    List(Box<Type>),
-    Tuple(Vec<Type>),
-    Record(Vec<RecordTypeField>),
+pub enum Type {
+    Number(Span),
+    Boolean(Span),
+    String(Span),
+    Reference {
+        name: Ident,
+        arguments: Option<Vec<Type>>,
+        span: Span,
+    },
     Function(Box<Type>, Box<Type>),
-    Reference(Ident, Option<Vec<Ident>>),
+    Tuple(Vec<Type>, Span),
 }
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct Type {
-    pub span: Span,
-    pub kind: TypeKind,
-}
-
-impl Debug for Type {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self.kind)
-    }
-
-}
-
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct TypeDef {
+pub struct TypeAlias {
     pub name: Ident,
     pub ty: Type,
     pub parameters: Option<Vec<Ident>>,
@@ -97,21 +84,13 @@ pub enum ItemKind {
     /// An enum definition
     Enum(EnumDef),
     /// Type definition for records
-    Type(TypeDef),
+    Type(TypeAlias),
     /// Import declaration
     Import(Box<Import>),
     /// Exported declaration
     Export(Box<Item>),
     /// Struct definition
     Struct(Struct),
-}
-
-//  TODO(brandondail) currently just supports function type aliases
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct TypeAlias {
-    pub name: Ident,
-    pub parameters: Vec<Type>,
-    pub return_ty: Type,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -169,7 +148,6 @@ pub struct TypeDefinition {
     pub span: Span,
 }
 
-
 /// The kinds of types that can be declared/named
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum TypeDefinitionKind {
@@ -217,7 +195,6 @@ impl IntoIterator for ParamType {
         }
     }
 }
-
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Struct {

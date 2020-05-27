@@ -5,6 +5,7 @@
 use internment::Intern;
 
 use crate::effects::EffectType;
+use std::fmt::Display;
 use syntax::symbol::Symbol;
 
 pub type InternType = Intern<Type>;
@@ -19,7 +20,17 @@ pub struct Variable(pub u16);
 pub enum LiteralType {
     Number,
     String,
-    Boolean,
+    Bool,
+}
+
+impl Display for LiteralType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LiteralType::Number => write!(f, "number"),
+            LiteralType::String => write!(f, "string"),
+            LiteralType::Bool => write!(f, "boolean"),
+        }
+    }
 }
 
 #[macro_export]
@@ -32,7 +43,7 @@ macro_rules! number {
 #[macro_export]
 macro_rules! boolean {
     () => {
-        Type::Literal(LiteralType::Boolean).into()
+        Type::Literal(LiteralType::Bool).into()
     };
 }
 
@@ -84,6 +95,30 @@ pub enum Type {
         // types for components
         return_ty: InternType,
     },
+}
+
+impl Display for Type {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Type::Literal(lit) => write!(f, "{}", lit),
+            Type::Existential(a) => write!(f, "∀{:?}", a),
+            Type::SolvableExistential(a, b) => {
+                if let Some(ty) = b {
+                    write!(f, "{}", ty)
+                } else {
+                    write!(f, "∀{:?}", a)
+                }
+            }
+            Type::Unit => write!(f, "unit"),
+            Type::Function { .. } => write!(f, "function (TODO)"),
+            Type::Pair(_, _) => write!(f, "pair (TODO)"),
+            Type::Tuple(_) => write!(f, "tuple (TODO)"),
+            Type::List(_) => write!(f, "list (TODO)"),
+            Type::Quantification(_, _) => write!(f, "Quantification (TODO)"),
+            Type::Variable(_) => write!(f, "variable (TODO)"),
+            Type::Component { .. } => write!(f, "Component (TODO)"),
+        }
+    }
 }
 
 impl Type {

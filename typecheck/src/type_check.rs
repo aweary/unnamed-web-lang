@@ -2,7 +2,7 @@ use crate::type_context::{Element, TypeContext};
 use ::hir::unique_name::UniqueName;
 use ::hir::{
     hir, BinOp, Binding, Expr, ExprKind, Lit, LitKind, Local, StatementKind,
-    TypeKind,
+    Type as HIRType,
 };
 
 use ::hir::visit::{walk_block, walk_component, walk_function, Visitor};
@@ -114,39 +114,41 @@ impl Visitor for TypeChecker {
         Ok(())
     }
 
-    fn visit_type_def(&mut self, type_def: &hir::TypeDef) -> Result<()> {
-        debug!("visit_type_def");
-        let hir::TypeDef {
-            ty,
-            parameters,
+    fn visit_type_alias(&mut self, type_alias: &hir::TypeAlias) -> Result<()> {
+        debug!("visit_type_alias, {:#?}", type_alias);
+        let hir::TypeAlias {
             unique_name,
+            parameters,
+            ty,
             ..
-        } = type_def;
+        } = type_alias;
 
-        let parameters = if let Some(parameters) = parameters {
-            let mut variables = vec![];
-            // TODO this doesn't account for duplicate paramter names
-            for name in parameters {
-                let variable = self.fresh_variable();
-                self.variable_map.entry(*name).or_insert(variable);
-                variables.push(variable)
+        // If there are parameters we create type variables for them
+        // and map them back to the unique name of the type parameter.
+        //
+        // TODO do we need to do this when visiting type definitions? Maybe
+        // it should happen when type application occurs
+        let parameters = parameters.as_ref().map(|parameters| {
+            let mut tvars = vec![];
+            for hir::TVar { unique_name, .. } in parameters {
+                let tvar = self.fresh_variable();
+                debug!("Map variable {:?} to tvar {:?}", unique_name, tvar);
+                self.variable_map.insert(*unique_name, tvar);
+                tvars.push(tvar);
             }
-            Some(variables)
-        } else {
-            None
-        };
+            tvars
+        });
 
         let mut ty = self.hir_type_to_type(ty)?;
 
-        // Make it a quantification type if we have parameters
-        if let Some(parameters) = parameters {
-            ty = Type::Quantification(parameters, ty).into()
+        if let Some(tvars) = parameters {
+            ty = Type::Quantification(tvars, ty).into();
         }
 
-        let element = Element::new_typed_variable(*unique_name, ty);
-        self.context.add(element);
+        debug!("Type for {:?} is {:#?}", unique_name, ty);
 
-        debug!("type: {:#?}", ty);
+        self.context
+            .add(Element::new_typed_variable(*unique_name, ty));
         Ok(())
     }
 
@@ -536,6 +538,17 @@ impl TypeChecker {
                         let ty = self.context.get_annotation(&name).unwrap();
                         self.synthesize_application(ty, mapped_args)
                     }
+                    Binding::Import(import) => {
+                        use std::ops::Deref;
+                        let import = import.lock().unwrap();
+                        let hir::Import { name, span, .. } = import.deref();
+                        Err(Diagnostic::error()
+                            .with_message("Cant type check imports yet")
+                            .with_labels(vec![
+                                Label::primary(name.span),
+                                Label::secondary(*span),
+                            ]))
+                    }
                     _ => Err(Diagnostic::error()
                         .with_message("Cant call this type as a function")),
                 }
@@ -613,7 +626,7 @@ impl TypeChecker {
                 if ty == synth_ty {
                     Ok(())
                 } else {
-                    let msg = format!("Argument of type '{:?}' is not assignable to parameter of type '{:?}'", synth_ty, ty);
+                    let msg = format!("Argument of type '{}' is not assignable to parameter of type '{}'", synth_ty, ty);
                     Err(Diagnostic::error()
                         .with_message(msg)
                         .with_labels(vec![Label::primary(expr.span)]))
@@ -663,7 +676,7 @@ impl TypeChecker {
                     Ok(())
                 } else {
                     Err(Diagnostic::error().with_message(format!(
-                        "The literal types '{:?}' and '{:?}' are not compatible",
+                        "Type '{}' is not assignable to type '{}'",
                         a, b
                     )))
                 }
@@ -757,6 +770,13 @@ impl TypeChecker {
                     self.instantiate_r(*alpha, a)
                 }
             }
+
+            // Error cases
+            // Type variables subtyped with anything but another type variable
+            (_, Type::Variable(_)) | (Type::Variable(_), _) => {
+                let message = format!("Cannot subtype a known value with a type variable. This variable could be instantiated to an arbitrary type that does not match");
+                Err(Diagnostic::error().with_message(message))
+            }
             (_, _) => Err(Diagnostic::error().with_message("Cant subtype")),
         }
     }
@@ -797,6 +817,70 @@ impl TypeChecker {
             return Ok(());
         }
         Ok(())
+    }
+
+    /// I don't know if this is sound within the type system, but this allows us to
+    /// perform explicit type applications for type aliases that instantiate type schemes
+    /// with monotypes.
+    fn type_application(
+        &mut self,
+        var: Variable,
+        in_ty: InternType,
+        with_ty: InternType,
+    ) -> Result<InternType> {
+        match &*in_ty {
+            Type::Variable(var2) => {
+                if &var == var2 {
+                    Ok(with_ty)
+                } else {
+                    Ok(in_ty)
+                }
+            }
+            Type::Function {
+                parameters, out, ..
+            } => {
+                let mut s1 = vec![];
+                for param in parameters {
+                    let ty = self.type_application(var, param.ty, with_ty)?;
+                    s1.push(ty::Parameter {
+                        ty,
+                        name: param.name.clone(),
+                    })
+                }
+                Ok(Type::new_function(
+                    s1,
+                    self.type_application(var, *out, with_ty)?,
+                ))
+                // let mut t1 = vec![];
+            }
+            Type::Quantification(vars, ty) => {
+                if vars.contains(&var) {
+                    let mut vars = vars.clone();
+                    let index = vars.iter().position(|e| e == &var).unwrap();
+                    vars.remove(index);
+
+                    let ty = self.type_application(var, *ty, with_ty)?;
+
+                    if vars.is_empty() {
+                        Ok(ty)
+                    } else {
+                        Ok(Type::new_quantification(vars, ty).into())
+                    }
+                } else {
+                    Ok(in_ty)
+                }
+            }
+            Type::Pair(a, b) => Ok(Type::Pair(
+                self.type_application(var, *a, with_ty)?,
+                self.type_application(var, *b, with_ty)?,
+            )
+            .into()),
+            // Type::Tuple(_) => {}
+            // Type::List(_) => {}
+            // Type::Quantification(_, _) => {}
+            // Type::Variable(_) => {}
+            _ => Ok(in_ty),
+        }
     }
 
     fn apply_context(&mut self, ty: InternType) -> Result<InternType> {
@@ -986,7 +1070,14 @@ impl TypeChecker {
                 }
                 Ok(Type::Existential(alpha).into())
             }
-            _ => todo!(),
+            Type::Literal(_)
+            | Type::SolvableExistential(_, _)
+            | Type::Unit
+            | Type::Pair(_, _)
+            | Type::Tuple(_)
+            | Type::List(_)
+            | Type::Variable(_)
+            | Type::Component { .. } => todo!(),
         }
     }
 
@@ -996,6 +1087,7 @@ impl TypeChecker {
         a: InternType,
         b: InternType,
     ) -> Result<InternType> {
+        debug!("substitution, alpha: {:?}\na: {:#?}\nb: {:#?}", alpha, a, b);
         match &*a {
             Type::Literal(_) => Ok(a),
             Type::Variable(var) => {
@@ -1046,72 +1138,208 @@ impl TypeChecker {
                 self.substitution(alpha, *t2, b)?,
             )
             .into()),
+            Type::Tuple(tys) => {
+                let mut sub_tys = vec![];
+                for ty in tys {
+                    sub_tys.push(self.substitution(alpha, *ty, b)?);
+                }
+                Ok(Type::Tuple(sub_tys).into())
+            }
             _ => unimplemented!(),
         }
     }
 
     fn hir_type_to_type(&mut self, hir_type: &hir::Type) -> Result<InternType> {
         debug!("hir_type_to_type {:#?}", hir_type);
-        let ty = match &hir_type.kind {
-            // Types that we can't resolve. These should be built-ins
-            // that the HIR doesn't know about
-            TypeKind::UnresolvedReference(typename) => {
-                match typename.symbol.as_str() {
-                    "number" => Type::Literal(LiteralType::Number),
-                    "boolean" => Type::Literal(LiteralType::Boolean),
-                    "string" => Type::Literal(LiteralType::String),
-                    _ => {
-                        panic!("Cant resolve");
-                    }
-                }
-                .into()
-            }
-            TypeKind::Reference(typedef) => {
-                let ty = &typedef.ty;
-                let name = typedef.unique_name;
-                self.context.get_annotation(&name).unwrap()
-            }
-            TypeKind::Tuple(hir_tys) => {
+        let ty = match hir_type {
+            HIRType::Tuple(hir_tys, _) => {
                 let mut tys = vec![];
                 for ty in hir_tys {
-                    tys.push(self.hir_type_to_type(ty)?);
+                    let ty = self.hir_type_to_type(ty)?;
+                    tys.push(ty);
                 }
                 Type::Tuple(tys).into()
             }
-            TypeKind::Function(input, output) => {
-                let input = match &input.kind {
-                    TypeKind::Tuple(hir_tys) => {
-                        let mut parameters = vec![];
-                        for ty in hir_tys {
-                            parameters.push(self.hir_type_to_type(ty)?);
+            HIRType::Number(_) => Type::Literal(LiteralType::Number).into(),
+            HIRType::String(_) => Type::Literal(LiteralType::String).into(),
+            HIRType::Bool(_) => Type::Literal(LiteralType::Bool).into(),
+            HIRType::Reference {
+                alias, arguments, ..
+            } => {
+                // Here we need to apply the argumenst to the type
+                let hir::TypeAlias {
+                    parameters,
+                    unique_name,
+                    ..
+                } = &**alias;
+                debug!("reference to {:?}, args {:#?}", unique_name, arguments);
+
+                // Resolve interned type for the alias, which should already exist in context
+                let ty = self.context.get_annotation(unique_name).unwrap();
+                debug!("reference type: {:#?}", ty);
+
+                return match (parameters, arguments) {
+                    (Some(parameters), Some(arguments)) => {
+                        if parameters.len() != arguments.len() {
+                            let msg = format!("Expected {} arguments, but {} arguments were provided", parameters.len(), arguments.len());
+                            let span = hir_type.span();
+                            return Err(Diagnostic::error()
+                                .with_message(msg)
+                                .with_labels(vec![
+                                    Label::primary(span),
+                                    Label::secondary(alias.name.span),
+                                ]));
                         }
-                        parameters
+
+                        let mut ty = ty;
+
+                        for (hir::TVar { unique_name, name }, arg) in
+                            parameters.iter().zip(arguments.iter())
+                        {
+                            debug!("substituting arguments, ty is {:#?}", ty);
+                            // Find the type variable for the parameter
+                            let var = self
+                                .variable_map
+                                .get(&unique_name)
+                                .unwrap()
+                                .clone();
+                            let arg_ty = self.hir_type_to_type(arg)?;
+                            ty = self.type_application(var, ty, arg_ty)?;
+                        }
+                        return Ok(ty);
                     }
-                    TypeKind::Reference(_)
-                    | TypeKind::Function(_, _)
-                    | TypeKind::UnresolvedReference(_)
-                    | TypeKind::TypeParameter(_) => {
-                        let ty = self.hir_type_to_type(input)?;
-                        vec![ty]
+                    (None, None) => {
+                        Ok(ty)
+                        // No arguments, good to go
+                    }
+                    (None, Some(args)) => {
+                        // Arguments but no parameters!
+                        let arg_count = args.len();
+
+                        // Merge the spans of the reference and its arguments
+                        let span = {
+                            let mut span = hir_type.span();
+                            for arg in args {
+                                span = span.merge(arg.span())
+                            }
+                            span
+                        };
+                        let msg = format!("The type '{:?}' takes no arguments, but {} argument{} provided.", alias.name, arg_count, if arg_count > 1 {"s were"} else { " was"});
+                        Err(Diagnostic::error().with_message(msg).with_labels(
+                            vec![
+                                Label::primary(span),
+                                Label::secondary(alias.name.span),
+                            ],
+                        ))
+                    }
+                    (Some(params), None) => {
+                        let param_count = params.len();
+                        let span = hir_type.span();
+                        let msg = format!(
+                            "The type '{:?}' requires {} argument{}, but none were provided.",
+                            alias.name,
+                            param_count,
+                            if param_count > 1  {"s"} else {""}
+                        );
+                        Err(Diagnostic::error().with_message(msg).with_labels(
+                            vec![
+                                Label::primary(span),
+                                Label::secondary(alias.name.span),
+                            ],
+                        ))
                     }
                 };
-                let output = self.hir_type_to_type(output)?;
-                let params: Vec<ty::Parameter> = input
-                    .iter()
-                    .map(|ty| ty::Parameter {
-                        ty: *ty,
-                        name: None,
-                    })
-                    .collect();
-                Type::new_function(params, output)
-                // Type::Function { parameters: input, out: output, effect: }.into()
             }
-            TypeKind::TypeParameter(name) => {
-                let variable = self.variable_map.get(name).unwrap();
-                Type::Variable(*variable).into()
+            HIRType::Function { parameters, out } => {
+                let out = self.hir_type_to_type(out)?;
+                let mut ty_parameters = vec![];
+                for param in parameters {
+                    let ty = self.hir_type_to_type(&param.ty)?;
+                    ty_parameters.push(ty::Parameter {
+                        name: param.name.clone(),
+                        ty,
+                    })
+                }
+                // let parameters = self.hir_type_to_type(input)?;
+                // let out = self.hir_type_to_type(output)?;
+                // This is where type application is done.
+                Type::new_function(ty_parameters, out)
+            }
+            HIRType::Var(_, unique_name) => {
+                let var = self
+                    .variable_map
+                    .get(unique_name)
+                    .expect("Expected variable");
+                Type::Variable(*var).into()
             }
         };
         Ok(ty)
+        // let ty = match &hir_type.kind {
+        //     // Types that we can't resolve. These should be built-ins
+        //     // that the HIR doesn't know about
+        //     TypeKind::UnresolvedReference(typename) => {
+        //         match typename.symbol.as_str() {
+        //             "number" => Type::Literal(LiteralType::Number),
+        //             "boolean" => Type::Literal(LiteralType::Boolean),
+        //             "string" => Type::Literal(LiteralType::String),
+        //             "Array" => {
+        //                 let variable = self.fresh_variable();
+        //                 Type::Quantification(
+        //                     vec![variable],
+        //                     Type::List(Type::Variable(variable).into()).into(),
+        //                 )
+        //             }
+        //             _ => {
+        //                 panic!("Cant resolve");
+        //             }
+        //         }
+        //         .into()
+        //     }
+        //     TypeKind::Reference(typedef) => {
+        //         let name = typedef.unique_name;
+        //         self.context.get_annotation(&name).unwrap()
+        //     }
+        //     TypeKind::Tuple(hir_tys) => {
+        //         let mut tys = vec![];
+        //         for ty in hir_tys {
+        //             tys.push(self.hir_type_to_type(ty)?);
+        //         }
+        //         Type::Tuple(tys).into()
+        //     }
+        //     TypeKind::Function(input, output) => {
+        //         let input = match &input.kind {
+        //             TypeKind::Tuple(hir_tys) => {
+        //                 let mut parameters = vec![];
+        //                 for ty in hir_tys {
+        //                     parameters.push(self.hir_type_to_type(ty)?);
+        //                 }
+        //                 parameters
+        //             }
+        //             TypeKind::Reference(_)
+        //             | TypeKind::Function(_, _)
+        //             | TypeKind::UnresolvedReference(_)
+        //             | TypeKind::TypeParameter(_) => {
+        //                 let ty = self.hir_type_to_type(input)?;
+        //                 vec![ty]
+        //             }
+        //         };
+        //         let output = self.hir_type_to_type(output)?;
+        //         let params: Vec<ty::Parameter> = input
+        //             .iter()
+        //             .map(|ty| ty::Parameter {
+        //                 ty: *ty,
+        //                 name: None,
+        //             })
+        //             .collect();
+        //         Type::new_function(params, output)
+        //         // Type::Function { parameters: input, out: output, effect: }.into()
+        //     }
+        //     TypeKind::TypeParameter(name) => {
+        //         let variable = self.variable_map.get(name).unwrap();
+        //         Type::Variable(*variable).into()
+        //     }
+        // };
+        // Ok(ty)
     }
 }
 
@@ -1147,7 +1375,7 @@ fn occurs_in(alpha: &Existential, ty: InternType) -> bool {
 /// Infers the type of a literal expression
 fn infer_literal(lit: &Lit) -> InternType {
     let lit_ty = match lit.kind {
-        LitKind::Bool(_) => LiteralType::Boolean,
+        LitKind::Bool(_) => LiteralType::Bool,
         LitKind::Str(_) => LiteralType::String,
         LitKind::Number(_) => LiteralType::Number,
     };

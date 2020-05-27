@@ -1,14 +1,13 @@
-fn main(some_fn) {
-    // some_fn will be inferred as (a: number, b: string) -> ?
-    let a = some_fn(a: 1, b: "1");
-    // So this works!
-    let b = some_fn(b: "1", a: 1);
-    // and this does too. It assumes the first function call uses
-    // a standard ordering for parameter positions
-    let c = some_fn(1, "1");
-    // But this will fail
-    let c = some_fn(a: "1", b: "2");
-}
+// A generic identity function
+type Identity<T> = T => T;
+// An identity function only for strings
+type StringIdentity = Identity<string>;
 
+fn main(string_identity: StringIdentity) {
+    // This works
+    let a = string_identity("hello");
+    // This fails
+    let b = string_identity(1);
+}
 
 
