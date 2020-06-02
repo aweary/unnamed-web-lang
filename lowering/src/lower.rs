@@ -219,9 +219,12 @@ impl LoweringContext {
             hir_variants.push(self.lower_enum_variant(variant)?);
         }
 
+        let unique_name = UniqueName::new();
+
         let enumdef = Arc::new(hir::EnumDef {
             name,
             variants: hir_variants,
+            unique_name,
             parameters,
             span,
         });
@@ -262,8 +265,11 @@ impl LoweringContext {
             None
         };
 
+        let unique_name = UniqueName::new();
+
         Ok(hir::Variant {
             ident,
+            unique_name,
             fields,
             discriminant,
             span,
@@ -459,8 +465,31 @@ impl LoweringContext {
                             hir::Binding::TypeParameter(unique_name) => {
                                 Ok(hir::Type::Var(name, unique_name))
                             }
-                            _ => Err(Diagnostic::error()
-                                .with_message("Wrong binding")),
+                            hir::Binding::Enum(enumdef) => {
+                                Ok(hir::Type::Enum {
+                                    enumdef: enumdef,
+                                    span,
+                                })
+                            }
+                            _ => {
+                                let descriptor = binding.type_description();
+                                let msg = format!("'{:?}' is {}, which cannot be used as a type.", name.symbol, descriptor);
+                                Err(Diagnostic::error()
+                                    .with_message(msg)
+                                    .with_labels(vec![
+                                        Label::primary(name.span).with_message(
+                                            format!(
+                                                "'{:?}' is not a type",
+                                                name
+                                            ),
+                                        ),
+                                        Label::secondary(binding.span())
+                                            .with_message(format!(
+                                                "This is {}",
+                                                descriptor
+                                            )),
+                                    ]))
+                            }
                         }
                     }
                     None => {
@@ -551,12 +580,8 @@ impl LoweringContext {
         Ok(compdef)
     }
 
-    fn lower_fn(
-        &mut self,
-        fndef: ast::Function,
-    ) -> Result<Arc<Mutex<hir::Function>>> {
+    fn lower_fn(&mut self, fndef: ast::Function) -> Result<Arc<hir::Function>> {
         // TODO figure out how to fill this out
-        let cfg = ControlFlowGraph::default();
         let name = fndef.name.symbol.clone();
         // Push a new scope before we lower the block, so the params are included
         // self.ignore_next_scope = true;
@@ -614,16 +639,15 @@ impl LoweringContext {
 
         self.scope.exit_scope();
         let unique_name = UniqueName::new();
-        let fndef = Arc::new(Mutex::new(hir::Function {
+        let fndef = Arc::new(hir::Function {
             params,
             name: fndef.name,
             unique_name,
             span: fndef.span,
-            graph: cfg,
             body: block,
             ty: return_ty,
             generics,
-        }));
+        });
         self.scope
             .define(name, hir::Binding::Function(fndef.clone()));
         Ok(fndef)
@@ -787,9 +811,53 @@ impl LoweringContext {
                 }
             }
             // Object member access
-            ExprKind::Member(expr, ident) => {
+            ExprKind::Member(expr, member_ident) => {
+                debug!("member expr, {:?}", member_ident);
+                // Check if this is an enum.
+                match &expr.kind {
+                    ast::ExprKind::Reference(name) => {
+                        if let Some((binding, _)) =
+                            self.scope.resolve(&name.symbol)
+                        {
+                            match binding {
+                                hir::Binding::Enum(enumdef) => {
+                                    debug!("Resolved to enum");
+                                    let hir::EnumDef { name, variants, .. } =
+                                        &*enumdef;
+                                    // Find the variant for this property access
+                                    for hir::Variant {
+                                        ident,
+                                        unique_name,
+                                        span,
+                                        ..
+                                    } in variants
+                                    {
+                                        if ident.symbol == member_ident.symbol {
+                                            let kind =
+                                                hir::ExprKind::EnumVariant(
+                                                    enumdef.clone(),
+                                                    *unique_name,
+                                                );
+                                            return Ok(hir::Expr {
+                                                kind,
+                                                span: expr.span,
+                                            });
+                                        }
+                                    }
+                                }
+                                _ => {
+                                    // ...
+                                }
+                            }
+                        }
+                    }
+                    _ => {
+                        // ...
+                    }
+                }
+
                 let expr = self.lower_expr(*expr)?;
-                hir::ExprKind::Member(Box::new(expr), ident)
+                hir::ExprKind::Member(Box::new(expr), member_ident)
             }
             // Object optional member access,
             ExprKind::OptionalMember(_, _) => {
@@ -828,6 +896,15 @@ impl LoweringContext {
                                         )
                                         .with_labels(vec![Label::primary(ident.span)]));
                                 }
+                            }
+                            hir::Binding::Type(_)
+                            | hir::Binding::TypeParameter(_) => {
+                                let msg = format!("`{:?}` is a type and cannot be used as a value", ident);
+                                return Err(Diagnostic::error()
+                                    .with_message(msg)
+                                    .with_labels(vec![Label::primary(
+                                        expr.span,
+                                    )]));
                             }
                             _ => hir::ExprKind::Reference(ident, binding),
                         }

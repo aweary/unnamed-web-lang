@@ -29,6 +29,10 @@ pub trait Visitor: Sized {
         // ...
     }
 
+    fn visit_enum_def(&mut self, enum_def: &EnumDef) -> Result<()> {
+        Ok(())
+    }
+
     fn visit_block(&mut self, block: &Block) -> Result<()> {
         walk_block(self, block)
     }
@@ -97,6 +101,7 @@ pub fn walk_expr<V: Visitor>(visitor: &mut V, expr: &Expr) -> Result<()> {
         crate::ExprKind::Match(_, _) => {}
         crate::ExprKind::Func(_) => {}
         crate::ExprKind::TrailingClosure(_, _) => {}
+        crate::ExprKind::EnumVariant(_, _) => {}
     }
     Ok(())
 }
@@ -117,8 +122,6 @@ pub fn walk_definition<V: Visitor>(
 ) -> Result<()> {
     match &definition.kind {
         DefinitionKind::Function(fndef) => {
-            let mut fndef = fndef.lock().unwrap();
-            let fndef = &mut *fndef;
             visitor.visit_function(fndef)?;
         }
         DefinitionKind::Component(compdef) => {
@@ -127,6 +130,9 @@ pub fn walk_definition<V: Visitor>(
         DefinitionKind::Type(ty) => {
             // TODO
             visitor.visit_type_alias(ty)?;
+        }
+        DefinitionKind::Enum(enumdef) => {
+            visitor.visit_enum_def(enumdef)?;
         }
         // DefinitionKind::Import(imports) => {
         // }

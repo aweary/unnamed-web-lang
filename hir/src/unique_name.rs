@@ -22,6 +22,13 @@ impl UniqueName {
     }
 }
 
+impl Into<u32> for UniqueName {
+    fn into(self) -> u32 {
+        self.0
+    }
+
+}
+
 impl fmt::Debug for UniqueName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:x}", self.0)

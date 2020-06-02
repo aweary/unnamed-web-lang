@@ -38,6 +38,10 @@ pub enum Type {
         arguments: Option<Vec<Type>>,
         span: Span,
     },
+    Enum {
+        enumdef: Arc<EnumDef>,
+        span: Span,
+    },
     Function {
         parameters: Vec<FunctionParameter>,
         out: Box<Type>,
@@ -65,6 +69,7 @@ impl Type {
                 span
             }
             Type::Var(ident, _) => ident.span,
+            Type::Enum { span, .. } => *span,
         }
     }
 }
@@ -101,7 +106,7 @@ pub enum Binding {
     /// A state cell definition, only allowed in components
     State(Arc<Local>),
     /// A function definition
-    Function(Arc<Mutex<Function>>),
+    Function(Arc<Function>),
     /// A parameter to a function
     Parameter(Arc<Param>),
     /// A type parameter
@@ -119,6 +124,52 @@ pub enum Binding {
     /// A special identifier, denoted by `_`, for unused values and catch-all case
     /// in pattern matching.
     Wildcard,
+}
+
+impl Binding {
+    pub fn span(&self) -> Span {
+        match self {
+            Binding::Local(local) | Binding::State(local) => local.span,
+            Binding::Function(fndef) => {
+                fndef.span
+            }
+            Binding::Parameter(param) => {
+                param.span
+            }
+            Binding::TypeParameter(t) => {
+                todo!()
+            }
+            Binding::Component(component) => {
+                component.span
+            }
+            Binding::Import(import) => {
+                let import = import.lock().unwrap();
+                import.span
+            }
+            Binding::Constant(constant) => {
+                constant.span
+            }
+            Binding::Type(ty) => ty.name.span,
+            Binding::Enum(enumdef) => enumdef.span,
+            Binding::Wildcard => todo!()
+        }
+    }
+
+    pub fn type_description(&self) -> &'static str {
+        match self {
+            Binding::Local(_) => "a local variable",
+            Binding::State(_) => "a state variable",
+            Binding::Function(_) => "a function",
+            Binding::Parameter(_) => "a function parameter",
+            Binding::TypeParameter(_) => "a type parameter",
+            Binding::Component(_) => "a component",
+            Binding::Import(_) => "an import",
+            Binding::Constant(_) => "a constant",
+            Binding::Type(_) => "a type",
+            Binding::Enum(_) => "an enum definition",
+            Binding::Wildcard => "the special 'wildcard' type",
+        }
+    }
 }
 
 impl Referant for Binding {}
@@ -154,7 +205,6 @@ impl Module {
             if def.visibility == DefinitionVisibility::Public {
                 match &def.kind {
                     DefinitionKind::Function(fndef) => {
-                        let fndef = fndef.lock().unwrap();
                         if fndef.name.symbol == name.symbol {
                             return Some(def.clone());
                         }
@@ -226,7 +276,6 @@ impl Definition {
     pub fn name(&self) -> Ident {
         match &self.kind {
             DefinitionKind::Function(fndef) => {
-                let fndef = fndef.lock().unwrap();
                 fndef.name.clone()
             }
             DefinitionKind::Component(compdef) => compdef.name.clone(),
@@ -239,7 +288,7 @@ impl Definition {
 /// A definition for some nameable item.
 #[derive(Debug, Clone)]
 pub enum DefinitionKind {
-    Function(Arc<Mutex<Function>>),
+    Function(Arc<Function>),
     Component(Arc<Component>),
     Constant(Arc<Constant>),
     Enum(Arc<EnumDef>),
@@ -276,7 +325,7 @@ pub struct TypeParameter {
 pub struct Function {
     pub generics: Option<Vec<TypeParameter>>,
     pub params: Vec<Arc<Param>>,
-    pub graph: ControlFlowGraph<Statement>,
+    // pub graph: ControlFlowGraph<Statement>,
     pub name: Ident,
     pub unique_name: UniqueName,
     pub span: Span,
@@ -312,6 +361,7 @@ pub struct Component {
 #[derive(Clone, Debug)]
 pub struct EnumDef {
     pub name: Ident,
+    pub unique_name: UniqueName,
     pub variants: Vec<Variant>,
     // TODO a better data structure for parameter lists
     pub parameters: Option<Vec<TVar>>,
@@ -322,6 +372,8 @@ pub struct EnumDef {
 pub struct Variant {
     // The name of the variant
     pub ident: Ident,
+    // Unique identifier for this variant
+    pub unique_name: UniqueName,
     // The input types for tuple variants
     pub fields: Option<Vec<Type>>,
     // TODO discriminants should be restricted to simple types like numbers and strings
@@ -500,10 +552,13 @@ pub enum ExprKind {
     /// Match
     Match(Box<Expr>, Vec<MatchArm>),
     // Function expression
-    Func(Arc<Mutex<Function>>),
+    Func(Arc<Function>),
     // Lamda expression
     Lambda(Lambda),
     // Trailing closure
     TrailingClosure(Box<Expr>, Block),
+
+    // Enum expression
+    EnumVariant(Arc<EnumDef>, UniqueName)
     // ...
 }

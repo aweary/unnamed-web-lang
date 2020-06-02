@@ -114,6 +114,31 @@ impl Visitor for TypeChecker {
         Ok(())
     }
 
+    fn visit_enum_def(&mut self, enum_def: &hir::EnumDef) -> Result<()> {
+        debug!("visit_enum_def");
+        // Create the ADT type for the enum definition, add it to context
+        let hir::EnumDef {
+            name,
+            unique_name,
+            variants,
+            parameters,
+            span,
+        } = &*enum_def;
+        let mut ids = vec![];
+        for hir::Variant {
+            unique_name, ident, ..
+        } in variants
+        {
+            let id: u32 = (*unique_name).into();
+            ids.push(id);
+            // ...
+        }
+        let ty: InternType = Type::Adt { variants: ids }.into();
+        self.context
+            .add(Element::new_typed_variable(*unique_name, ty));
+        Ok(())
+    }
+
     fn visit_type_alias(&mut self, type_alias: &hir::TypeAlias) -> Result<()> {
         debug!("visit_type_alias, {:#?}", type_alias);
         let hir::TypeAlias {
@@ -464,7 +489,6 @@ impl TypeChecker {
                         Ok(ty)
                     }
                     Binding::Function(function) => {
-                        let function = function.lock().unwrap();
                         let name = function.unique_name;
                         let ty = self.context.get_annotation(&name).unwrap();
                         Ok(ty)
@@ -507,7 +531,6 @@ impl TypeChecker {
                 match binding {
                     // Calling a function definition
                     Binding::Function(function) => {
-                        let function = function.lock().unwrap();
                         let name = function.unique_name;
                         let fn_ty = self.context.get_annotation(&name).unwrap();
 
@@ -555,6 +578,12 @@ impl TypeChecker {
             }
             ExprKind::TrailingClosure(a, b) => {
                 todo!("cant synth type for trailing closure expressions");
+            }
+            ExprKind::EnumVariant(enumdef, variant) => {
+                let ty =
+                    self.context.get_annotation(&enumdef.unique_name).unwrap();
+                
+                todo!("ENUM VARIANT");
             }
             _ => unimplemented!(""),
         }
@@ -615,7 +644,7 @@ impl TypeChecker {
     }
 
     fn checks_against(&mut self, expr: &Expr, ty: InternType) -> Result<()> {
-        debug!("check_against, {:?}", ty);
+        debug!("check_against\nexpr: {:#?}\nty: {:#?}", expr, ty);
         // TODO assert is_well_formed
         match (&expr.kind, &*ty) {
             // I1
@@ -712,9 +741,13 @@ impl TypeChecker {
             ) => {
                 debug!("<:->");
                 for (a, b) in a1.iter().zip(b1) {
-                    self.subtype(a.ty, b.ty)?;
+                    let a = self.apply_context(a.ty)?;
+                    let b = self.apply_context(b.ty)?;
+                    self.subtype(a, b)?;
                 }
-                self.subtype(*a2, *b2)
+                let a2 = self.apply_context(*a2)?;
+                let b2 = self.apply_context(*b2)?;
+                self.subtype(a2, b2)
             }
             // >:forallL
             (Type::Quantification(alphas, a), _) => {
@@ -777,6 +810,10 @@ impl TypeChecker {
                 let message = format!("Cannot subtype a known value with a type variable. This variable could be instantiated to an arbitrary type that does not match");
                 Err(Diagnostic::error().with_message(message))
             }
+            (_, Type::Function { .. }) | (Type::Function { .. }, _) => {
+                Err(Diagnostic::error()
+                    .with_message("Cant subtype with functions"))
+            }
             (_, _) => Err(Diagnostic::error().with_message("Cant subtype")),
         }
     }
@@ -786,7 +823,7 @@ impl TypeChecker {
         alpha: Existential,
         b: InternType,
     ) -> Result<()> {
-        debug!("<:InstantiateL - {:?}", alpha);
+        debug!("<:InstantiateL - {:?} with {:?}", alpha, b);
         // First we need to split the context into left/right
         // TODO
         // let element = Element::new_existential(alpha);
@@ -805,7 +842,7 @@ impl TypeChecker {
         alpha: Existential,
         a: InternType,
     ) -> Result<()> {
-        debug!("<:InstantiateL - {:?}", alpha);
+        debug!("<:InstantiateR - {:?} with {:?}", alpha, a);
         // First we need to split the context into left/right
         // TODO
         // let element = Element::new_existential(alpha);
@@ -875,10 +912,6 @@ impl TypeChecker {
                 self.type_application(var, *b, with_ty)?,
             )
             .into()),
-            // Type::Tuple(_) => {}
-            // Type::List(_) => {}
-            // Type::Quantification(_, _) => {}
-            // Type::Variable(_) => {}
             _ => Ok(in_ty),
         }
     }
@@ -929,9 +962,9 @@ impl TypeChecker {
 
         let ty = self.apply_context(ty)?;
 
-        debug!("synthesize_application: {:#?}", ty);
-        debug!("synthesize_application, args: {:#?}", args);
         match &*ty {
+            Type::Adt { .. } => Err(Diagnostic::error()
+                .with_message("Cant call an enum as a function")),
             Type::Function {
                 parameters,
                 out,
@@ -1152,6 +1185,9 @@ impl TypeChecker {
     fn hir_type_to_type(&mut self, hir_type: &hir::Type) -> Result<InternType> {
         debug!("hir_type_to_type {:#?}", hir_type);
         let ty = match hir_type {
+            HIRType::Enum { enumdef, .. } => {
+                self.context.get_annotation(&enumdef.unique_name).unwrap()
+            }
             HIRType::Tuple(hir_tys, _) => {
                 let mut tys = vec![];
                 for ty in hir_tys {
@@ -1347,6 +1383,9 @@ fn occurs_in(alpha: &Existential, ty: InternType) -> bool {
     debug!("occurs_in: {:?} - {:?}", alpha, ty);
     // false
     match &*ty {
+        Type::Adt { .. } => {
+            todo!("Occurs in ADT");
+        }
         Type::Component { .. } => todo!("occurs_in for component"),
         Type::Unit => false,
         Type::Literal(_) => false,

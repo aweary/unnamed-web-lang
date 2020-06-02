@@ -1,13 +1,9 @@
-// A generic identity function
-type Identity<T> = T => T;
-// An identity function only for strings
-type StringIdentity = Identity<string>;
-
-fn main(string_identity: StringIdentity) {
-    // This works
-    let a = string_identity("hello");
-    // This fails
-    let b = string_identity(1);
+enum Flavor {
+    Chocolate,
+    Vanilla,
+    Strawberry,
 }
 
-
+fn with_flavor(flavor: Flavor) {
+    let a = Flavor.Chocolate;
+}

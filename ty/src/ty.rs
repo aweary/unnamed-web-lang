@@ -95,6 +95,9 @@ pub enum Type {
         // types for components
         return_ty: InternType,
     },
+    // Algebraic data type, used to represent enums
+    // TODO use UniqueName here?
+    Adt { variants: Vec<u32> },
 }
 
 impl Display for Type {
@@ -117,6 +120,7 @@ impl Display for Type {
             Type::Quantification(_, _) => write!(f, "Quantification (TODO)"),
             Type::Variable(_) => write!(f, "variable (TODO)"),
             Type::Component { .. } => write!(f, "Component (TODO)"),
+            Type::Adt { .. } => write!(f, "Component (TODO)"),
         }
     }
 }
