@@ -1,9 +1,19 @@
-enum Flavor {
-    Chocolate,
-    Vanilla,
-    Strawberry,
+enum Option {
+    Some,
+    None,
 }
 
-fn with_flavor(flavor: Flavor) {
-    let a = Flavor.Chocolate;
+enum StringOption {
+    Some,
+    None,
+}
+
+fn with_string_option(option: StringOption) {}
+fn with_option(option: Option) {}
+
+fn main() {
+    // Should have type Variant('Some')
+    let a = Option.Some;
+    with_option(a);
+    with_string_option(StringOption.None);
 }

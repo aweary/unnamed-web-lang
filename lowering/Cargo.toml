@@ -7,6 +7,7 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+common = { path = "../common" }
 data_structures = { path = "../data_structures" }
 diagnostics = { path = "../diagnostics" }
 edit-distance = "2.1.0"

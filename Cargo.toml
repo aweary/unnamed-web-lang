@@ -2,6 +2,7 @@
 
 members = [
     "codegen",
+    "common",
     "compiler",
     "data_structures",
     "diagnostics",

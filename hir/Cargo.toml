@@ -16,6 +16,7 @@ quickcheck_macros = "0.9.1"
 edit-distance = "2.1.0"
 quickcheck = "0.9.2"
 data_structures = { path = "../data_structures" }
+common = { path = "../common" }
 fxhash = "0.2.1"
 notify = "4.0.13"
 id-arena = "2.2.1"
@@ -28,4 +29,3 @@ petgraph = "0.5.0"
 syntax = { path = "../syntax" }
 parser = { path = "../parser" }
 ty = { path = "../ty" }
-lazy_static = "1.4.0"

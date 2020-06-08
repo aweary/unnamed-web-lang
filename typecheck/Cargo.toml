@@ -9,6 +9,7 @@ hir = { path = "../hir" }
 source = { path = "../source" }
 diagnostics = { path = "../diagnostics" }
 data_structures = { path = "../data_structures" }
+common = { path = "../common" }
 syntax = { path = "../syntax" }
 ty = { path = "../ty" }
 log = "0.4"

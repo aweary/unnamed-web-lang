@@ -1,5 +1,5 @@
 use diagnostics::ParseResult as Result;
-use hir::unique_name::UniqueName;
+use common::unique_name::UniqueName;
 use ty::{Existential, Type, Variable};
 
 use internment::Intern;
@@ -136,7 +136,7 @@ impl TypeContext {
         for element in &self.elements {
             match &element.kind {
                 ElementKind::TypedVariable(a, ty) if a == name => {
-                    debug!("get_annotation: {:?} is {:?}", name, ty);
+                    debug!("get_annotation: {:?} is {}", name, ty);
                     return Some(*ty);
                 }
                 _ => {}

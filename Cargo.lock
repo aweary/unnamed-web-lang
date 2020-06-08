@@ -271,6 +271,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "common"
+version = "0.1.0"
+dependencies = [
+ "data_structures 0.1.0",
+ "lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "compiler"
 version = "0.1.0"
 dependencies = [
@@ -762,6 +770,7 @@ name = "hir"
 version = "0.1.0"
 dependencies = [
  "cargo-insta 0.13.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "common 0.1.0",
  "data_structures 0.1.0",
  "diagnostics 0.1.0",
  "edit-distance 2.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -769,7 +778,6 @@ dependencies = [
  "generational-arena 0.2.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "id-arena 2.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "insta 0.13.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.1.0",
  "notify 4.0.14 (registry+https://github.com/rust-lang/crates.io-index)",
  "parser 0.1.0",
@@ -998,6 +1006,7 @@ dependencies = [
 name = "lowering"
 version = "0.1.0"
 dependencies = [
+ "common 0.1.0",
  "data_structures 0.1.0",
  "diagnostics 0.1.0",
  "edit-distance 2.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1981,9 +1990,11 @@ dependencies = [
 name = "ty"
 version = "0.1.0"
 dependencies = [
+ "common 0.1.0",
  "data_structures 0.1.0",
  "internment 0.3.12 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.103 (registry+https://github.com/rust-lang/crates.io-index)",
+ "source 0.1.0",
  "syntax 0.1.0",
 ]
 
@@ -1991,6 +2002,7 @@ dependencies = [
 name = "typecheck"
 version = "0.1.0"
 dependencies = [
+ "common 0.1.0",
  "data_structures 0.1.0",
  "diagnostics 0.1.0",
  "hir 0.1.0",

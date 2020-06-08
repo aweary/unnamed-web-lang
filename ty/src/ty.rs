@@ -5,6 +5,8 @@
 use internment::Intern;
 
 use crate::effects::EffectType;
+use common::unique_name::UniqueName;
+use source::diagnostics::Span;
 use std::fmt::Display;
 use syntax::symbol::Symbol;
 
@@ -62,6 +64,16 @@ pub struct Parameter {
     pub name: Option<Symbol>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Data {
+    pub name: Symbol,
+    pub id: u32,
+    fields: Option<Vec<DataField>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct DataField {}
+
 // Set of possible types that the user can define or reference
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Type {
@@ -95,16 +107,38 @@ pub enum Type {
         // types for components
         return_ty: InternType,
     },
-    // Algebraic data type, used to represent enums
-    // TODO use UniqueName here?
-    Adt { variants: Vec<u32> },
+    Enum(Enum),
+    Variant(Variant),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Variant {
+    pub name: Symbol,
+    pub span: Span,
+    pub unique_name: UniqueName,
+    pub kind: VariantType,
+    pub parent: UniqueName,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum VariantType {
+    Fieldless,
+    Tuple(Vec<InternType>),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Enum {
+    pub name: Symbol,
+    pub span: Span,
+    pub unique_name: UniqueName,
+    pub variants: Vec<Variant>,
 }
 
 impl Display for Type {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Type::Literal(lit) => write!(f, "{}", lit),
-            Type::Existential(a) => write!(f, "∀{:?}", a),
+            Type::Existential(a) => write!(f, "∀{}", a.0),
             Type::SolvableExistential(a, b) => {
                 if let Some(ty) = b {
                     write!(f, "{}", ty)
@@ -113,19 +147,49 @@ impl Display for Type {
                 }
             }
             Type::Unit => write!(f, "unit"),
-            Type::Function { .. } => write!(f, "function (TODO)"),
+            Type::Function {
+                parameters, out, ..
+            } => {
+                write!(f, "(")?;
+                let params: Vec<String> = parameters
+                    .iter()
+                    .map(|param| format!("{}", param.ty))
+                    .collect();
+                let params = params.join(", ");
+                write!(f, "{}", params)?;
+                write!(f, ")")?;
+                write!(f, " => {}", out)
+            }
             Type::Pair(_, _) => write!(f, "pair (TODO)"),
             Type::Tuple(_) => write!(f, "tuple (TODO)"),
             Type::List(_) => write!(f, "list (TODO)"),
             Type::Quantification(_, _) => write!(f, "Quantification (TODO)"),
             Type::Variable(_) => write!(f, "variable (TODO)"),
             Type::Component { .. } => write!(f, "Component (TODO)"),
-            Type::Adt { .. } => write!(f, "Component (TODO)"),
+            Type::Enum(_) => write!(f, "TODO"),
+            Type::Variant(_) => write!(f, "TODO"),
         }
     }
 }
 
 impl Type {
+    pub fn description(&self) -> &'static str {
+        match self {
+            Type::Literal(_) => "a literal",
+            Type::Existential(_) => "an unsolved existential",
+            Type::SolvableExistential(_, _) => "an existential",
+            Type::Unit => "the unit type",
+            Type::Function { .. } => "a function",
+            Type::Pair(_, _) => "a pair",
+            Type::Tuple(_) => "a tuple",
+            Type::List(_) => "a list",
+            Type::Quantification(_, _) => "a quantification",
+            Type::Variable(_) => "a type variable",
+            Type::Component { .. } => "a component",
+            Type::Enum(_) => "an enum",
+            Type::Variant(_) => "a variant",
+        }
+    }
     pub fn new_function(
         parameters: Vec<Parameter>,
         out: InternType,

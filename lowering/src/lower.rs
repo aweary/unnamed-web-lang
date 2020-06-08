@@ -6,7 +6,7 @@ use data_structures::scope_map::ScopeMap;
 
 use diagnostics::ParseResult as Result;
 
-use hir::unique_name::UniqueName;
+use common::unique_name::UniqueName;
 use log::debug;
 use source::FileId;
 use std::sync::Arc;
@@ -813,49 +813,6 @@ impl LoweringContext {
             // Object member access
             ExprKind::Member(expr, member_ident) => {
                 debug!("member expr, {:?}", member_ident);
-                // Check if this is an enum.
-                match &expr.kind {
-                    ast::ExprKind::Reference(name) => {
-                        if let Some((binding, _)) =
-                            self.scope.resolve(&name.symbol)
-                        {
-                            match binding {
-                                hir::Binding::Enum(enumdef) => {
-                                    debug!("Resolved to enum");
-                                    let hir::EnumDef { name, variants, .. } =
-                                        &*enumdef;
-                                    // Find the variant for this property access
-                                    for hir::Variant {
-                                        ident,
-                                        unique_name,
-                                        span,
-                                        ..
-                                    } in variants
-                                    {
-                                        if ident.symbol == member_ident.symbol {
-                                            let kind =
-                                                hir::ExprKind::EnumVariant(
-                                                    enumdef.clone(),
-                                                    *unique_name,
-                                                );
-                                            return Ok(hir::Expr {
-                                                kind,
-                                                span: expr.span,
-                                            });
-                                        }
-                                    }
-                                }
-                                _ => {
-                                    // ...
-                                }
-                            }
-                        }
-                    }
-                    _ => {
-                        // ...
-                    }
-                }
-
                 let expr = self.lower_expr(*expr)?;
                 hir::ExprKind::Member(Box::new(expr), member_ident)
             }

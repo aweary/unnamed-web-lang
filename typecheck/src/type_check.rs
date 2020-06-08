@@ -1,5 +1,5 @@
 use crate::type_context::{Element, TypeContext};
-use ::hir::unique_name::UniqueName;
+use ::common::unique_name::UniqueName;
 use ::hir::{
     hir, BinOp, Binding, Expr, ExprKind, Lit, LitKind, Local, StatementKind,
     Type as HIRType,
@@ -10,7 +10,7 @@ use data_structures::HashMap;
 use diagnostics::ParseResult as Result;
 use source::diagnostics::{Diagnostic, Label};
 use ty::effects::{EffectConstant, EffectType};
-use ty::{boolean, number, string, Existential, LiteralType, Type, Variable};
+use ty::{boolean, number, Existential, LiteralType, Type, Variable, Variant};
 
 use internment::Intern;
 use log::{debug, info};
@@ -39,7 +39,7 @@ pub struct TypeChecker {
 
 impl Visitor for TypeChecker {
     fn visit_statement(&mut self, statement: &hir::Statement) -> Result<()> {
-        debug!("visit_statement");
+        debug!("\n\nvisit_statement");
         match &statement.kind {
             StatementKind::Expr(expr) => {
                 // Just check the expression can be inferred
@@ -61,19 +61,13 @@ impl Visitor for TypeChecker {
             }
             StatementKind::If(ifexpr) => {
                 let hir::IfExpr {
-                    condition,
-                    block,
-                    alt,
-                    ..
+                    condition, block, ..
                 } = ifexpr;
-
                 // Check that the condition evaluates to a boolean
                 self.checks_against(&*condition, boolean!())?;
-
                 // TODO could we check if this condition will *always* evaluate
                 // to `true` or `false`? If we can statically exclude the easy cases
                 // maybe we can give better effect inference.
-
                 walk_block(self, block)?;
             }
             StatementKind::State(local) => {
@@ -95,9 +89,7 @@ impl Visitor for TypeChecker {
                 }
             }
             StatementKind::Throw(expr) => {
-                debug!("visit throw statement");
                 let ty = self.synth(expr)?;
-                debug!("throwing a {:?}", ty);
                 let effect = EffectConstant::Exn(ty);
                 let tracked_effect_ty =
                     self.tracked_effect_ty.as_mut().unwrap();
@@ -115,27 +107,67 @@ impl Visitor for TypeChecker {
     }
 
     fn visit_enum_def(&mut self, enum_def: &hir::EnumDef) -> Result<()> {
-        debug!("visit_enum_def");
-        // Create the ADT type for the enum definition, add it to context
         let hir::EnumDef {
             name,
             unique_name,
             variants,
             parameters,
             span,
-        } = &*enum_def;
-        let mut ids = vec![];
+        } = enum_def;
+
+        // If there are parameters we create type variables for them
+        // and map them back to the unique name of the type parameter.
+        let _parameters = parameters.as_ref().map(|parameters| {
+            let mut tvars = vec![];
+            for hir::TVar { unique_name, .. } in parameters {
+                let tvar = self.fresh_variable();
+                self.variable_map.insert(*unique_name, tvar);
+                tvars.push(tvar);
+            }
+            tvars
+        });
+
+        // Enums are modelled as disjoint unions. We can use the `unique_name` of the
+        // enum definition as the discriminator and then use a u8 to distinguish
+        // variants within the union. That limits us to 256 cases, which is an intentional
+        // limitation for now.
+        let mut variant_id: u8 = 0;
+
+        let mut variant_tys = vec![];
+
         for hir::Variant {
-            unique_name, ident, ..
+            fields,
+            ident,
+            unique_name,
+            span,
+            ..
         } in variants
         {
-            let id: u32 = (*unique_name).into();
-            ids.push(id);
-            // ...
+            let ty = ty::Variant {
+                unique_name: *unique_name,
+                name: ident.symbol.clone(),
+                span: ident.span,
+                kind: ty::VariantType::Fieldless,
+                parent: enum_def.unique_name,
+            };
+            variant_tys.push(ty);
         }
-        let ty: InternType = Type::Adt { variants: ids }.into();
+
+        let enum_ = ty::Enum {
+            name: name.symbol.clone(),
+            span: name.span,
+            unique_name: *unique_name,
+            variants: variant_tys,
+        };
+
+        let ty = Type::Enum(enum_);
+        let ty = Intern::new(ty);
+
         self.context
             .add(Element::new_typed_variable(*unique_name, ty));
+
+        debug!("Variants: {:#?}", variants);
+
         Ok(())
     }
 
@@ -493,11 +525,15 @@ impl TypeChecker {
                         let ty = self.context.get_annotation(&name).unwrap();
                         Ok(ty)
                     }
+                    Binding::Enum(enumdef) => {
+                        let name = enumdef.unique_name;
+                        let ty = self.context.get_annotation(&name).unwrap();
+                        Ok(ty)
+                    }
                     Binding::Component(_)
                     | Binding::Import(_)
                     | Binding::Constant(_)
                     | Binding::Type(_)
-                    | Binding::Enum(_)
                     | Binding::Wildcard => Err(Diagnostic::error()
                         .with_message("Cant check these references yet")),
                 }
@@ -579,11 +615,94 @@ impl TypeChecker {
             ExprKind::TrailingClosure(a, b) => {
                 todo!("cant synth type for trailing closure expressions");
             }
-            ExprKind::EnumVariant(enumdef, variant) => {
-                let ty =
-                    self.context.get_annotation(&enumdef.unique_name).unwrap();
-                
-                todo!("ENUM VARIANT");
+            ExprKind::Member(source, name) => {
+                let source_ty = self.synth(&*source)?;
+
+                match &*source_ty {
+                    Type::Enum(enum_) => {
+                        // Accessing an enum should return a `Variant` type.
+                        // For Member acesss (as opposed to MemberCall) the variant
+                        // must have no fields.
+                        let ty::Enum {
+                            variants,
+                            ..
+                            // unique_name,
+                        } = enum_;
+
+                        debug!("variants: {:#?}", variants);
+
+                        let variant = variants
+                            .iter()
+                            .find(|variant| variant.name == name.symbol);
+                        debug!("found variant: {:#?}", variant);
+                        if let Some(variant) = variant {
+                            // TODO check fields and make sure it doesn't
+                            // require arguments.
+                            let ty = Type::Variant(variant.clone());
+                            return Ok(ty.into());
+                        } else {
+                            // No variant with this name.
+                            // TODO recommend similar names
+                            let msg = format!(
+                                "No variant '{:?}' found in the enum '{:?}'",
+                                name, enum_.name,
+                            );
+                            return Err(Diagnostic::error()
+                                .with_message(msg)
+                                .with_labels(vec![
+                                    Label::primary(name.span),
+                                    Label::secondary(enum_.span),
+                                ]));
+                        }
+                    }
+                    _ => {
+                        let desc = source_ty.description();
+                        let msg = format!("This is {}, which does not have properties to access", desc);
+                        return Err(Diagnostic::error()
+                            .with_message(msg)
+                            .with_labels(vec![Label::primary(
+                                source.span.merge(name.span),
+                            )]));
+                    }
+                    _ => todo!("only support enum variants for member access"),
+                }
+                debug!("source_ty: {:?}", source_ty);
+                todo!("member expression for ty");
+                // ...
+            }
+            ExprKind::MemberCall(source, name, arguments) => {
+                let source_ty = self.synth(&*source)?;
+                // We only support accessing variant types for now
+                match &*source_ty {
+                    Type::Enum(ty::Enum {
+                        unique_name,
+                        variants,
+                        name,
+                        span,
+                    }) => {
+                        debug!("variants: {:#?}", variants);
+                        // let member_symbol = &name.symbol;
+                        // // Make sure this actually exists in the type
+                        // for variant in variants {
+                        //     if &variant.name == member_symbol {
+                        //         if let Some(ty) = variant.ty {
+                        //             let mut args = vec![];
+                        //             for arg in arguments {
+                        //                 args.push(arg);
+                        //             }
+                        //             let ty = self.apply_context(ty)?;
+
+                        //             return Ok(ty);
+                        //         } else {
+                        //             panic!("NOOOOOOO");
+                        //         }
+                        //     }
+                        // }
+                        // ...
+                    }
+                    _ => todo!("only support enum variants for member access"),
+                };
+                todo!("foo")
             }
             _ => unimplemented!(""),
         }
@@ -644,7 +763,7 @@ impl TypeChecker {
     }
 
     fn checks_against(&mut self, expr: &Expr, ty: InternType) -> Result<()> {
-        debug!("check_against\nexpr: {:#?}\nty: {:#?}", expr, ty);
+        debug!("check_against - {}", ty);
         // TODO assert is_well_formed
         match (&expr.kind, &*ty) {
             // I1
@@ -688,7 +807,15 @@ impl TypeChecker {
                 let a = self.synth(expr)?;
                 let b = self.apply_context(ty)?;
                 self.subtype(a, b).map_err(|err| {
-                    err.with_labels(vec![Label::primary(expr.span)])
+                    let Diagnostic {
+                        message,
+                        mut labels,
+                        ..
+                    } = err;
+                    labels.push(Label::primary(expr.span));
+                    Diagnostic::error()
+                        .with_message(message)
+                        .with_labels(labels)
                 })?;
                 Ok(())
             }
@@ -696,8 +823,19 @@ impl TypeChecker {
     }
 
     fn subtype(&mut self, a: InternType, b: InternType) -> Result<()> {
-        debug!("subtype, a: {:?}, b: {:?}", a, b);
+        debug!("subtype, a: {}, b: {}", a, b);
         match (&*a, &*b) {
+            (Type::Variant(variant), Type::Enum(enum_)) => {
+                let ty::Enum { variants, .. } = enum_;
+                for ty::Variant { unique_name, .. } in variants {
+                    if variant.unique_name == *unique_name {
+                        // This variant exists within this enum
+                        return Ok(());
+                    }
+                }
+                return Err(Diagnostic::error()
+                    .with_message("This variant doesnt exist in this enum!"));
+            }
             // <:Unit
             (Type::Literal(a), Type::Literal(b)) => {
                 debug!("<:Unit");
@@ -917,7 +1055,7 @@ impl TypeChecker {
     }
 
     fn apply_context(&mut self, ty: InternType) -> Result<InternType> {
-        debug!("apply_context {:?}", ty);
+        debug!("apply_context {}", ty);
         match &*ty {
             Type::Existential(alpha) => {
                 if let Some(tau) = self.context.get_solved(*alpha) {
@@ -963,7 +1101,7 @@ impl TypeChecker {
         let ty = self.apply_context(ty)?;
 
         match &*ty {
-            Type::Adt { .. } => Err(Diagnostic::error()
+            Type::Enum { .. } => Err(Diagnostic::error()
                 .with_message("Cant call an enum as a function")),
             Type::Function {
                 parameters,
@@ -1110,6 +1248,7 @@ impl TypeChecker {
             | Type::Tuple(_)
             | Type::List(_)
             | Type::Variable(_)
+            | Type::Variant(_)
             | Type::Component { .. } => todo!(),
         }
     }
@@ -1380,13 +1519,11 @@ impl TypeChecker {
 }
 
 fn occurs_in(alpha: &Existential, ty: InternType) -> bool {
-    debug!("occurs_in: {:?} - {:?}", alpha, ty);
+    debug!("occurs_in: {:?} - {}", alpha, ty);
     // false
     match &*ty {
-        Type::Adt { .. } => {
-            todo!("Occurs in ADT");
-        }
         Type::Component { .. } => todo!("occurs_in for component"),
+        Type::Enum(_) | Type::Variant(_) => todo!(""),
         Type::Unit => false,
         Type::Literal(_) => false,
         // TODO when is it possible for an existential to equal a type variable?

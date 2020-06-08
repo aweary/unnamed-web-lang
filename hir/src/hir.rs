@@ -10,7 +10,7 @@ use data_structures::scope_map::{Referant, Reference};
 use data_structures::{Blockable, ControlFlowGraph};
 use source::FileId;
 
-use crate::unique_name::UniqueName;
+use common::unique_name::UniqueName;
 
 use edit_distance::edit_distance;
 
@@ -24,8 +24,6 @@ pub use syntax::ast::{
 };
 
 pub type ModuleId = Id<Module>;
-
-impl Reference for UniqueName {}
 
 #[derive(Debug, Clone)]
 pub enum Type {

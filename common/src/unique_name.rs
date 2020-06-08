@@ -4,6 +4,9 @@ use std::cell::RefCell;
 use std::fmt;
 use std::sync::Mutex;
 
+use data_structures::scope_map::{Reference};
+impl Reference for UniqueName {}
+
 lazy_static! {
     static ref UNIQUE_NAME_COUNTER: Mutex<RefCell<u32>> =
         Mutex::new(RefCell::new(0));
