@@ -35,6 +35,7 @@ pub struct TypeChecker {
     tracked_effect_ty: Option<EffectType>,
     /// Maps unique names to type variables
     variable_map: HashMap<UniqueName, Variable>,
+    enum_map: HashMap<UniqueName, InternType>,
 }
 
 impl Visitor for TypeChecker {
@@ -117,7 +118,7 @@ impl Visitor for TypeChecker {
 
         // If there are parameters we create type variables for them
         // and map them back to the unique name of the type parameter.
-        let _parameters = parameters.as_ref().map(|parameters| {
+        let parameters = parameters.as_ref().map(|parameters| {
             let mut tvars = vec![];
             for hir::TVar { unique_name, .. } in parameters {
                 let tvar = self.fresh_variable();
@@ -127,11 +128,7 @@ impl Visitor for TypeChecker {
             tvars
         });
 
-        // Enums are modelled as disjoint unions. We can use the `unique_name` of the
-        // enum definition as the discriminator and then use a u8 to distinguish
-        // variants within the union. That limits us to 256 cases, which is an intentional
-        // limitation for now.
-        let mut variant_id: u8 = 0;
+        debug!("parameters: {:#?}", parameters);
 
         let mut variant_tys = vec![];
 
@@ -139,15 +136,24 @@ impl Visitor for TypeChecker {
             fields,
             ident,
             unique_name,
-            span,
             ..
         } in variants
         {
+            let kind = if let Some(fields) = fields {
+                let tys = fields
+                    .iter()
+                    .map(|ty| self.hir_type_to_type(ty))
+                    .collect::<Result<Vec<InternType>>>()?;
+                ty::VariantType::Tuple(tys)
+            } else {
+                ty::VariantType::Fieldless
+            };
+
             let ty = ty::Variant {
                 unique_name: *unique_name,
                 name: ident.symbol.clone(),
                 span: ident.span,
-                kind: ty::VariantType::Fieldless,
+                kind,
                 parent: enum_def.unique_name,
             };
             variant_tys.push(ty);
@@ -162,6 +168,8 @@ impl Visitor for TypeChecker {
 
         let ty = Type::Enum(enum_);
         let ty = Intern::new(ty);
+
+        self.enum_map.insert(*unique_name, ty);
 
         self.context
             .add(Element::new_typed_variable(*unique_name, ty));
@@ -340,6 +348,7 @@ impl TypeChecker {
             tracked_return_ty: None,
             tracked_effect_ty: None,
             variable_map: HashMap::default(),
+            enum_map: HashMap::default(),
         };
     }
 
@@ -365,6 +374,18 @@ impl TypeChecker {
                 );
                 Err(err)
             }
+        }
+    }
+
+    fn with_enum<F, T>(&self, name: UniqueName, func: F) -> T
+    where
+        F: FnOnce(&ty::Enum) -> T,
+    {
+        let ty = self.enum_map.get(&name).unwrap();
+        let ty = *ty;
+        match &*ty {
+            Type::Enum(enum_) => func(enum_),
+            _ => panic!(),
         }
     }
 
@@ -623,23 +644,29 @@ impl TypeChecker {
                         // Accessing an enum should return a `Variant` type.
                         // For Member acesss (as opposed to MemberCall) the variant
                         // must have no fields.
-                        let ty::Enum {
-                            variants,
-                            ..
-                            // unique_name,
-                        } = enum_;
-
-                        debug!("variants: {:#?}", variants);
+                        let ty::Enum { variants, .. } = enum_;
 
                         let variant = variants
                             .iter()
                             .find(|variant| variant.name == name.symbol);
-                        debug!("found variant: {:#?}", variant);
+
                         if let Some(variant) = variant {
-                            // TODO check fields and make sure it doesn't
-                            // require arguments.
-                            let ty = Type::Variant(variant.clone());
-                            return Ok(ty.into());
+                            return match &variant.kind {
+                                ty::VariantType::Fieldless => {
+                                    let ty = Type::Variant(variant.clone());
+                                    Ok(ty.into())
+                                }
+                                ty::VariantType::Tuple(tys) => {
+                                    let msg = format!("Variant '{:?}' expected {} argument(s), but none were provided", name, tys.len());
+                                    Err(Diagnostic::error()
+                                        .with_message(msg)
+                                        .with_labels(vec![Label::primary(
+                                            name.span,
+                                        )]))
+                                }
+                            };
+                        // TODO check fields and make sure it doesn't
+                        // require arguments.
                         } else {
                             // No variant with this name.
                             // TODO recommend similar names
@@ -664,45 +691,65 @@ impl TypeChecker {
                                 source.span.merge(name.span),
                             )]));
                     }
-                    _ => todo!("only support enum variants for member access"),
                 }
-                debug!("source_ty: {:?}", source_ty);
-                todo!("member expression for ty");
-                // ...
             }
             ExprKind::MemberCall(source, name, arguments) => {
                 let source_ty = self.synth(&*source)?;
                 // We only support accessing variant types for now
                 match &*source_ty {
-                    Type::Enum(ty::Enum {
-                        unique_name,
-                        variants,
-                        name,
-                        span,
-                    }) => {
-                        debug!("variants: {:#?}", variants);
-                        // let member_symbol = &name.symbol;
-                        // // Make sure this actually exists in the type
-                        // for variant in variants {
-                        //     if &variant.name == member_symbol {
-                        //         if let Some(ty) = variant.ty {
-                        //             let mut args = vec![];
-                        //             for arg in arguments {
-                        //                 args.push(arg);
-                        //             }
-                        //             let ty = self.apply_context(ty)?;
+                    Type::Enum(enum_) => {
+                        let ty::Enum { variants, .. } = enum_;
 
-                        //             return Ok(ty);
-                        //         } else {
-                        //             panic!("NOOOOOOO");
-                        //         }
-                        //     }
-                        // }
-                        // ...
+                        let variant = variants
+                            .iter()
+                            .find(|variant| variant.name == name.symbol);
+
+                        if let Some(variant) = variant {
+                            match &variant.kind {
+                                ty::VariantType::Tuple(tys) => {
+                                    // We treat this like a function call, except the return
+                                    // type is the variant itself.
+                                    // TODO handle quantifications here.
+
+                                    assert_eq!(tys.len(), arguments.len());
+
+
+                                    for (hir::Argument { value, .. }, ty) in
+                                        arguments.iter().zip(tys)
+                                    {
+                                        self.checks_against(value, *ty)?;
+                                    }
+                                    let ty = Type::Variant(variant.clone());
+                                    Ok(ty.into())
+                                }
+                                ty::VariantType::Fieldless => {
+                                    let msg = format!("Variant '{:?}' expected no argument(s), but {} argument(s) was/were provided", name, arguments.len());
+                                    Err(Diagnostic::error()
+                                        .with_message(msg)
+                                        .with_labels(vec![Label::primary(
+                                            name.span,
+                                        )]))
+                                }
+                            }
+                        // TODO check fields and make sure it doesn't
+                        // require arguments.
+                        } else {
+                            // No variant with this name.
+                            // TODO recommend similar names
+                            let msg = format!(
+                                "No variant '{:?}' found in the enum '{:?}'",
+                                name, enum_.name,
+                            );
+                            return Err(Diagnostic::error()
+                                .with_message(msg)
+                                .with_labels(vec![
+                                    Label::primary(name.span),
+                                    Label::secondary(enum_.span),
+                                ]));
+                        }
                     }
                     _ => todo!("only support enum variants for member access"),
-                };
-                todo!("foo")
+                }
             }
             _ => unimplemented!(""),
         }
@@ -833,8 +880,10 @@ impl TypeChecker {
                         return Ok(());
                     }
                 }
-                return Err(Diagnostic::error()
-                    .with_message("This variant doesnt exist in this enum!"));
+                let enum_name =
+                    self.with_enum(variant.parent, |enum_| enum_.name.clone());
+                let msg = format!("Expected a variant from '{:?}', but found a variant from '{:?}'", enum_.name, enum_name);
+                return Err(Diagnostic::error().with_message(msg));
             }
             // <:Unit
             (Type::Literal(a), Type::Literal(b)) => {
@@ -1070,17 +1119,18 @@ impl TypeChecker {
                 out,
                 effect,
             } => {
-                // panic!("exit function apply_context");
-                let mut mapped_parameters = vec![];
-                for param in parameters {
-                    mapped_parameters.push(ty::Parameter {
-                        ty: self.apply_context(param.ty)?,
-                        name: param.name.clone(),
-                    });
-                }
+                let parameters = parameters
+                    .iter()
+                    .map(|param| {
+                        Ok(ty::Parameter {
+                            ty: self.apply_context(param.ty)?,
+                            name: param.name.clone(),
+                        })
+                    })
+                    .collect::<Result<Vec<ty::Parameter>>>()?;
                 let output = self.apply_context(*out)?;
                 Ok(Type::new_function_with_effect(
-                    mapped_parameters,
+                    parameters,
                     output,
                     effect.clone(),
                 ))
@@ -1184,7 +1234,6 @@ impl TypeChecker {
                 }
                 self.synthesize_application(substituted, args)
             }
-
             Type::Existential(oldalpha) => {
                 debug!("synthesize_application for existential {:?}", oldalpha);
                 // Create an existential for the return type

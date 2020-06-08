@@ -1,19 +1,10 @@
-enum Option {
-    Some,
+enum Option<T> {
+    Some(T),
     None,
 }
 
-enum StringOption {
-    Some,
-    None,
-}
-
-fn with_string_option(option: StringOption) {}
 fn with_option(option: Option) {}
 
 fn main() {
-    // Should have type Variant('Some')
-    let a = Option.Some;
-    with_option(a);
-    with_string_option(StringOption.None);
+    with_option(Option.None);
 }

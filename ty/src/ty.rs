@@ -18,6 +18,12 @@ pub struct Existential(pub u16);
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Variable(pub u16);
 
+impl Display for Variable {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum LiteralType {
     Number,
@@ -164,10 +170,10 @@ impl Display for Type {
             Type::Tuple(_) => write!(f, "tuple (TODO)"),
             Type::List(_) => write!(f, "list (TODO)"),
             Type::Quantification(_, _) => write!(f, "Quantification (TODO)"),
-            Type::Variable(_) => write!(f, "variable (TODO)"),
+            Type::Variable(var) => write!(f, "tvar '{}'", var),
             Type::Component { .. } => write!(f, "Component (TODO)"),
-            Type::Enum(_) => write!(f, "TODO"),
-            Type::Variant(_) => write!(f, "TODO"),
+            Type::Enum(enum_) => write!(f, "enum {:?}", enum_.name),
+            Type::Variant(variant) => write!(f, "variant {:?}", variant.name),
         }
     }
 }
