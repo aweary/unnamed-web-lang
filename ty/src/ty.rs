@@ -113,31 +113,32 @@ pub enum Type {
         // types for components
         return_ty: InternType,
     },
-    Enum(Enum),
-    Variant(Variant),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Variant {
-    pub name: Symbol,
-    pub span: Span,
-    pub unique_name: UniqueName,
-    pub kind: VariantType,
-    pub parent: UniqueName,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum VariantType {
-    Fieldless,
-    Tuple(Vec<InternType>),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Enum {
-    pub name: Symbol,
-    pub span: Span,
-    pub unique_name: UniqueName,
-    pub variants: Vec<Variant>,
+    // An enum is a collection of variants. The enum type doesn't
+    // explicitly reference the variants themselves; that relationship
+    // is inverted. Enums can potentially hold generic data.
+    Enum {
+        name: Symbol,
+        unique_name: UniqueName,
+        tys: Option<Vec<InternType>>,
+    },
+    // A variant constructor is a variant of an enum that
+    // also holds data. It has some input types and the
+    // unique name of the enum its defined in. Calling
+    // a variant constructor evalutes to the type of the
+    // enum.
+    VariantConstructor {
+        name: Symbol,
+        unique_name: UniqueName,
+        input: Vec<InternType>,
+        parent: UniqueName,
+    },
+    // A fieldless variant, which is like a variant constructor except
+    // it holds no data.
+    Variant {
+        name: Symbol,
+        unique_name: UniqueName,
+        parent: UniqueName,
+    },
 }
 
 impl Display for Type {
@@ -168,12 +169,17 @@ impl Display for Type {
             }
             Type::Pair(_, _) => write!(f, "pair (TODO)"),
             Type::Tuple(_) => write!(f, "tuple (TODO)"),
-            Type::List(_) => write!(f, "list (TODO)"),
+            Type::List(t) => write!(f, "{}[]", t),
             Type::Quantification(_, _) => write!(f, "Quantification (TODO)"),
             Type::Variable(var) => write!(f, "tvar '{}'", var),
             Type::Component { .. } => write!(f, "Component (TODO)"),
-            Type::Enum(enum_) => write!(f, "enum {:?}", enum_.name),
-            Type::Variant(variant) => write!(f, "variant {:?}", variant.name),
+            Type::Enum { name, .. } => write!(f, "{:?}", name),
+            Type::Variant { name, .. } => {
+                write!(f, "variant {:?}", name)
+            }
+            Type::VariantConstructor { name, .. } => {
+                write!(f, "variant {:?}", name)
+            }
         }
     }
 }
@@ -192,8 +198,8 @@ impl Type {
             Type::Quantification(_, _) => "a quantification",
             Type::Variable(_) => "a type variable",
             Type::Component { .. } => "a component",
-            Type::Enum(_) => "an enum",
-            Type::Variant(_) => "a variant",
+            Type::Enum { .. } => "an enum",
+            Type::VariantConstructor { .. } | Type::Variant { .. } => "a variant",
         }
     }
     pub fn new_function(

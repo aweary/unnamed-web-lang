@@ -1,10 +1,16 @@
-enum Option<T> {
-    Some(T),
-    None,
+enum Either<T, U> {
+    Left(T),
+    Right(U),
 }
 
-fn with_option(option: Option) {}
+fn with_either_number_or_string(
+    either: Either<number, string>,
+) {}
+
 
 fn main() {
-    with_option(Option.None);
+    with_either_number_or_string(Either.Left(1));
+    with_either_number_or_string(Either.Right("right"));
+    // Oops! Wrong type
+    with_either_number_or_string(Either.Left("oops!"));
 }

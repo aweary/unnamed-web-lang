@@ -1,5 +1,5 @@
-use diagnostics::ParseResult as Result;
 use common::unique_name::UniqueName;
+use diagnostics::ParseResult as Result;
 use ty::{Existential, Type, Variable};
 
 use internment::Intern;
@@ -201,11 +201,12 @@ impl TypeContext {
                 if alpha == existential {
                     // Mutate it in place
                     *element = Element::new_solved(alpha, ty);
+                    return Ok(());
                 }
             }
         }
         // Find the element for this existential
-        Ok(())
+        panic!("Attempted to solve '{:?}' which doesnt exist in context", existential)
     }
 
     /// Split a context at and an index. This is used to split

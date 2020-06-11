@@ -27,6 +27,7 @@ pub type ModuleId = Id<Module>;
 
 #[derive(Debug, Clone)]
 pub enum Type {
+    List(Box<Type>, Span),
     Tuple(Vec<Type>, Span),
     Number(Span),
     Bool(Span),
@@ -38,6 +39,7 @@ pub enum Type {
     },
     Enum {
         enumdef: Arc<EnumDef>,
+        arguments: Option<Vec<Type>>,
         span: Span,
     },
     Function {
@@ -56,6 +58,7 @@ pub struct FunctionParameter {
 impl Type {
     pub fn span(&self) -> Span {
         match self {
+            Type::List(_, span) => *span,
             Type::Tuple(_, span) => *span,
             Type::Number(span) | Type::Bool(span) | Type::String(span) => *span,
             Type::Reference { span, .. } => *span,

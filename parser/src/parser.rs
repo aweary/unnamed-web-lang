@@ -451,11 +451,19 @@ impl Parser<'_> {
         debug!("parse_type");
 
         let ty = self.parse_prefix_type()?;
+        debug!("prefix_type {:#?}", ty);
         match self.peek()?.kind {
             TokenKind::Arrow => {
                 self.expect(TokenKind::Arrow)?;
                 let out_ty = self.parse_type()?;
                 Ok(ast::Type::Function(ty.into(), out_ty.into()))
+            }
+            TokenKind::LBrace => {
+                let lo = ty.span();
+                self.expect(TokenKind::LBrace)?;
+                self.expect(TokenKind::RBrace)?;
+                let span = lo.merge(self.span);
+                Ok(ast::Type::List(ty.into(), span))
             }
             _ => Ok(ty),
         }

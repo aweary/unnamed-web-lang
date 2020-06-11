@@ -18,7 +18,22 @@ pub enum Type {
         span: Span,
     },
     Function(Box<Type>, Box<Type>),
+    List(Box<Type>, Span),
     Tuple(Vec<Type>, Span),
+}
+
+impl Type {
+    pub fn span(&self) -> Span {
+        match self {
+            Type::Number(span) | Type::Boolean(span) | Type::String(span) => {
+                *span
+            }
+            Type::Reference { span, .. } => *span,
+            Type::Function(in_ty, out_ty) => in_ty.span().merge(out_ty.span()),
+            Type::List(_, span) => *span,
+            Type::Tuple(_, span) => *span,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

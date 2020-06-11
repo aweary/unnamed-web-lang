@@ -440,6 +440,10 @@ impl LoweringContext {
     fn lower_type(&mut self, ty: ast::Type) -> Result<hir::Type> {
         debug!("lower_type {:#?}", ty);
         match ty {
+            ast::Type::List(ty, span) => {
+                let ty = self.lower_type(*ty)?;
+                Ok(hir::Type::List(ty.into(), span))
+            }
             ast::Type::Number(span) => Ok(hir::Type::Number(span)),
             ast::Type::Boolean(span) => Ok(hir::Type::Bool(span)),
             ast::Type::String(span) => Ok(hir::Type::String(span)),
@@ -466,8 +470,11 @@ impl LoweringContext {
                                 Ok(hir::Type::Var(name, unique_name))
                             }
                             hir::Binding::Enum(enumdef) => {
+                                let arguments =
+                                    self.lower_type_arguments(arguments)?;
                                 Ok(hir::Type::Enum {
                                     enumdef: enumdef,
+                                    arguments,
                                     span,
                                 })
                             }
