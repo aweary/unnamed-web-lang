@@ -206,7 +206,10 @@ impl TypeContext {
             }
         }
         // Find the element for this existential
-        panic!("Attempted to solve '{:?}' which doesnt exist in context", existential)
+        panic!(
+            "Attempted to solve '{:?}' which doesnt exist in context",
+            existential
+        )
     }
 
     /// Split a context at and an index. This is used to split

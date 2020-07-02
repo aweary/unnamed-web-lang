@@ -18,9 +18,6 @@ use syntax::ast;
 use syntax::symbol::Symbol;
 use typecheck::TypeChecker;
 
-
-
-
 type ImportDescriptorList = Vec<(PathBuf, hir::Ident, ast::ImportPath)>;
 type DashSet<T> = dashmap::DashMap<T, ()>;
 type HirModuleGraph = ModuleGraph<hir::Module, Symbol>;

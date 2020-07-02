@@ -174,9 +174,7 @@ impl Display for Type {
             Type::Variable(var) => write!(f, "tvar '{}'", var),
             Type::Component { .. } => write!(f, "Component (TODO)"),
             Type::Enum { name, .. } => write!(f, "{:?}", name),
-            Type::Variant { name, .. } => {
-                write!(f, "variant {:?}", name)
-            }
+            Type::Variant { name, .. } => write!(f, "variant {:?}", name),
             Type::VariantConstructor { name, .. } => {
                 write!(f, "variant {:?}", name)
             }
@@ -199,7 +197,9 @@ impl Type {
             Type::Variable(_) => "a type variable",
             Type::Component { .. } => "a component",
             Type::Enum { .. } => "an enum",
-            Type::VariantConstructor { .. } | Type::Variant { .. } => "a variant",
+            Type::VariantConstructor { .. } | Type::Variant { .. } => {
+                "a variant"
+            }
         }
     }
     pub fn new_function(

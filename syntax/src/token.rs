@@ -21,8 +21,14 @@ impl Token {
         }
     }
     pub fn precedence(&self) -> Precedence {
-        use Precedence::{ASSIGNMENT, COMPARE, CONDITIONAL, NONE, PREFIX, PRODUCT, SUM};
-        use TokenKind::{And, BinOr, DblEquals, Div, Dot, Equals, GreaterThan, LCurlyBrace, LParen, LessThan, Minus, Mul, Or, Pipeline, Plus, PlusEquals, Question, QuestionDot};
+        use Precedence::{
+            ASSIGNMENT, COMPARE, CONDITIONAL, NONE, PREFIX, PRODUCT, SUM,
+        };
+        use TokenKind::{
+            And, BinOr, DblEquals, Div, Dot, Equals, GreaterThan, LCurlyBrace,
+            LParen, LessThan, Minus, Mul, Or, Pipeline, Plus, PlusEquals,
+            Question, QuestionDot,
+        };
         match self.kind {
             LCurlyBrace | LParen => PREFIX,
             Equals => ASSIGNMENT,
@@ -44,7 +50,10 @@ impl Token {
 
     /// Translate a token to a binary operator AST node
     pub fn to_bin_op(&self) -> Option<BinOp> {
-        use BinOp::{Add, And, BinOr, DblEquals, Div, Equals, GreaterThan, LessThan, Mod, Mul, Or, Pipeline, Sub};
+        use BinOp::{
+            Add, And, BinOr, DblEquals, Div, Equals, GreaterThan, LessThan,
+            Mod, Mul, Or, Pipeline, Sub,
+        };
         match self.kind {
             TokenKind::Equals => Some(Equals),
             TokenKind::DblEquals => Some(DblEquals),

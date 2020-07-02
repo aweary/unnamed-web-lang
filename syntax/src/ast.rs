@@ -494,9 +494,26 @@ pub struct IfExpr {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct MatchArm {
-    pub test: Expr,
-    pub consequent: Expr,
+    pub pattern: Pattern,
+    pub body: Expr,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct Pattern {
     pub span: Span,
+    pub kind: PatternKind,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum PatternKind {
+    /// `User`
+    Fiedless { name: Ident },
+    /// `Enum.User`
+    MemberFiedless { type_name: Ident, name: Ident },
+    /// `User(name)`
+    Tuple { name: Ident, values: Vec<Ident> },
+    /// `Enum.User(name)`
+    MemberTuple { type_name: Ident, name: Ident, values: Vec<Ident> },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

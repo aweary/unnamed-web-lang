@@ -4,7 +4,7 @@ use std::cell::RefCell;
 use std::fmt;
 use std::sync::Mutex;
 
-use data_structures::scope_map::{Reference};
+use data_structures::scope_map::Reference;
 impl Reference for UniqueName {}
 
 lazy_static! {
@@ -29,7 +29,6 @@ impl Into<u32> for UniqueName {
     fn into(self) -> u32 {
         self.0
     }
-
 }
 
 impl fmt::Debug for UniqueName {

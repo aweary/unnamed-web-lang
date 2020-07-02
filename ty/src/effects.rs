@@ -1,7 +1,7 @@
 pub type Heap = u32;
 
-use internment::Intern;
 use crate::ty::InternType;
+use internment::Intern;
 
 use data_structures::MultiSet;
 
@@ -9,8 +9,6 @@ use data_structures::MultiSet;
 pub struct Effect {
     row: MultiSet<EffectConstant>,
 }
-
-
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum EffectConstant {
@@ -21,9 +19,8 @@ pub enum EffectConstant {
     /// Heap operations over some heap
     St(Heap),
     // State
-    State
+    State,
 }
-
 
 /// Most constants compare directly. The only exception in our system is
 /// the state effect where `st<h1> != st<h2>` does *not* hold even if `h1 != h2`
@@ -53,7 +50,10 @@ pub struct EffectType {
 
 impl Default for EffectType {
     fn default() -> Self {
-        EffectType { row: vec![], is_open: false }
+        EffectType {
+            row: vec![],
+            is_open: false,
+        }
     }
 }
 
@@ -68,7 +68,6 @@ impl EffectType {
         // panic!()
     }
 }
-
 
 /// Defines the equivalence relation between effect types, where we consider
 /// effects equivlant regardless of the order of the effect constants.

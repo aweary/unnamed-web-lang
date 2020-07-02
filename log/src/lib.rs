@@ -1,4 +1,3 @@
-
 pub use log::*;
 
 pub fn init() {

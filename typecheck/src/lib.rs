@@ -1,7 +1,4 @@
-#![warn(
-    clippy::all,
-    clippy::pedantic,
-)]
+#![warn(clippy::all, clippy::pedantic)]
 
 mod type_check;
 mod type_context;

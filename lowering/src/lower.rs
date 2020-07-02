@@ -939,44 +939,37 @@ impl LoweringContext {
             hir_args.push(hir::Argument { name, value, span });
         }
         Ok(hir_args)
-        // let mut arguments = vec![];
-        // let mut kind = hir::CallArgumentType::Positional;
-        // for ast::CallArgument { name, value } in args {
-        //     // The parser should already ensure that positional/named arguments
-        //     // aren't mixed.
-        //     if name.is_some() {
-        //         kind = hir::CallArgumentType::Named;
-        //     }
-        //     let value = self.lower_expr(value)?;
-        //     let arg = hir::CallArgument { name, value };
-        //     arguments.push(arg);
-        // }
-        // Ok(hir::CallArguments { arguments, kind })
     }
 
     fn lower_match_arms(
         &mut self,
         arms: Vec<ast::MatchArm>,
     ) -> Result<Vec<hir::MatchArm>> {
-        let mut lowered_arms = vec![];
-        for ast::MatchArm {
-            test,
-            consequent,
-            span,
-        } in arms
-        {
-            let allow_wildcard_reference = self.allow_wildcard_reference;
-            self.allow_wildcard_reference = true;
-            let test = self.lower_expr(test)?;
-            self.allow_wildcard_reference = allow_wildcard_reference;
-            let consequent = self.lower_expr(consequent)?;
-            lowered_arms.push(hir::MatchArm {
-                test,
-                consequent,
-                span,
-            })
+        debug!("lower_match_arms {:#?}", arms);
+
+        for ast::MatchArm { pattern, body } in arms {
+            match pattern.kind {
+                ast::PatternKind::Fiedless { name } => {
+                    if let Some((binding, _)) = self.scope.resolve(&name.symbol)
+                    {
+                        debug!(
+                            "Resolved enum for fiedless variant: {:#?}",
+                            binding
+                        );
+                        // ...
+                    }
+                }
+                ast::PatternKind::MemberFiedless { type_name, name } => {}
+                ast::PatternKind::Tuple { name, values } => {}
+                ast::PatternKind::MemberTuple {
+                    type_name,
+                    name,
+                    values,
+                } => {}
+            }
         }
-        Ok(lowered_arms)
+
+        todo!("lower_match_arms");
     }
 
     fn lower_template(

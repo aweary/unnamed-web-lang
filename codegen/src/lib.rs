@@ -1,7 +1,4 @@
-#![warn(
-    clippy::all,
-    clippy::pedantic,
-)]
+#![warn(clippy::all, clippy::pedantic)]
 #![allow(clippy::must_use_candidate)]
 
 use diagnostics::ParseResult;

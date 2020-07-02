@@ -1,7 +1,4 @@
-#![warn(
-    clippy::all,
-    clippy::pedantic,
-)]
+#![warn(clippy::all, clippy::pedantic)]
 #![allow(clippy::must_use_candidate)]
 #![allow(dead_code)]
 
@@ -22,5 +19,5 @@ pub use control_flow_graph::*;
 pub use fxhash::FxHashMap as HashMap;
 pub use fxhash::FxHashSet as HashSet;
 
+pub use hashbag::{HashBag as MultiSet, *};
 pub use petgraph::*;
-pub use hashbag::{*, HashBag as MultiSet};

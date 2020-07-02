@@ -16,8 +16,6 @@ use std::sync::Arc;
 use source::diagnostics::Diagnostic as CompilerDiagnostic;
 use source::filesystem::{FileId, FileSystem};
 
-
-
 pub type GenericResult<T> = Result<T, Box<dyn Error + Sync + Send>>;
 
 pub struct LSPServer {

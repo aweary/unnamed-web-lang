@@ -131,28 +131,18 @@ impl Binding {
     pub fn span(&self) -> Span {
         match self {
             Binding::Local(local) | Binding::State(local) => local.span,
-            Binding::Function(fndef) => {
-                fndef.span
-            }
-            Binding::Parameter(param) => {
-                param.span
-            }
-            Binding::TypeParameter(t) => {
-                todo!()
-            }
-            Binding::Component(component) => {
-                component.span
-            }
+            Binding::Function(fndef) => fndef.span,
+            Binding::Parameter(param) => param.span,
+            Binding::TypeParameter(t) => todo!(),
+            Binding::Component(component) => component.span,
             Binding::Import(import) => {
                 let import = import.lock().unwrap();
                 import.span
             }
-            Binding::Constant(constant) => {
-                constant.span
-            }
+            Binding::Constant(constant) => constant.span,
             Binding::Type(ty) => ty.name.span,
             Binding::Enum(enumdef) => enumdef.span,
-            Binding::Wildcard => todo!()
+            Binding::Wildcard => todo!(),
         }
     }
 
@@ -276,9 +266,7 @@ pub struct Definition {
 impl Definition {
     pub fn name(&self) -> Ident {
         match &self.kind {
-            DefinitionKind::Function(fndef) => {
-                fndef.name.clone()
-            }
+            DefinitionKind::Function(fndef) => fndef.name.clone(),
             DefinitionKind::Component(compdef) => compdef.name.clone(),
             DefinitionKind::Constant(constant) => constant.name.clone(),
             _ => unimplemented!(),
@@ -560,6 +548,5 @@ pub enum ExprKind {
     TrailingClosure(Box<Expr>, Block),
 
     // Enum expression
-    EnumVariant(Arc<EnumDef>, UniqueName)
-    // ...
+    EnumVariant(Arc<EnumDef>, UniqueName), // ...
 }

@@ -1571,6 +1571,7 @@ impl Parser<'_> {
         debug!("match_expr");
         self.expect(TokenKind::Reserved(Keyword::Match))?;
         let lo = self.span;
+        // TODO this seems like a hard-to-maintain pattern
         let allow_trailing_closure = self.allow_trailing_closure;
         self.allow_trailing_closure = false;
         let cond = self.expr(Precedence::NONE)?;
@@ -1583,6 +1584,9 @@ impl Parser<'_> {
             if self.peek()?.kind == TokenKind::RCurlyBrace {
                 break;
             }
+            if self.eat(TokenKind::Comma)? {
+                continue;
+            }
         }
         self.expect(TokenKind::RCurlyBrace)?;
         let kind = ast::ExprKind::Match(Box::new(cond), cases);
@@ -1593,47 +1597,73 @@ impl Parser<'_> {
     fn match_arm_expr(&mut self) -> Result<ast::MatchArm> {
         use ast::ExprKind;
         debug!("match_arm_expr");
-        let test = self.expr(Precedence::NONE)?;
-        // Match arm test expression are restricted.
-        match test.kind {
-            // Use binary or expressions for case discriminator `|` syntax
-            ExprKind::Binary(ref binop, _, _) => {
-                match binop {
-                    ast::BinOp::BinOr => {
-                        // Allowd
+        let pattern = self.pattern()?;
+        //  TODO pattern
+        self.expect(TokenKind::Arrow)?;
+        let body = self.expr(Precedence::NONE)?;
+        Ok(ast::MatchArm { pattern, body })
+    }
+
+    fn pattern(&mut self) -> Result<ast::Pattern> {
+        let name = self.ident()?;
+        let lo = self.span;
+
+        let kind = match self.peek()?.kind {
+            TokenKind::Dot => {
+                // Member or MemberTuple
+                self.skip()?;
+                let enum_name = name;
+                let name = self.ident()?;
+
+                match self.peek()?.kind {
+                    TokenKind::LParen => {
+                        // MemberTuple
+                        self.skip()?;
+                        let mut idents = vec![];
+                        loop {
+                            match self.peek()?.kind {
+                                TokenKind::Ident(_) => {
+                                    let ident = self.ident()?;
+                                    idents.push(ident);
+                                }
+                                TokenKind::LParen => {
+                                    self.skip()?;
+                                    break;
+                                }
+                                _ => break
+                            }
+
+                            if self.eat(TokenKind::Comma)? {
+                                continue;
+                            }
+                            if self.eat(TokenKind::LParen)? {
+                                break;
+                            }
+                        }
+                        self.expect(TokenKind::RParen)?;
+                        ast::PatternKind::MemberTuple { type_name: enum_name, name, values: idents }
                     }
-                    _ => {
-                        return Err(self.fatal(
-                            "Binary expressions aren't allowed in match arms",
-                            "",
-                            test.span,
-                        ));
-                        // Not allowed
-                    }
+                    _ => ast::PatternKind::MemberFiedless { type_name: enum_name, name }
                 }
-                // allowed
             }
-            ExprKind::Lit(_)
-            | ExprKind::Member(..)
-            | ExprKind::Reference(_) => {
-                // All allowed
+            TokenKind::Arrow => {
+                ast::PatternKind::Fiedless { name }
+            }
+            TokenKind::LParen => {
+                todo!();
+                // Tuple
             }
             _ => {
-                return Err(self.fatal(
-                    "Unsupported expression in match arm",
-                    "Match arm expressions are limited to references",
-                    test.span,
-                ))
+                return Err(Diagnostic::error()
+                    .with_message("Unexpected token in pattern"))
             }
-        }
-        self.expect(TokenKind::Arrow)?;
-        let consequent = self.expr(Precedence::NONE)?;
-        let span = test.span.merge(self.span);
-        self.eat(TokenKind::Comma)?;
-        Ok(ast::MatchArm {
-            test,
-            consequent,
-            span,
+        };
+
+        debug!("kind: {:#?}", kind);
+
+        Ok(ast::Pattern {
+            kind,
+            span: lo.merge(self.span)
         })
     }
 

@@ -58,7 +58,6 @@ impl Default for FileSystem {
 }
 
 impl FileSystem {
-
     pub fn id_for_path(&self, path: &PathBuf) -> Option<FileId> {
         self.ids.get(path).map(|path| *path)
     }
