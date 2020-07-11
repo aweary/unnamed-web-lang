@@ -1,14 +1,39 @@
-enum Option<T> {
-    Some(T),
-    None,
+enum Result<T, E> {
+    Ok(T),
+    Err(E),
 }
 
-fn with_option_string(input: Option<string>) {}
-fn with_option_number(input: Option<number>) {}
+fn with_number(a: number) {}
 
-fn main(numerator, denominator) {
-    let none = Option.None;
-    with_option_string(none);
-    with_option_number(none);
-    return none;
+// Returns a Result<number, string>
+fn try_divide(a: number, b: number) {
+    if (b == 0) {
+      return Result.Err("Cant divide by zero")
+    } else {
+      return Result.Ok(a / b);
+    }
 }
+
+// Takes a Result and gives you the value of type T
+fn unwrap<T, E>(result: Result<T, E>) : T {}
+
+fn main() {
+    match try_divide(1, 0) {
+        Result.Ok(value) => {
+            // ...
+        }
+        Result.Err(err) => {
+            // ...
+        }
+    }
+
+}
+
+
+
+
+
+
+
+
+

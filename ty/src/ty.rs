@@ -6,7 +6,6 @@ use internment::Intern;
 
 use crate::effects::EffectType;
 use common::unique_name::UniqueName;
-use source::diagnostics::Span;
 use std::fmt::Display;
 use syntax::symbol::Symbol;
 
@@ -97,6 +96,11 @@ pub enum Type {
         out: InternType,
         effect: EffectType,
     },
+    /// Type constructors are like functions, except they can
+    /// only instantiate data types. We could re-use the Function type
+    /// for these, but type constructors have no named parameters or effects,
+    /// so this separate type simplifies their type checking.
+    Constructor(Option<Vec<InternType>>, InternType),
     // Function(Vec<Intern<Type>>, Intern<Type>),
     // A 2-tuple of types
     Pair(Intern<Type>, Intern<Type>),
@@ -120,24 +124,6 @@ pub enum Type {
         name: Symbol,
         unique_name: UniqueName,
         tys: Option<Vec<InternType>>,
-    },
-    // A variant constructor is a variant of an enum that
-    // also holds data. It has some input types and the
-    // unique name of the enum its defined in. Calling
-    // a variant constructor evalutes to the type of the
-    // enum.
-    VariantConstructor {
-        name: Symbol,
-        unique_name: UniqueName,
-        input: Vec<InternType>,
-        parent: UniqueName,
-    },
-    // A fieldless variant, which is like a variant constructor except
-    // it holds no data.
-    Variant {
-        name: Symbol,
-        unique_name: UniqueName,
-        parent: UniqueName,
     },
 }
 
@@ -167,6 +153,7 @@ impl Display for Type {
                 write!(f, ")")?;
                 write!(f, " => {}", out)
             }
+            Type::Constructor(_, _) => write!(f, "type constructor (TODO)"),
             Type::Pair(_, _) => write!(f, "pair (TODO)"),
             Type::Tuple(_) => write!(f, "tuple (TODO)"),
             Type::List(t) => write!(f, "{}[]", t),
@@ -174,10 +161,6 @@ impl Display for Type {
             Type::Variable(var) => write!(f, "tvar '{}'", var),
             Type::Component { .. } => write!(f, "Component (TODO)"),
             Type::Enum { name, .. } => write!(f, "{:?}", name),
-            Type::Variant { name, .. } => write!(f, "variant {:?}", name),
-            Type::VariantConstructor { name, .. } => {
-                write!(f, "variant {:?}", name)
-            }
         }
     }
 }
@@ -185,6 +168,7 @@ impl Display for Type {
 impl Type {
     pub fn description(&self) -> &'static str {
         match self {
+            Type::Constructor(_, _) => "a type constructor",
             Type::Literal(_) => "a literal",
             Type::Existential(_) => "an unsolved existential",
             Type::SolvableExistential(_, _) => "an existential",
@@ -197,9 +181,6 @@ impl Type {
             Type::Variable(_) => "a type variable",
             Type::Component { .. } => "a component",
             Type::Enum { .. } => "an enum",
-            Type::VariantConstructor { .. } | Type::Variant { .. } => {
-                "a variant"
-            }
         }
     }
     pub fn new_function(

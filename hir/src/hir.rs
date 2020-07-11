@@ -512,9 +512,7 @@ pub enum ExprKind {
     /// Conditional expression, e.g., ternary
     Cond(Box<Expr>, Box<Expr>, Box<Expr>),
     /// Call expression
-    Call(Binding, Vec<Argument>),
-    /// Member call expression
-    MemberCall(Box<Expr>, Ident, Vec<Argument>),
+    Call(Box<Expr>, Vec<Argument>),
     /// Assignment expression
     // TODO the left hand side should be a LeftExpr or something
     Assign(AssignOp, Arc<Local>, Box<Expr>),
@@ -522,6 +520,8 @@ pub enum ExprKind {
     StateUpdate(AssignOp, Arc<Local>, Box<Expr>),
     /// Object member access
     Member(Box<Expr>, Ident),
+    /// Enum access
+    EnumVariant(Arc<EnumDef>, Ident),
     /// Object optional member access,
     OptionalMember(Box<Expr>, Ident),
     /// A literal
@@ -546,7 +546,4 @@ pub enum ExprKind {
     Lambda(Lambda),
     // Trailing closure
     TrailingClosure(Box<Expr>, Block),
-
-    // Enum expression
-    EnumVariant(Arc<EnumDef>, UniqueName), // ...
 }

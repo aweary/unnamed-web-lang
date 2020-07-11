@@ -1,6 +1,4 @@
-use data_structures::control_flow_graph::{
-    Block, Blockable, ControlFlowEdge, ControlFlowGraph,
-};
+use data_structures::control_flow_graph::{Blockable, ControlFlowGraph};
 use data_structures::module_graph::ModuleGraphIndex;
 use data_structures::scope_map::ScopeMap;
 
@@ -50,23 +48,6 @@ impl LoweringContext {
         // Populate the global scope. TODO this should go somewhere else?
         let mut scope_map = ScopeMap::default();
         scope_map.enter_scope();
-
-        // The empty binding symbol, `_`. Used for unused variables and
-        // in pattern matching.
-        // scope_map.define(
-        //     Symbol::intern("_"),
-        //     Binding::Wildcard, // hir::Binding::BuiltIn(hir::BuiltIn::EmptyBinding),
-        // );
-        // Built-in types
-        // scope_map.define(
-        //     Symbol::intern("number"),
-        //     Binding::Type(Type::Number),
-        // );
-        // scope_map.define(
-        //     Symbol::intern("string"),
-        //     Binding::Type(Type::Literal(LiteralType::String)),
-        // );
-        // scope_map.define(Symbol::intern("Array"), Binding::Type(Type::Array));
 
         LoweringContext {
             vfs,
@@ -763,17 +744,8 @@ impl LoweringContext {
             // Call expression
             ExprKind::Call(expr, args) => {
                 let args = self.lower_call_arguments(args)?;
-                match self.lower_expr(*expr)?.kind {
-                    hir::ExprKind::Reference(_, binding) => {
-                        hir::ExprKind::Call(binding, args)
-                    }
-                    hir::ExprKind::Member(expr, ident) => {
-                        hir::ExprKind::MemberCall(expr, ident, args)
-                    }
-                    _ => {
-                        unimplemented!("Can't call computed functions yet");
-                    }
-                }
+                let expr = self.lower_expr(*expr)?;
+                hir::ExprKind::Call(expr.into(), args)
             }
             // Assignment expression
             // TODO the left hand side should be a LeftExpr or something
@@ -821,7 +793,18 @@ impl LoweringContext {
             ExprKind::Member(expr, member_ident) => {
                 debug!("member expr, {:?}", member_ident);
                 let expr = self.lower_expr(*expr)?;
-                hir::ExprKind::Member(Box::new(expr), member_ident)
+                if let hir::ExprKind::Reference(_, binding) = &expr.kind {
+                    if let hir::Binding::Enum(enumdef) = binding {
+                        hir::ExprKind::EnumVariant(
+                            enumdef.clone(),
+                            member_ident,
+                        )
+                    } else {
+                        hir::ExprKind::Member(Box::new(expr), member_ident)
+                    }
+                } else {
+                    hir::ExprKind::Member(Box::new(expr), member_ident)
+                }
             }
             // Object optional member access,
             ExprKind::OptionalMember(_, _) => {

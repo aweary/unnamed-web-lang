@@ -86,7 +86,6 @@ pub fn walk_expr<V: Visitor>(visitor: &mut V, expr: &Expr) -> Result<()> {
         crate::ExprKind::Unary(_, _) => {}
         crate::ExprKind::Cond(_, _, _) => {}
         crate::ExprKind::Call(_, _) => {}
-        crate::ExprKind::MemberCall(_, _, _) => {}
         crate::ExprKind::Assign(_, _, _) => {}
         crate::ExprKind::StateUpdate(_, _, _) => {}
         crate::ExprKind::Member(_, _) => {}
