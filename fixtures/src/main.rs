@@ -9,7 +9,7 @@ fn main() {
     compiler::run_from_path(path);
     let end = Instant::now();
     info!(
-        "Running fixture took: {:?}ms",
-        end.duration_since(start).as_millis()
+        "Running fixture took: {:?}us",
+        end.duration_since(start).as_micros()
     );
 }

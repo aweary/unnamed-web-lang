@@ -5,7 +5,9 @@ use ::hir::{
     Type as HIRType, UnOp,
 };
 
-use ::hir::visit::{walk_block, walk_component, walk_function, Visitor};
+use ::hir::visit::{
+    walk_block, walk_component, walk_function, walk_lambda, Visitor,
+};
 use data_structures::HashMap;
 use diagnostics::ParseResult as Result;
 use source::diagnostics::{Diagnostic, Label};
@@ -44,6 +46,42 @@ pub struct TypeChecker {
 }
 
 impl Visitor for TypeChecker {
+    fn visit_constant(&mut self, constant: &hir::Constant) -> Result<()> {
+        debug!("visit_constant");
+        let hir::Constant {
+            unique_name,
+            name,
+            value,
+            ty,
+            span,
+        } = constant;
+
+        let infer_ty = self.synth(value)?;
+        let ty = if let Some(ty) = ty {
+            let ty = self.hir_type_to_type(ty)?;
+            self.subtype(ty, infer_ty)?;
+            self.apply_context(infer_ty)?
+        } else {
+            infer_ty
+        };
+
+        match &*ty {
+            Type::Function { .. } => {
+                return Err(Diagnostic::error()
+                    .with_message("Constants can't reference functions")
+                    .with_labels(vec![Label::primary(name.span)]))
+            }
+            _ => {}
+        }
+
+        debug!("constant inferred as {:#?}", ty);
+
+        let element = Element::new_typed_variable(*unique_name, ty);
+        self.context.add(element);
+
+        Ok(())
+    }
+
     fn visit_statement(&mut self, statement: &hir::Statement) -> Result<()> {
         debug!("\n\nvisit_statement");
         match &statement.kind {
@@ -265,13 +303,20 @@ impl Visitor for TypeChecker {
             }
         };
 
+        let effect_ty = EffectType::default();
+
         // Track it so we can refine it / check against it
         self.tracked_return_ty = Some(return_ty);
+        self.tracked_effect_ty = Some(effect_ty);
 
         walk_component(self, component)?;
 
         Ok(())
     }
+
+    // fn visit_lambda(&mut self, lambda: &hir::Lambda) -> Result<()> {
+    //     return Ok(())
+    // }
 
     fn visit_function(&mut self, function: &hir::Function) -> Result<()> {
         // If there are generics, we need to treat this as a quantification type
@@ -474,7 +519,6 @@ impl TypeChecker {
     fn synthesize(&mut self, expr: &Expr) -> Result<InternType> {
         debug!("synthesize");
         match &expr.kind {
-            
             ExprKind::Lit(lit) => Ok(infer_literal(lit)),
             ExprKind::Lambda(lambda) => {
                 debug!("synthesize lambda");
@@ -538,6 +582,13 @@ impl TypeChecker {
                         let ty = self.context.get_annotation(&name).unwrap();
                         let ty = self.apply_context(ty)?;
                         debug!("local is {:#?}", ty);
+                        Ok(ty)
+                    }
+                    Binding::Constant(constant) => {
+                        let hir::Constant { unique_name, .. } = &**constant;
+                        let ty =
+                            self.context.get_annotation(unique_name).unwrap();
+                        let ty = self.apply_context(ty)?;
                         Ok(ty)
                     }
                     Binding::Parameter(param) => {
@@ -668,7 +719,6 @@ impl TypeChecker {
                     )?;
                 let ty =
                     self.context.get_annotation(&variant.unique_name).unwrap();
-                
 
                 // If this variant contains values, return the type of the variant
                 // type constructor. If there are no values, treat this as if
@@ -801,14 +851,18 @@ impl TypeChecker {
                 }
             }
             //->I, lambdas
-            (ExprKind::Lambda(lambda), Type::Function { parameters, .. }) => {
-                let hir::Lambda {
-                    params, span: _, ..
-                } = lambda;
-                assert_eq!(params.len(), parameters.len());
-                debug!("->I");
-                Ok(())
-            }
+            // (ExprKind::Lambda(lambda), Type::Function { parameters, .. }) => {
+            //     let hir::Lambda {
+            //         params, span: _, ..
+            //     } = lambda;
+
+            //     let ty = self.synth(expr)?;
+
+
+            //     assert_eq!(params.len(), parameters.len());
+            //     debug!("->I");
+            //     Ok(())
+            // }
             //forallI
             (_, Type::Quantification(alphas, a)) => {
                 debug!("\u{2200}I");
@@ -846,6 +900,7 @@ impl TypeChecker {
         debug!("subtype, a: {}, b: {}", a, b);
         match (&*a, &*b) {
             // <:Unit
+            (Type::Unit, Type::Unit) => Ok(()),
             (Type::Literal(a), Type::Literal(b)) => {
                 debug!("<:Unit");
                 if a == b {
@@ -965,13 +1020,15 @@ impl TypeChecker {
                 },
             ) => {
                 if unique_name_a == unique_name_b {
-                    if let (Some(tys_a), Some(tys_b)) = (tys_a, tys_b) {
-                        for (a, b) in tys_a.iter().zip(tys_b) {
-                            self.subtype(*a, *b)?;
+                    match (tys_a, tys_b) {
+                        (None, None) => Ok(()),
+                        (Some(tys_a), Some(tys_b)) => {
+                            for (a, b) in tys_a.iter().zip(tys_b) {
+                                self.subtype(*a, *b)?;
+                            }
+                            Ok(())
                         }
-                        Ok(())
-                    } else {
-                        panic!("oops")
+                        _ => panic!("oops"),
                     }
                 } else {
                     Err(Diagnostic::error().with_message(format!(
@@ -1365,7 +1422,7 @@ impl TypeChecker {
     ) -> Result<InternType> {
         debug!("substitution, alpha: {:?}\na: {:#?}\nb: {:#?}", alpha, a, b);
         match &*a {
-            Type::Literal(_) => Ok(a),
+            Type::Literal(_) | Type::Unit => Ok(a),
             Type::Variable(var) => {
                 if var == alpha {
                     // Substitute it
@@ -1578,6 +1635,7 @@ impl TypeChecker {
             HIRType::Number(_) => Type::Literal(LiteralType::Number).into(),
             HIRType::String(_) => Type::Literal(LiteralType::String).into(),
             HIRType::Bool(_) => Type::Literal(LiteralType::Bool).into(),
+            HIRType::Unit(_) => Type::Unit.into(),
             HIRType::Reference {
                 alias, arguments, ..
             } => {

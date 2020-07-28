@@ -12,6 +12,7 @@ pub enum Type {
     Number(Span),
     Boolean(Span),
     String(Span),
+    Unit(Span),
     Reference {
         name: Ident,
         arguments: Option<Vec<Type>>,
@@ -25,9 +26,10 @@ pub enum Type {
 impl Type {
     pub fn span(&self) -> Span {
         match self {
-            Type::Number(span) | Type::Boolean(span) | Type::String(span) => {
-                *span
-            }
+            Type::Number(span)
+            | Type::Boolean(span)
+            | Type::String(span)
+            | Type::Unit(span) => *span,
             Type::Reference { span, .. } => *span,
             Type::Function(in_ty, out_ty) => in_ty.span().merge(out_ty.span()),
             Type::List(_, span) => *span,
@@ -111,7 +113,7 @@ pub enum ItemKind {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Constant {
     pub name: Ident,
-    pub ty: Type,
+    pub ty: Option<Type>,
     pub value: Expr,
     pub span: Span,
 }
@@ -513,7 +515,11 @@ pub enum PatternKind {
     /// `User(name)`
     Tuple { name: Ident, values: Vec<Ident> },
     /// `Enum.User(name)`
-    MemberTuple { type_name: Ident, name: Ident, values: Vec<Ident> },
+    MemberTuple {
+        type_name: Ident,
+        name: Ident,
+        values: Vec<Ident>,
+    },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

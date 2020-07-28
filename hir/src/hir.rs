@@ -31,6 +31,7 @@ pub enum Type {
     Tuple(Vec<Type>, Span),
     Number(Span),
     Bool(Span),
+    Unit(Span),
     String(Span),
     Reference {
         alias: Arc<TypeAlias>,
@@ -60,7 +61,10 @@ impl Type {
         match self {
             Type::List(_, span) => *span,
             Type::Tuple(_, span) => *span,
-            Type::Number(span) | Type::Bool(span) | Type::String(span) => *span,
+            Type::Number(span)
+            | Type::Bool(span)
+            | Type::String(span)
+            | Type::Unit(span) => *span,
             Type::Reference { span, .. } => *span,
             Type::Function { parameters, out } => {
                 let mut span = out.span();
@@ -287,6 +291,7 @@ pub enum DefinitionKind {
 #[derive(Clone, Debug)]
 pub struct Constant {
     pub name: Ident,
+    pub unique_name: UniqueName,
     // We need to be able to solve the type of the
     // constant, but we don't require an explicit annotation
     // in all cases. The type checker will throw if it can't infer

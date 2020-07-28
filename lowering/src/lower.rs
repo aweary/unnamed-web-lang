@@ -314,12 +314,17 @@ impl LoweringContext {
     ) -> Result<Arc<hir::Constant>> {
         let span = constant.span;
         let name = constant.name;
-        // TODO anyway to not require Some here?
-        let ty = self.lower_type(constant.ty)?;
+        let ty = if let Some(ty) = constant.ty {
+            Some(self.lower_type(ty)?)
+        } else {
+            None
+        };
         let value = self.lower_expr(constant.value)?;
+        let unique_name = UniqueName::new();
         let constant = Arc::new(hir::Constant {
             name,
-            ty: Some(ty),
+            unique_name,
+            ty,
             value,
             span,
         });
@@ -428,6 +433,7 @@ impl LoweringContext {
             ast::Type::Number(span) => Ok(hir::Type::Number(span)),
             ast::Type::Boolean(span) => Ok(hir::Type::Bool(span)),
             ast::Type::String(span) => Ok(hir::Type::String(span)),
+            ast::Type::Unit(span) => Ok(hir::Type::Unit(span)),
             ast::Type::Reference {
                 name,
                 arguments,

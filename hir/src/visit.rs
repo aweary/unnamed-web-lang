@@ -20,6 +20,10 @@ pub trait Visitor: Sized {
         // ...
     }
 
+    fn visit_constant(&mut self, _constant: &Constant) -> Result<()> {
+        Ok(())
+    }
+
     fn visit_function(&mut self, fndef: &Function) -> Result<()> {
         walk_function(self, fndef)?;
         Ok(())
@@ -68,7 +72,11 @@ pub trait Visitor: Sized {
 }
 
 pub fn walk_lambda<V: Visitor>(visitor: &mut V, lambda: &Lambda) -> Result<()> {
-    // let Lambda { params, body, .. } = lambda;
+    let Lambda { params, body, .. } = lambda;
+    match body {
+        LambdaBody::Block(block) => visitor.visit_block(block)?,
+        LambdaBody::Expr(expr) => visitor.visit_expr(expr)?
+    };
     Ok(())
 }
 
@@ -132,6 +140,9 @@ pub fn walk_definition<V: Visitor>(
         }
         DefinitionKind::Enum(enumdef) => {
             visitor.visit_enum_def(enumdef)?;
+        }
+        DefinitionKind::Constant(constant) => {
+            visitor.visit_constant(&**constant)?;
         }
         // DefinitionKind::Import(imports) => {
         // }

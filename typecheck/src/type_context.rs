@@ -19,8 +19,6 @@ pub enum ElementKind {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Element {
     kind: ElementKind,
-    // alpha: u32,
-    // beta: u32,
 }
 
 impl Element {

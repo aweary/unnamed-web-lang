@@ -206,8 +206,11 @@ impl Parser<'_> {
         self.expect(TokenKind::Reserved(Keyword::Const))?;
         let lo = self.span;
         let name = self.ident()?;
-        self.expect(TokenKind::Colon)?;
-        let ty = self.parse_type()?;
+        let ty = if self.eat(TokenKind::Colon)? {
+            Some(self.parse_type()?)
+        } else {
+            None
+        };
         self.expect(TokenKind::Equals)?;
         let value = self.expr(Precedence::NONE)?;
         let span = lo.merge(self.span);
@@ -405,6 +408,7 @@ impl Parser<'_> {
                     "number" => Ok(ast::Type::Number(name.span)),
                     "bool" => Ok(ast::Type::Boolean(name.span)),
                     "string" => Ok(ast::Type::String(name.span)),
+                    "unit" => Ok(ast::Type::Unit(name.span)),
                     _ => {
                         let arguments = if self.eat(TokenKind::LessThan)? {
                             let mut arguments = vec![];
