@@ -6,7 +6,7 @@ use ::hir::{
 };
 
 use ::hir::visit::{
-    walk_block, walk_component, walk_function, walk_lambda, Visitor,
+    walk_block, walk_component, walk_function, Visitor,
 };
 use data_structures::HashMap;
 use diagnostics::ParseResult as Result;
@@ -561,18 +561,13 @@ impl TypeChecker {
                         self.tracked_return_ty = cached_tracked_return_ty;
                         ty
                     }
-                    hir::LambdaBody::Expr(expr) => {
-                        self.synth(expr)?
-                        // Infer the type of this expression
-                    }
+                    hir::LambdaBody::Expr(expr) => self.synth(expr)?,
                 };
 
                 let input_ty = self.synth_fn_params(&params)?;
                 let ty = Type::new_function(input_ty, return_ty);
                 debug!("Lambda type: {:#?}", ty);
                 Ok(ty)
-                // Err(Diagnostic::error()
-                //     .with_message("Cant infer lambdas right now"))
             }
             ExprKind::Reference(ident, binding) => {
                 debug!("synthesizing a reference!");
@@ -622,6 +617,7 @@ impl TypeChecker {
                             .with_message(msg)
                             .with_labels(vec![Label::primary(ident.span)]))
                     }
+                    // Binding::Import(import) =>
                     Binding::Component(_)
                     | Binding::Import(_)
                     | Binding::Constant(_)
@@ -857,7 +853,6 @@ impl TypeChecker {
             //     } = lambda;
 
             //     let ty = self.synth(expr)?;
-
 
             //     assert_eq!(params.len(), parameters.len());
             //     debug!("->I");

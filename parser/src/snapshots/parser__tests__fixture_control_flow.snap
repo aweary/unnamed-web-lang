@@ -8,7 +8,7 @@ expression: parse_module(input)
       "kind": {
         "Fn": {
           "name": {
-            "name": {
+            "symbol": {
               "unstable_source": "control_flow"
             },
             "span": {
@@ -22,7 +22,7 @@ expression: parse_module(input)
                 "local": {
                   "Ident": [
                     {
-                      "name": {
+                      "symbol": {
                         "unstable_source": "a"
                       },
                       "span": {
@@ -36,7 +36,7 @@ expression: parse_module(input)
                     }
                   ]
                 },
-                "ty": "Existential",
+                "ty": null,
                 "id": 0,
                 "span": {
                   "start": 16,
@@ -47,7 +47,7 @@ expression: parse_module(input)
                 "local": {
                   "Ident": [
                     {
-                      "name": {
+                      "symbol": {
                         "unstable_source": "b"
                       },
                       "span": {
@@ -61,7 +61,7 @@ expression: parse_module(input)
                     }
                   ]
                 },
-                "ty": "Existential",
+                "ty": null,
                 "id": 0,
                 "span": {
                   "start": 19,
@@ -81,7 +81,6 @@ expression: parse_module(input)
                       "end": 103
                     },
                     "condition": {
-                      "id": 0,
                       "kind": {
                         "Lit": {
                           "span": {
@@ -98,8 +97,7 @@ expression: parse_module(input)
                       "span": {
                         "start": 31,
                         "end": 35
-                      },
-                      "ty": null
+                      }
                     },
                     "block": {
                       "stmts": [
@@ -111,7 +109,7 @@ expression: parse_module(input)
                               "name": {
                                 "Ident": [
                                   {
-                                    "name": {
+                                    "symbol": {
                                       "unstable_source": "a"
                                     },
                                     "span": {
@@ -127,10 +125,9 @@ expression: parse_module(input)
                               },
                               "ty": null,
                               "init": {
-                                "id": 0,
                                 "kind": {
                                   "Reference": {
-                                    "name": {
+                                    "symbol": {
                                       "unstable_source": "b"
                                     },
                                     "span": {
@@ -142,8 +139,7 @@ expression: parse_module(input)
                                 "span": {
                                   "start": 54,
                                   "end": 55
-                                },
-                                "ty": null
+                                }
                               },
                               "span": {
                                 "start": 46,
@@ -155,7 +151,7 @@ expression: parse_module(input)
                             "start": 46,
                             "end": 56
                           },
-                          "has_semi": false
+                          "has_semi": true
                         }
                       ],
                       "id": 0,
@@ -171,7 +167,6 @@ expression: parse_module(input)
                           "end": 103
                         },
                         "condition": {
-                          "id": 0,
                           "kind": {
                             "Lit": {
                               "span": {
@@ -188,8 +183,7 @@ expression: parse_module(input)
                           "span": {
                             "start": 71,
                             "end": 76
-                          },
-                          "ty": null
+                          }
                         },
                         "block": {
                           "stmts": [
@@ -201,7 +195,7 @@ expression: parse_module(input)
                                   "name": {
                                     "Ident": [
                                       {
-                                        "name": {
+                                        "symbol": {
                                           "unstable_source": "c"
                                         },
                                         "span": {
@@ -217,7 +211,6 @@ expression: parse_module(input)
                                   },
                                   "ty": null,
                                   "init": {
-                                    "id": 0,
                                     "kind": {
                                       "Lit": {
                                         "span": {
@@ -234,8 +227,7 @@ expression: parse_module(input)
                                     "span": {
                                       "start": 95,
                                       "end": 96
-                                    },
-                                    "ty": null
+                                    }
                                   },
                                   "span": {
                                     "start": 87,
@@ -247,7 +239,7 @@ expression: parse_module(input)
                                 "start": 87,
                                 "end": 97
                               },
-                              "has_semi": false
+                              "has_semi": true
                             }
                           ],
                           "id": 0,
@@ -276,15 +268,13 @@ expression: parse_module(input)
                       "end": 174
                     },
                     "condition": {
-                      "id": 0,
                       "kind": {
                         "Binary": [
                           "DblEquals",
                           {
-                            "id": 0,
                             "kind": {
                               "Reference": {
-                                "name": {
+                                "symbol": {
                                   "unstable_source": "a"
                                 },
                                 "span": {
@@ -296,14 +286,12 @@ expression: parse_module(input)
                             "span": {
                               "start": 111,
                               "end": 112
-                            },
-                            "ty": null
+                            }
                           },
                           {
-                            "id": 0,
                             "kind": {
                               "Reference": {
-                                "name": {
+                                "symbol": {
                                   "unstable_source": "b"
                                 },
                                 "span": {
@@ -315,16 +303,14 @@ expression: parse_module(input)
                             "span": {
                               "start": 116,
                               "end": 117
-                            },
-                            "ty": null
+                            }
                           }
                         ]
                       },
                       "span": {
                         "start": 111,
                         "end": 117
-                      },
-                      "ty": null
+                      }
                     },
                     "block": {
                       "stmts": [
@@ -332,10 +318,9 @@ expression: parse_module(input)
                           "id": 0,
                           "kind": {
                             "Return": {
-                              "id": 0,
                               "kind": {
                                 "Reference": {
-                                  "name": {
+                                  "symbol": {
                                     "unstable_source": "a"
                                   },
                                   "span": {
@@ -347,15 +332,14 @@ expression: parse_module(input)
                               "span": {
                                 "start": 135,
                                 "end": 136
-                              },
-                              "ty": null
+                              }
                             }
                           },
                           "span": {
                             "start": 128,
                             "end": 137
                           },
-                          "has_semi": false
+                          "has_semi": true
                         }
                       ],
                       "id": 0,
@@ -371,10 +355,9 @@ expression: parse_module(input)
                             "id": 0,
                             "kind": {
                               "Return": {
-                                "id": 0,
                                 "kind": {
                                   "Reference": {
-                                    "name": {
+                                    "symbol": {
                                       "unstable_source": "b"
                                     },
                                     "span": {
@@ -386,15 +369,14 @@ expression: parse_module(input)
                                 "span": {
                                   "start": 166,
                                   "end": 167
-                                },
-                                "ty": null
+                                }
                               }
                             },
                             "span": {
                               "start": 159,
                               "end": 168
                             },
-                            "has_semi": false
+                            "has_semi": true
                           }
                         ],
                         "id": 0,
@@ -416,7 +398,6 @@ expression: parse_module(input)
                 "id": 0,
                 "kind": {
                   "Return": {
-                    "id": 0,
                     "kind": {
                       "Lit": {
                         "span": {
@@ -433,15 +414,14 @@ expression: parse_module(input)
                     "span": {
                       "start": 186,
                       "end": 187
-                    },
-                    "ty": null
+                    }
                   }
                 },
                 "span": {
                   "start": 179,
                   "end": 188
                 },
-                "has_semi": false
+                "has_semi": true
               }
             ],
             "id": 0,
@@ -450,7 +430,7 @@ expression: parse_module(input)
               "end": 190
             }
           },
-          "return_ty": "Existential",
+          "return_ty": null,
           "is_async": false,
           "generics": null,
           "span": {

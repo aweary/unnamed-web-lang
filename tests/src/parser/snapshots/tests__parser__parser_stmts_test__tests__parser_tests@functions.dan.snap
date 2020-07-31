@@ -1,0 +1,1428 @@
+---
+source: tests/src/parser/parser_stmts_test.rs
+expression: ast
+input_file: tests/src/parser/fixtures/functions.dan
+---
+{
+  "items": [
+    {
+      "kind": {
+        "Fn": {
+          "name": {
+            "symbol": {
+              "unstable_source": "empty"
+            },
+            "span": {
+              "start": 3,
+              "end": 8
+            }
+          },
+          "params": "Empty",
+          "body": {
+            "stmts": [],
+            "id": 0,
+            "span": {
+              "start": 11,
+              "end": 13
+            }
+          },
+          "return_ty": null,
+          "is_async": false,
+          "generics": null,
+          "span": {
+            "start": 0,
+            "end": 13
+          }
+        }
+      },
+      "span": {
+        "start": 0,
+        "end": 13
+      }
+    },
+    {
+      "kind": {
+        "Fn": {
+          "name": {
+            "symbol": {
+              "unstable_source": "empty_annotated"
+            },
+            "span": {
+              "start": 17,
+              "end": 32
+            }
+          },
+          "params": "Empty",
+          "body": {
+            "stmts": [],
+            "id": 0,
+            "span": {
+              "start": 42,
+              "end": 44
+            }
+          },
+          "return_ty": {
+            "Unit": {
+              "start": 37,
+              "end": 41
+            }
+          },
+          "is_async": false,
+          "generics": null,
+          "span": {
+            "start": 14,
+            "end": 44
+          }
+        }
+      },
+      "span": {
+        "start": 14,
+        "end": 44
+      }
+    },
+    {
+      "kind": {
+        "Fn": {
+          "name": {
+            "symbol": {
+              "unstable_source": "one_arg"
+            },
+            "span": {
+              "start": 48,
+              "end": 55
+            }
+          },
+          "params": {
+            "Single": {
+              "local": {
+                "Ident": [
+                  {
+                    "symbol": {
+                      "unstable_source": "a"
+                    },
+                    "span": {
+                      "start": 56,
+                      "end": 57
+                    }
+                  },
+                  {
+                    "start": 56,
+                    "end": 57
+                  }
+                ]
+              },
+              "ty": null,
+              "id": 0,
+              "span": {
+                "start": 56,
+                "end": 57
+              }
+            }
+          },
+          "body": {
+            "stmts": [],
+            "id": 0,
+            "span": {
+              "start": 59,
+              "end": 61
+            }
+          },
+          "return_ty": null,
+          "is_async": false,
+          "generics": null,
+          "span": {
+            "start": 45,
+            "end": 61
+          }
+        }
+      },
+      "span": {
+        "start": 45,
+        "end": 61
+      }
+    },
+    {
+      "kind": {
+        "Fn": {
+          "name": {
+            "symbol": {
+              "unstable_source": "on_arg_annotated"
+            },
+            "span": {
+              "start": 65,
+              "end": 81
+            }
+          },
+          "params": {
+            "Single": {
+              "local": {
+                "Ident": [
+                  {
+                    "symbol": {
+                      "unstable_source": "a"
+                    },
+                    "span": {
+                      "start": 82,
+                      "end": 83
+                    }
+                  },
+                  {
+                    "start": 82,
+                    "end": 83
+                  }
+                ]
+              },
+              "ty": {
+                "String": {
+                  "start": 85,
+                  "end": 91
+                }
+              },
+              "id": 0,
+              "span": {
+                "start": 82,
+                "end": 91
+              }
+            }
+          },
+          "body": {
+            "stmts": [],
+            "id": 0,
+            "span": {
+              "start": 100,
+              "end": 102
+            }
+          },
+          "return_ty": {
+            "Unit": {
+              "start": 95,
+              "end": 99
+            }
+          },
+          "is_async": false,
+          "generics": null,
+          "span": {
+            "start": 62,
+            "end": 102
+          }
+        }
+      },
+      "span": {
+        "start": 62,
+        "end": 102
+      }
+    },
+    {
+      "kind": {
+        "Fn": {
+          "name": {
+            "symbol": {
+              "unstable_source": "on_arg_annotated"
+            },
+            "span": {
+              "start": 106,
+              "end": 122
+            }
+          },
+          "params": {
+            "Single": {
+              "local": {
+                "Ident": [
+                  {
+                    "symbol": {
+                      "unstable_source": "a"
+                    },
+                    "span": {
+                      "start": 123,
+                      "end": 124
+                    }
+                  },
+                  {
+                    "start": 123,
+                    "end": 124
+                  }
+                ]
+              },
+              "ty": {
+                "String": {
+                  "start": 126,
+                  "end": 132
+                }
+              },
+              "id": 0,
+              "span": {
+                "start": 123,
+                "end": 132
+              }
+            }
+          },
+          "body": {
+            "stmts": [],
+            "id": 0,
+            "span": {
+              "start": 134,
+              "end": 136
+            }
+          },
+          "return_ty": null,
+          "is_async": false,
+          "generics": null,
+          "span": {
+            "start": 103,
+            "end": 136
+          }
+        }
+      },
+      "span": {
+        "start": 103,
+        "end": 136
+      }
+    },
+    {
+      "kind": {
+        "Fn": {
+          "name": {
+            "symbol": {
+              "unstable_source": "many_args"
+            },
+            "span": {
+              "start": 140,
+              "end": 149
+            }
+          },
+          "params": {
+            "Multi": [
+              {
+                "local": {
+                  "Ident": [
+                    {
+                      "symbol": {
+                        "unstable_source": "a"
+                      },
+                      "span": {
+                        "start": 150,
+                        "end": 151
+                      }
+                    },
+                    {
+                      "start": 150,
+                      "end": 151
+                    }
+                  ]
+                },
+                "ty": null,
+                "id": 0,
+                "span": {
+                  "start": 150,
+                  "end": 151
+                }
+              },
+              {
+                "local": {
+                  "Ident": [
+                    {
+                      "symbol": {
+                        "unstable_source": "b"
+                      },
+                      "span": {
+                        "start": 153,
+                        "end": 154
+                      }
+                    },
+                    {
+                      "start": 153,
+                      "end": 154
+                    }
+                  ]
+                },
+                "ty": null,
+                "id": 0,
+                "span": {
+                  "start": 153,
+                  "end": 154
+                }
+              },
+              {
+                "local": {
+                  "Ident": [
+                    {
+                      "symbol": {
+                        "unstable_source": "c"
+                      },
+                      "span": {
+                        "start": 156,
+                        "end": 157
+                      }
+                    },
+                    {
+                      "start": 156,
+                      "end": 157
+                    }
+                  ]
+                },
+                "ty": null,
+                "id": 0,
+                "span": {
+                  "start": 156,
+                  "end": 157
+                }
+              },
+              {
+                "local": {
+                  "Ident": [
+                    {
+                      "symbol": {
+                        "unstable_source": "d"
+                      },
+                      "span": {
+                        "start": 159,
+                        "end": 160
+                      }
+                    },
+                    {
+                      "start": 159,
+                      "end": 160
+                    }
+                  ]
+                },
+                "ty": null,
+                "id": 0,
+                "span": {
+                  "start": 159,
+                  "end": 160
+                }
+              },
+              {
+                "local": {
+                  "Ident": [
+                    {
+                      "symbol": {
+                        "unstable_source": "e"
+                      },
+                      "span": {
+                        "start": 162,
+                        "end": 163
+                      }
+                    },
+                    {
+                      "start": 162,
+                      "end": 163
+                    }
+                  ]
+                },
+                "ty": null,
+                "id": 0,
+                "span": {
+                  "start": 162,
+                  "end": 163
+                }
+              }
+            ]
+          },
+          "body": {
+            "stmts": [],
+            "id": 0,
+            "span": {
+              "start": 165,
+              "end": 167
+            }
+          },
+          "return_ty": null,
+          "is_async": false,
+          "generics": null,
+          "span": {
+            "start": 137,
+            "end": 167
+          }
+        }
+      },
+      "span": {
+        "start": 137,
+        "end": 167
+      }
+    },
+    {
+      "kind": {
+        "Fn": {
+          "name": {
+            "symbol": {
+              "unstable_source": "many_args_annotated"
+            },
+            "span": {
+              "start": 171,
+              "end": 190
+            }
+          },
+          "params": {
+            "Multi": [
+              {
+                "local": {
+                  "Ident": [
+                    {
+                      "symbol": {
+                        "unstable_source": "a"
+                      },
+                      "span": {
+                        "start": 191,
+                        "end": 192
+                      }
+                    },
+                    {
+                      "start": 191,
+                      "end": 192
+                    }
+                  ]
+                },
+                "ty": {
+                  "String": {
+                    "start": 194,
+                    "end": 200
+                  }
+                },
+                "id": 0,
+                "span": {
+                  "start": 191,
+                  "end": 200
+                }
+              },
+              {
+                "local": {
+                  "Ident": [
+                    {
+                      "symbol": {
+                        "unstable_source": "b"
+                      },
+                      "span": {
+                        "start": 202,
+                        "end": 203
+                      }
+                    },
+                    {
+                      "start": 202,
+                      "end": 203
+                    }
+                  ]
+                },
+                "ty": {
+                  "String": {
+                    "start": 205,
+                    "end": 211
+                  }
+                },
+                "id": 0,
+                "span": {
+                  "start": 202,
+                  "end": 211
+                }
+              },
+              {
+                "local": {
+                  "Ident": [
+                    {
+                      "symbol": {
+                        "unstable_source": "c"
+                      },
+                      "span": {
+                        "start": 213,
+                        "end": 214
+                      }
+                    },
+                    {
+                      "start": 213,
+                      "end": 214
+                    }
+                  ]
+                },
+                "ty": {
+                  "String": {
+                    "start": 216,
+                    "end": 222
+                  }
+                },
+                "id": 0,
+                "span": {
+                  "start": 213,
+                  "end": 222
+                }
+              },
+              {
+                "local": {
+                  "Ident": [
+                    {
+                      "symbol": {
+                        "unstable_source": "d"
+                      },
+                      "span": {
+                        "start": 224,
+                        "end": 225
+                      }
+                    },
+                    {
+                      "start": 224,
+                      "end": 225
+                    }
+                  ]
+                },
+                "ty": {
+                  "String": {
+                    "start": 227,
+                    "end": 233
+                  }
+                },
+                "id": 0,
+                "span": {
+                  "start": 224,
+                  "end": 233
+                }
+              },
+              {
+                "local": {
+                  "Ident": [
+                    {
+                      "symbol": {
+                        "unstable_source": "e"
+                      },
+                      "span": {
+                        "start": 235,
+                        "end": 236
+                      }
+                    },
+                    {
+                      "start": 235,
+                      "end": 236
+                    }
+                  ]
+                },
+                "ty": {
+                  "String": {
+                    "start": 238,
+                    "end": 244
+                  }
+                },
+                "id": 0,
+                "span": {
+                  "start": 235,
+                  "end": 244
+                }
+              }
+            ]
+          },
+          "body": {
+            "stmts": [],
+            "id": 0,
+            "span": {
+              "start": 255,
+              "end": 257
+            }
+          },
+          "return_ty": {
+            "Number": {
+              "start": 248,
+              "end": 254
+            }
+          },
+          "is_async": false,
+          "generics": null,
+          "span": {
+            "start": 168,
+            "end": 257
+          }
+        }
+      },
+      "span": {
+        "start": 168,
+        "end": 257
+      }
+    },
+    {
+      "kind": {
+        "Fn": {
+          "name": {
+            "symbol": {
+              "unstable_source": "many_args_line_breaks"
+            },
+            "span": {
+              "start": 261,
+              "end": 282
+            }
+          },
+          "params": {
+            "Multi": [
+              {
+                "local": {
+                  "Ident": [
+                    {
+                      "symbol": {
+                        "unstable_source": "a"
+                      },
+                      "span": {
+                        "start": 288,
+                        "end": 289
+                      }
+                    },
+                    {
+                      "start": 288,
+                      "end": 289
+                    }
+                  ]
+                },
+                "ty": null,
+                "id": 0,
+                "span": {
+                  "start": 288,
+                  "end": 289
+                }
+              },
+              {
+                "local": {
+                  "Ident": [
+                    {
+                      "symbol": {
+                        "unstable_source": "b"
+                      },
+                      "span": {
+                        "start": 295,
+                        "end": 296
+                      }
+                    },
+                    {
+                      "start": 295,
+                      "end": 296
+                    }
+                  ]
+                },
+                "ty": null,
+                "id": 0,
+                "span": {
+                  "start": 295,
+                  "end": 296
+                }
+              },
+              {
+                "local": {
+                  "Ident": [
+                    {
+                      "symbol": {
+                        "unstable_source": "c"
+                      },
+                      "span": {
+                        "start": 302,
+                        "end": 303
+                      }
+                    },
+                    {
+                      "start": 302,
+                      "end": 303
+                    }
+                  ]
+                },
+                "ty": null,
+                "id": 0,
+                "span": {
+                  "start": 302,
+                  "end": 303
+                }
+              },
+              {
+                "local": {
+                  "Ident": [
+                    {
+                      "symbol": {
+                        "unstable_source": "d"
+                      },
+                      "span": {
+                        "start": 309,
+                        "end": 310
+                      }
+                    },
+                    {
+                      "start": 309,
+                      "end": 310
+                    }
+                  ]
+                },
+                "ty": null,
+                "id": 0,
+                "span": {
+                  "start": 309,
+                  "end": 310
+                }
+              },
+              {
+                "local": {
+                  "Ident": [
+                    {
+                      "symbol": {
+                        "unstable_source": "e"
+                      },
+                      "span": {
+                        "start": 316,
+                        "end": 317
+                      }
+                    },
+                    {
+                      "start": 316,
+                      "end": 317
+                    }
+                  ]
+                },
+                "ty": null,
+                "id": 0,
+                "span": {
+                  "start": 316,
+                  "end": 317
+                }
+              }
+            ]
+          },
+          "body": {
+            "stmts": [],
+            "id": 0,
+            "span": {
+              "start": 321,
+              "end": 323
+            }
+          },
+          "return_ty": null,
+          "is_async": false,
+          "generics": null,
+          "span": {
+            "start": 258,
+            "end": 323
+          }
+        }
+      },
+      "span": {
+        "start": 258,
+        "end": 323
+      }
+    },
+    {
+      "kind": {
+        "Fn": {
+          "name": {
+            "symbol": {
+              "unstable_source": "mixed_annotations"
+            },
+            "span": {
+              "start": 327,
+              "end": 344
+            }
+          },
+          "params": {
+            "Multi": [
+              {
+                "local": {
+                  "Ident": [
+                    {
+                      "symbol": {
+                        "unstable_source": "a"
+                      },
+                      "span": {
+                        "start": 345,
+                        "end": 346
+                      }
+                    },
+                    {
+                      "start": 345,
+                      "end": 346
+                    }
+                  ]
+                },
+                "ty": null,
+                "id": 0,
+                "span": {
+                  "start": 345,
+                  "end": 346
+                }
+              },
+              {
+                "local": {
+                  "Ident": [
+                    {
+                      "symbol": {
+                        "unstable_source": "b"
+                      },
+                      "span": {
+                        "start": 348,
+                        "end": 349
+                      }
+                    },
+                    {
+                      "start": 348,
+                      "end": 349
+                    }
+                  ]
+                },
+                "ty": {
+                  "String": {
+                    "start": 351,
+                    "end": 357
+                  }
+                },
+                "id": 0,
+                "span": {
+                  "start": 348,
+                  "end": 357
+                }
+              },
+              {
+                "local": {
+                  "Ident": [
+                    {
+                      "symbol": {
+                        "unstable_source": "c"
+                      },
+                      "span": {
+                        "start": 359,
+                        "end": 360
+                      }
+                    },
+                    {
+                      "start": 359,
+                      "end": 360
+                    }
+                  ]
+                },
+                "ty": null,
+                "id": 0,
+                "span": {
+                  "start": 359,
+                  "end": 360
+                }
+              },
+              {
+                "local": {
+                  "Ident": [
+                    {
+                      "symbol": {
+                        "unstable_source": "d"
+                      },
+                      "span": {
+                        "start": 362,
+                        "end": 363
+                      }
+                    },
+                    {
+                      "start": 362,
+                      "end": 363
+                    }
+                  ]
+                },
+                "ty": {
+                  "Number": {
+                    "start": 365,
+                    "end": 371
+                  }
+                },
+                "id": 0,
+                "span": {
+                  "start": 362,
+                  "end": 371
+                }
+              },
+              {
+                "local": {
+                  "Ident": [
+                    {
+                      "symbol": {
+                        "unstable_source": "e"
+                      },
+                      "span": {
+                        "start": 373,
+                        "end": 374
+                      }
+                    },
+                    {
+                      "start": 373,
+                      "end": 374
+                    }
+                  ]
+                },
+                "ty": {
+                  "String": {
+                    "start": 376,
+                    "end": 382
+                  }
+                },
+                "id": 0,
+                "span": {
+                  "start": 373,
+                  "end": 382
+                }
+              }
+            ]
+          },
+          "body": {
+            "stmts": [],
+            "id": 0,
+            "span": {
+              "start": 384,
+              "end": 386
+            }
+          },
+          "return_ty": null,
+          "is_async": false,
+          "generics": null,
+          "span": {
+            "start": 324,
+            "end": 386
+          }
+        }
+      },
+      "span": {
+        "start": 324,
+        "end": 386
+      }
+    },
+    {
+      "kind": {
+        "Fn": {
+          "name": {
+            "symbol": {
+              "unstable_source": "generic"
+            },
+            "span": {
+              "start": 390,
+              "end": 397
+            }
+          },
+          "params": {
+            "Single": {
+              "local": {
+                "Ident": [
+                  {
+                    "symbol": {
+                      "unstable_source": "a"
+                    },
+                    "span": {
+                      "start": 401,
+                      "end": 402
+                    }
+                  },
+                  {
+                    "start": 401,
+                    "end": 402
+                  }
+                ]
+              },
+              "ty": {
+                "Reference": {
+                  "name": {
+                    "symbol": {
+                      "unstable_source": "T"
+                    },
+                    "span": {
+                      "start": 404,
+                      "end": 405
+                    }
+                  },
+                  "arguments": null,
+                  "span": {
+                    "start": 404,
+                    "end": 405
+                  }
+                }
+              },
+              "id": 0,
+              "span": {
+                "start": 401,
+                "end": 405
+              }
+            }
+          },
+          "body": {
+            "stmts": [],
+            "id": 0,
+            "span": {
+              "start": 407,
+              "end": 409
+            }
+          },
+          "return_ty": null,
+          "is_async": false,
+          "generics": {
+            "params": [
+              {
+                "symbol": {
+                  "unstable_source": "T"
+                },
+                "span": {
+                  "start": 398,
+                  "end": 399
+                }
+              }
+            ]
+          },
+          "span": {
+            "start": 387,
+            "end": 409
+          }
+        }
+      },
+      "span": {
+        "start": 387,
+        "end": 409
+      }
+    },
+    {
+      "kind": {
+        "Fn": {
+          "name": {
+            "symbol": {
+              "unstable_source": "generics"
+            },
+            "span": {
+              "start": 413,
+              "end": 421
+            }
+          },
+          "params": {
+            "Multi": [
+              {
+                "local": {
+                  "Ident": [
+                    {
+                      "symbol": {
+                        "unstable_source": "a"
+                      },
+                      "span": {
+                        "start": 431,
+                        "end": 432
+                      }
+                    },
+                    {
+                      "start": 431,
+                      "end": 432
+                    }
+                  ]
+                },
+                "ty": {
+                  "Reference": {
+                    "name": {
+                      "symbol": {
+                        "unstable_source": "T"
+                      },
+                      "span": {
+                        "start": 434,
+                        "end": 435
+                      }
+                    },
+                    "arguments": null,
+                    "span": {
+                      "start": 434,
+                      "end": 435
+                    }
+                  }
+                },
+                "id": 0,
+                "span": {
+                  "start": 431,
+                  "end": 435
+                }
+              },
+              {
+                "local": {
+                  "Ident": [
+                    {
+                      "symbol": {
+                        "unstable_source": "b"
+                      },
+                      "span": {
+                        "start": 437,
+                        "end": 438
+                      }
+                    },
+                    {
+                      "start": 437,
+                      "end": 438
+                    }
+                  ]
+                },
+                "ty": {
+                  "Reference": {
+                    "name": {
+                      "symbol": {
+                        "unstable_source": "U"
+                      },
+                      "span": {
+                        "start": 440,
+                        "end": 441
+                      }
+                    },
+                    "arguments": null,
+                    "span": {
+                      "start": 440,
+                      "end": 441
+                    }
+                  }
+                },
+                "id": 0,
+                "span": {
+                  "start": 437,
+                  "end": 441
+                }
+              }
+            ]
+          },
+          "body": {
+            "stmts": [],
+            "id": 0,
+            "span": {
+              "start": 447,
+              "end": 449
+            }
+          },
+          "return_ty": {
+            "Reference": {
+              "name": {
+                "symbol": {
+                  "unstable_source": "V"
+                },
+                "span": {
+                  "start": 445,
+                  "end": 446
+                }
+              },
+              "arguments": null,
+              "span": {
+                "start": 445,
+                "end": 446
+              }
+            }
+          },
+          "is_async": false,
+          "generics": {
+            "params": [
+              {
+                "symbol": {
+                  "unstable_source": "T"
+                },
+                "span": {
+                  "start": 422,
+                  "end": 423
+                }
+              },
+              {
+                "symbol": {
+                  "unstable_source": "U"
+                },
+                "span": {
+                  "start": 425,
+                  "end": 426
+                }
+              },
+              {
+                "symbol": {
+                  "unstable_source": "V"
+                },
+                "span": {
+                  "start": 428,
+                  "end": 429
+                }
+              }
+            ]
+          },
+          "span": {
+            "start": 410,
+            "end": 449
+          }
+        }
+      },
+      "span": {
+        "start": 410,
+        "end": 449
+      }
+    },
+    {
+      "kind": {
+        "Fn": {
+          "name": {
+            "symbol": {
+              "unstable_source": "mixed_generics"
+            },
+            "span": {
+              "start": 453,
+              "end": 467
+            }
+          },
+          "params": {
+            "Multi": [
+              {
+                "local": {
+                  "Ident": [
+                    {
+                      "symbol": {
+                        "unstable_source": "a"
+                      },
+                      "span": {
+                        "start": 474,
+                        "end": 475
+                      }
+                    },
+                    {
+                      "start": 474,
+                      "end": 475
+                    }
+                  ]
+                },
+                "ty": {
+                  "Reference": {
+                    "name": {
+                      "symbol": {
+                        "unstable_source": "T"
+                      },
+                      "span": {
+                        "start": 477,
+                        "end": 478
+                      }
+                    },
+                    "arguments": null,
+                    "span": {
+                      "start": 477,
+                      "end": 478
+                    }
+                  }
+                },
+                "id": 0,
+                "span": {
+                  "start": 474,
+                  "end": 478
+                }
+              },
+              {
+                "local": {
+                  "Ident": [
+                    {
+                      "symbol": {
+                        "unstable_source": "b"
+                      },
+                      "span": {
+                        "start": 480,
+                        "end": 481
+                      }
+                    },
+                    {
+                      "start": 480,
+                      "end": 481
+                    }
+                  ]
+                },
+                "ty": {
+                  "String": {
+                    "start": 483,
+                    "end": 489
+                  }
+                },
+                "id": 0,
+                "span": {
+                  "start": 480,
+                  "end": 489
+                }
+              },
+              {
+                "local": {
+                  "Ident": [
+                    {
+                      "symbol": {
+                        "unstable_source": "c"
+                      },
+                      "span": {
+                        "start": 491,
+                        "end": 492
+                      }
+                    },
+                    {
+                      "start": 491,
+                      "end": 492
+                    }
+                  ]
+                },
+                "ty": {
+                  "Reference": {
+                    "name": {
+                      "symbol": {
+                        "unstable_source": "U"
+                      },
+                      "span": {
+                        "start": 494,
+                        "end": 495
+                      }
+                    },
+                    "arguments": null,
+                    "span": {
+                      "start": 494,
+                      "end": 495
+                    }
+                  }
+                },
+                "id": 0,
+                "span": {
+                  "start": 491,
+                  "end": 495
+                }
+              }
+            ]
+          },
+          "body": {
+            "stmts": [],
+            "id": 0,
+            "span": {
+              "start": 501,
+              "end": 503
+            }
+          },
+          "return_ty": {
+            "Reference": {
+              "name": {
+                "symbol": {
+                  "unstable_source": "U"
+                },
+                "span": {
+                  "start": 499,
+                  "end": 500
+                }
+              },
+              "arguments": null,
+              "span": {
+                "start": 499,
+                "end": 500
+              }
+            }
+          },
+          "is_async": false,
+          "generics": {
+            "params": [
+              {
+                "symbol": {
+                  "unstable_source": "T"
+                },
+                "span": {
+                  "start": 468,
+                  "end": 469
+                }
+              },
+              {
+                "symbol": {
+                  "unstable_source": "U"
+                },
+                "span": {
+                  "start": 471,
+                  "end": 472
+                }
+              }
+            ]
+          },
+          "span": {
+            "start": 450,
+            "end": 503
+          }
+        }
+      },
+      "span": {
+        "start": 450,
+        "end": 503
+      }
+    }
+  ]
+}

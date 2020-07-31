@@ -832,7 +832,7 @@ impl Parser<'_> {
         Ok(stmts)
     }
 
-    pub(crate) fn stmt(&mut self) -> Result<ast::Stmt> {
+    pub fn stmt(&mut self) -> Result<ast::Stmt> {
         let token = self.peek()?;
         match token.kind {
             TokenKind::Reserved(Keyword::Let) => {

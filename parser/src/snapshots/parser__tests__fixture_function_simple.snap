@@ -8,7 +8,7 @@ expression: parse_module(input)
       "kind": {
         "Fn": {
           "name": {
-            "name": {
+            "symbol": {
               "unstable_source": "add"
             },
             "span": {
@@ -22,7 +22,7 @@ expression: parse_module(input)
                 "local": {
                   "Ident": [
                     {
-                      "name": {
+                      "symbol": {
                         "unstable_source": "a"
                       },
                       "span": {
@@ -37,18 +37,10 @@ expression: parse_module(input)
                   ]
                 },
                 "ty": {
-                  "Variable": [
-                    {
-                      "name": {
-                        "unstable_source": "number"
-                      },
-                      "span": {
-                        "start": 31,
-                        "end": 37
-                      }
-                    },
-                    null
-                  ]
+                  "Number": {
+                    "start": 31,
+                    "end": 37
+                  }
                 },
                 "id": 0,
                 "span": {
@@ -60,7 +52,7 @@ expression: parse_module(input)
                 "local": {
                   "Ident": [
                     {
-                      "name": {
+                      "symbol": {
                         "unstable_source": "b"
                       },
                       "span": {
@@ -75,18 +67,10 @@ expression: parse_module(input)
                   ]
                 },
                 "ty": {
-                  "Variable": [
-                    {
-                      "name": {
-                        "unstable_source": "number"
-                      },
-                      "span": {
-                        "start": 42,
-                        "end": 48
-                      }
-                    },
-                    null
-                  ]
+                  "Number": {
+                    "start": 42,
+                    "end": 48
+                  }
                 },
                 "id": 0,
                 "span": {
@@ -106,7 +90,7 @@ expression: parse_module(input)
                     "name": {
                       "Ident": [
                         {
-                          "name": {
+                          "symbol": {
                             "unstable_source": "result"
                           },
                           "span": {
@@ -122,15 +106,13 @@ expression: parse_module(input)
                     },
                     "ty": null,
                     "init": {
-                      "id": 0,
                       "kind": {
                         "Binary": [
                           "Add",
                           {
-                            "id": 0,
                             "kind": {
                               "Reference": {
-                                "name": {
+                                "symbol": {
                                   "unstable_source": "a"
                                 },
                                 "span": {
@@ -142,14 +124,12 @@ expression: parse_module(input)
                             "span": {
                               "start": 78,
                               "end": 79
-                            },
-                            "ty": null
+                            }
                           },
                           {
-                            "id": 0,
                             "kind": {
                               "Reference": {
-                                "name": {
+                                "symbol": {
                                   "unstable_source": "b"
                                 },
                                 "span": {
@@ -161,16 +141,14 @@ expression: parse_module(input)
                             "span": {
                               "start": 82,
                               "end": 83
-                            },
-                            "ty": null
+                            }
                           }
                         ]
                       },
                       "span": {
                         "start": 78,
                         "end": 83
-                      },
-                      "ty": null
+                      }
                     },
                     "span": {
                       "start": 65,
@@ -182,16 +160,15 @@ expression: parse_module(input)
                   "start": 65,
                   "end": 84
                 },
-                "has_semi": false
+                "has_semi": true
               },
               {
                 "id": 0,
                 "kind": {
                   "Return": {
-                    "id": 0,
                     "kind": {
                       "Reference": {
-                        "name": {
+                        "symbol": {
                           "unstable_source": "result"
                         },
                         "span": {
@@ -203,15 +180,14 @@ expression: parse_module(input)
                     "span": {
                       "start": 96,
                       "end": 102
-                    },
-                    "ty": null
+                    }
                   }
                 },
                 "span": {
                   "start": 89,
                   "end": 103
                 },
-                "has_semi": false
+                "has_semi": true
               }
             ],
             "id": 0,
@@ -221,18 +197,10 @@ expression: parse_module(input)
             }
           },
           "return_ty": {
-            "Variable": [
-              {
-                "name": {
-                  "unstable_source": "number"
-                },
-                "span": {
-                  "start": 52,
-                  "end": 58
-                }
-              },
-              null
-            ]
+            "Number": {
+              "start": 52,
+              "end": 58
+            }
           },
           "is_async": false,
           "generics": null,

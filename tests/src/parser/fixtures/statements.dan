@@ -1,0 +1,8 @@
+fn main() {
+    let a = 1;
+    if true {
+        let b = 2;
+    } else {
+        let c = 3;
+    }
+}

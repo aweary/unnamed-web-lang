@@ -1,3 +1,37 @@
-fn filter<T>(a: T[], b: (T, number) => bool) : T[] {}
+// Primitives that will be automatically imported
+component Stack() {}
+component View() {}
+component Input() {}
+component Image() {}
+component VStack() {}
 
-const LIST_LENGTH = filter([], |number, i| number > 5)
+component Text(
+    content : string,
+    size : string = "large",
+) {}
+
+// All valid
+Text("Hello")
+Text(content: "Hello")
+Text().content("Hello")
+
+component Card(avatar: string) {
+    let greeting = Text("Hello")
+    if true {
+        Text.color("red")
+    }
+    View {
+        Image(src: avatar)
+         .height(16)
+         .width(16)
+        VStack {
+            Text("Erin Lindford").size("large")
+            Text("Product Engineer").color("purple-500")
+            Text("erinlindford@example.com").color("gray-600")
+        }
+        .alignText("center")
+    }
+    .background("white")
+    .rounded()
+    .padding(6)
+}

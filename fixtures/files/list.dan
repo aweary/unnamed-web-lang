@@ -1,0 +1,1 @@
+export fn append<T>(list: T[], item: T) : T[] {}

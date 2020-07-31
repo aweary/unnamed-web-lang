@@ -1,4 +1,0 @@
-import {shout} from "./baz/qux.dom";
-
-export fn basdfsdfr() {
-}

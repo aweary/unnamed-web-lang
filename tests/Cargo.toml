@@ -1,0 +1,22 @@
+[package]
+name = "tests"
+version = "0.1.0"
+authors = ["Brandon Dail <brandon.dail@discordapp.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+lowering = { path = "../lowering" }
+codegen = { path = "../codegen" }
+data_structures = { path = "../data_structures" }
+log = { path = "../log" }
+source = { path = "../source" }
+diagnostics = { path = "../diagnostics" }
+hir = { path = "../hir" }
+lexer = { path = "../lexer" }
+parser = { path = "../parser" }
+syntax = { path = "../syntax" }
+typecheck = { path = "../typecheck" }
+insta = { version = "0.16.1", features = ["glob"] }
+

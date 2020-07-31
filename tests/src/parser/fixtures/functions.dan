@@ -1,0 +1,18 @@
+fn empty() {}
+fn empty_annotated() : unit {}
+fn one_arg(a) {}
+fn on_arg_annotated(a: string) : unit {}
+fn on_arg_annotated(a: string) {}
+fn many_args(a, b, c, d, e) {}
+fn many_args_annotated(a: string, b: string, c: string, d: string, e: string) : number {}
+fn many_args_line_breaks(
+    a,
+    b,
+    c,
+    d,
+    e,
+) {}
+fn mixed_annotations(a, b: string, c, d: number, e: string) {}
+fn generic<T>(a: T) {}
+fn generics<T, U, V>(a: T, b: U) : V {}
+fn mixed_generics<T, U>(a: T, b: string, c: U) : U {}

@@ -8,7 +8,7 @@ expression: parse_module(input)
       "kind": {
         "Component": {
           "name": {
-            "name": {
+            "symbol": {
               "unstable_source": "UserList"
             },
             "span": {
@@ -21,7 +21,7 @@ expression: parse_module(input)
               "local": {
                 "Ident": [
                   {
-                    "name": {
+                    "symbol": {
                       "unstable_source": "user"
                     },
                     "span": {
@@ -35,7 +35,7 @@ expression: parse_module(input)
                   }
                 ]
               },
-              "ty": "Existential",
+              "ty": null,
               "id": 0,
               "span": {
                 "start": 19,
@@ -54,14 +54,12 @@ expression: parse_module(input)
                       "end": 246
                     },
                     "condition": {
-                      "id": 0,
                       "kind": {
                         "Member": [
                           {
-                            "id": 0,
                             "kind": {
                               "Reference": {
-                                "name": {
+                                "symbol": {
                                   "unstable_source": "user"
                                 },
                                 "span": {
@@ -73,11 +71,10 @@ expression: parse_module(input)
                             "span": {
                               "start": 34,
                               "end": 38
-                            },
-                            "ty": null
+                            }
                           },
                           {
-                            "name": {
+                            "symbol": {
                               "unstable_source": "is_admin"
                             },
                             "span": {
@@ -90,8 +87,7 @@ expression: parse_module(input)
                       "span": {
                         "start": 34,
                         "end": 47
-                      },
-                      "ty": null
+                      }
                     },
                     "block": {
                       "stmts": [
@@ -99,14 +95,12 @@ expression: parse_module(input)
                           "id": 0,
                           "kind": {
                             "Return": {
-                              "id": 0,
                               "kind": {
                                 "TrailingClosure": [
                                   {
-                                    "id": 0,
                                     "kind": {
                                       "Reference": {
-                                        "name": {
+                                        "symbol": {
                                           "unstable_source": "View"
                                         },
                                         "span": {
@@ -118,8 +112,7 @@ expression: parse_module(input)
                                     "span": {
                                       "start": 65,
                                       "end": 69
-                                    },
-                                    "ty": null
+                                    }
                                   },
                                   {
                                     "stmts": [
@@ -127,22 +120,18 @@ expression: parse_module(input)
                                         "id": 0,
                                         "kind": {
                                           "Expr": {
-                                            "id": 0,
                                             "kind": {
                                               "Call": [
                                                 {
-                                                  "id": 0,
                                                   "kind": {
                                                     "Member": [
                                                       {
-                                                        "id": 0,
                                                         "kind": {
                                                           "Call": [
                                                             {
-                                                              "id": 0,
                                                               "kind": {
                                                                 "Reference": {
-                                                                  "name": {
+                                                                  "symbol": {
                                                                     "unstable_source": "Text"
                                                                   },
                                                                   "span": {
@@ -154,30 +143,34 @@ expression: parse_module(input)
                                                               "span": {
                                                                 "start": 84,
                                                                 "end": 88
-                                                              },
-                                                              "ty": null
+                                                              }
                                                             },
                                                             [
                                                               {
-                                                                "id": 0,
-                                                                "kind": {
-                                                                  "Lit": {
-                                                                    "span": {
-                                                                      "start": 89,
-                                                                      "end": 96
-                                                                    },
-                                                                    "kind": {
-                                                                      "Str": {
-                                                                        "unstable_source": "\"Admin\""
-                                                                      }
-                                                                    }
-                                                                  }
-                                                                },
                                                                 "span": {
                                                                   "start": 89,
                                                                   "end": 96
                                                                 },
-                                                                "ty": null
+                                                                "name": null,
+                                                                "value": {
+                                                                  "kind": {
+                                                                    "Lit": {
+                                                                      "span": {
+                                                                        "start": 89,
+                                                                        "end": 96
+                                                                      },
+                                                                      "kind": {
+                                                                        "Str": {
+                                                                          "unstable_source": "\"Admin\""
+                                                                        }
+                                                                      }
+                                                                    }
+                                                                  },
+                                                                  "span": {
+                                                                    "start": 89,
+                                                                    "end": 96
+                                                                  }
+                                                                }
                                                               }
                                                             ]
                                                           ]
@@ -185,11 +178,10 @@ expression: parse_module(input)
                                                         "span": {
                                                           "start": 84,
                                                           "end": 97
-                                                        },
-                                                        "ty": null
+                                                        }
                                                       },
                                                       {
-                                                        "name": {
+                                                        "symbol": {
                                                           "unstable_source": "color"
                                                         },
                                                         "span": {
@@ -202,30 +194,34 @@ expression: parse_module(input)
                                                   "span": {
                                                     "start": 84,
                                                     "end": 103
-                                                  },
-                                                  "ty": null
+                                                  }
                                                 },
                                                 [
                                                   {
-                                                    "id": 0,
-                                                    "kind": {
-                                                      "Lit": {
-                                                        "span": {
-                                                          "start": 104,
-                                                          "end": 109
-                                                        },
-                                                        "kind": {
-                                                          "Str": {
-                                                            "unstable_source": "\"red\""
-                                                          }
-                                                        }
-                                                      }
-                                                    },
                                                     "span": {
                                                       "start": 104,
                                                       "end": 109
                                                     },
-                                                    "ty": null
+                                                    "name": null,
+                                                    "value": {
+                                                      "kind": {
+                                                        "Lit": {
+                                                          "span": {
+                                                            "start": 104,
+                                                            "end": 109
+                                                          },
+                                                          "kind": {
+                                                            "Str": {
+                                                              "unstable_source": "\"red\""
+                                                            }
+                                                          }
+                                                        }
+                                                      },
+                                                      "span": {
+                                                        "start": 104,
+                                                        "end": 109
+                                                      }
+                                                    }
                                                   }
                                                 ]
                                               ]
@@ -233,8 +229,7 @@ expression: parse_module(input)
                                             "span": {
                                               "start": 84,
                                               "end": 110
-                                            },
-                                            "ty": null
+                                            }
                                           }
                                         },
                                         "span": {
@@ -255,8 +250,7 @@ expression: parse_module(input)
                               "span": {
                                 "start": 65,
                                 "end": 120
-                              },
-                              "ty": null
+                              }
                             }
                           },
                           "span": {
@@ -284,14 +278,12 @@ expression: parse_module(input)
                                   "end": 240
                                 },
                                 "condition": {
-                                  "id": 0,
                                   "kind": {
                                     "Member": [
                                       {
-                                        "id": 0,
                                         "kind": {
                                           "Reference": {
-                                            "name": {
+                                            "symbol": {
                                               "unstable_source": "user"
                                             },
                                             "span": {
@@ -303,11 +295,10 @@ expression: parse_module(input)
                                         "span": {
                                           "start": 145,
                                           "end": 149
-                                        },
-                                        "ty": null
+                                        }
                                       },
                                       {
-                                        "name": {
+                                        "symbol": {
                                           "unstable_source": "is_guest"
                                         },
                                         "span": {
@@ -320,8 +311,7 @@ expression: parse_module(input)
                                   "span": {
                                     "start": 145,
                                     "end": 158
-                                  },
-                                  "ty": null
+                                  }
                                 },
                                 "block": {
                                   "stmts": [
@@ -329,14 +319,12 @@ expression: parse_module(input)
                                       "id": 0,
                                       "kind": {
                                         "Return": {
-                                          "id": 0,
                                           "kind": {
                                             "TrailingClosure": [
                                               {
-                                                "id": 0,
                                                 "kind": {
                                                   "Reference": {
-                                                    "name": {
+                                                    "symbol": {
                                                       "unstable_source": "View"
                                                     },
                                                     "span": {
@@ -348,8 +336,7 @@ expression: parse_module(input)
                                                 "span": {
                                                   "start": 180,
                                                   "end": 184
-                                                },
-                                                "ty": null
+                                                }
                                               },
                                               {
                                                 "stmts": [
@@ -357,14 +344,12 @@ expression: parse_module(input)
                                                     "id": 0,
                                                     "kind": {
                                                       "Expr": {
-                                                        "id": 0,
                                                         "kind": {
                                                           "Call": [
                                                             {
-                                                              "id": 0,
                                                               "kind": {
                                                                 "Reference": {
-                                                                  "name": {
+                                                                  "symbol": {
                                                                     "unstable_source": "Text"
                                                                   },
                                                                   "span": {
@@ -376,30 +361,34 @@ expression: parse_module(input)
                                                               "span": {
                                                                 "start": 203,
                                                                 "end": 207
-                                                              },
-                                                              "ty": null
+                                                              }
                                                             },
                                                             [
                                                               {
-                                                                "id": 0,
-                                                                "kind": {
-                                                                  "Lit": {
-                                                                    "span": {
-                                                                      "start": 208,
-                                                                      "end": 215
-                                                                    },
-                                                                    "kind": {
-                                                                      "Str": {
-                                                                        "unstable_source": "\"Guest\""
-                                                                      }
-                                                                    }
-                                                                  }
-                                                                },
                                                                 "span": {
                                                                   "start": 208,
                                                                   "end": 215
                                                                 },
-                                                                "ty": null
+                                                                "name": null,
+                                                                "value": {
+                                                                  "kind": {
+                                                                    "Lit": {
+                                                                      "span": {
+                                                                        "start": 208,
+                                                                        "end": 215
+                                                                      },
+                                                                      "kind": {
+                                                                        "Str": {
+                                                                          "unstable_source": "\"Guest\""
+                                                                        }
+                                                                      }
+                                                                    }
+                                                                  },
+                                                                  "span": {
+                                                                    "start": 208,
+                                                                    "end": 215
+                                                                  }
+                                                                }
                                                               }
                                                             ]
                                                           ]
@@ -407,8 +396,7 @@ expression: parse_module(input)
                                                         "span": {
                                                           "start": 203,
                                                           "end": 216
-                                                        },
-                                                        "ty": null
+                                                        }
                                                       }
                                                     },
                                                     "span": {
@@ -429,8 +417,7 @@ expression: parse_module(input)
                                           "span": {
                                             "start": 180,
                                             "end": 230
-                                          },
-                                          "ty": null
+                                          }
                                         }
                                       },
                                       "span": {
@@ -475,14 +462,12 @@ expression: parse_module(input)
                 "id": 0,
                 "kind": {
                   "Expr": {
-                    "id": 0,
                     "kind": {
                       "TrailingClosure": [
                         {
-                          "id": 0,
                           "kind": {
                             "Reference": {
-                              "name": {
+                              "symbol": {
                                 "unstable_source": "View"
                               },
                               "span": {
@@ -494,8 +479,7 @@ expression: parse_module(input)
                           "span": {
                             "start": 251,
                             "end": 255
-                          },
-                          "ty": null
+                          }
                         },
                         {
                           "stmts": [
@@ -503,14 +487,12 @@ expression: parse_module(input)
                               "id": 0,
                               "kind": {
                                 "Expr": {
-                                  "id": 0,
                                   "kind": {
                                     "TrailingClosure": [
                                       {
-                                        "id": 0,
                                         "kind": {
                                           "Reference": {
-                                            "name": {
+                                            "symbol": {
                                               "unstable_source": "HStack"
                                             },
                                             "span": {
@@ -522,8 +504,7 @@ expression: parse_module(input)
                                         "span": {
                                           "start": 266,
                                           "end": 272
-                                        },
-                                        "ty": null
+                                        }
                                       },
                                       {
                                         "stmts": [
@@ -531,18 +512,15 @@ expression: parse_module(input)
                                             "id": 0,
                                             "kind": {
                                               "Expr": {
-                                                "id": 0,
                                                 "kind": {
                                                   "TrailingClosure": [
                                                     {
-                                                      "id": 0,
                                                       "kind": {
                                                         "Call": [
                                                           {
-                                                            "id": 0,
                                                             "kind": {
                                                               "Reference": {
-                                                                "name": {
+                                                                "symbol": {
                                                                   "unstable_source": "VStack"
                                                                 },
                                                                 "span": {
@@ -554,30 +532,34 @@ expression: parse_module(input)
                                                             "span": {
                                                               "start": 287,
                                                               "end": 293
-                                                            },
-                                                            "ty": null
+                                                            }
                                                           },
                                                           [
                                                             {
-                                                              "id": 0,
-                                                              "kind": {
-                                                                "Lit": {
-                                                                  "span": {
-                                                                    "start": 294,
-                                                                    "end": 298
-                                                                  },
-                                                                  "kind": {
-                                                                    "Bool": {
-                                                                      "unstable_source": "true"
-                                                                    }
-                                                                  }
-                                                                }
-                                                              },
                                                               "span": {
                                                                 "start": 294,
                                                                 "end": 298
                                                               },
-                                                              "ty": null
+                                                              "name": null,
+                                                              "value": {
+                                                                "kind": {
+                                                                  "Lit": {
+                                                                    "span": {
+                                                                      "start": 294,
+                                                                      "end": 298
+                                                                    },
+                                                                    "kind": {
+                                                                      "Bool": {
+                                                                        "unstable_source": "true"
+                                                                      }
+                                                                    }
+                                                                  }
+                                                                },
+                                                                "span": {
+                                                                  "start": 294,
+                                                                  "end": 298
+                                                                }
+                                                              }
                                                             }
                                                           ]
                                                         ]
@@ -585,8 +567,7 @@ expression: parse_module(input)
                                                       "span": {
                                                         "start": 287,
                                                         "end": 299
-                                                      },
-                                                      "ty": null
+                                                      }
                                                     },
                                                     {
                                                       "stmts": [
@@ -594,14 +575,12 @@ expression: parse_module(input)
                                                           "id": 0,
                                                           "kind": {
                                                             "Expr": {
-                                                              "id": 0,
                                                               "kind": {
                                                                 "Call": [
                                                                   {
-                                                                    "id": 0,
                                                                     "kind": {
                                                                       "Reference": {
-                                                                        "name": {
+                                                                        "symbol": {
                                                                           "unstable_source": "Text"
                                                                         },
                                                                         "span": {
@@ -613,30 +592,34 @@ expression: parse_module(input)
                                                                     "span": {
                                                                       "start": 318,
                                                                       "end": 322
-                                                                    },
-                                                                    "ty": null
+                                                                    }
                                                                   },
                                                                   [
                                                                     {
-                                                                      "id": 0,
-                                                                      "kind": {
-                                                                        "Lit": {
-                                                                          "span": {
-                                                                            "start": 323,
-                                                                            "end": 330
-                                                                          },
-                                                                          "kind": {
-                                                                            "Str": {
-                                                                              "unstable_source": "\"Hello\""
-                                                                            }
-                                                                          }
-                                                                        }
-                                                                      },
                                                                       "span": {
                                                                         "start": 323,
                                                                         "end": 330
                                                                       },
-                                                                      "ty": null
+                                                                      "name": null,
+                                                                      "value": {
+                                                                        "kind": {
+                                                                          "Lit": {
+                                                                            "span": {
+                                                                              "start": 323,
+                                                                              "end": 330
+                                                                            },
+                                                                            "kind": {
+                                                                              "Str": {
+                                                                                "unstable_source": "\"Hello\""
+                                                                              }
+                                                                            }
+                                                                          }
+                                                                        },
+                                                                        "span": {
+                                                                          "start": 323,
+                                                                          "end": 330
+                                                                        }
+                                                                      }
                                                                     }
                                                                   ]
                                                                 ]
@@ -644,8 +627,7 @@ expression: parse_module(input)
                                                               "span": {
                                                                 "start": 318,
                                                                 "end": 331
-                                                              },
-                                                              "ty": null
+                                                              }
                                                             }
                                                           },
                                                           "span": {
@@ -658,14 +640,12 @@ expression: parse_module(input)
                                                           "id": 0,
                                                           "kind": {
                                                             "Expr": {
-                                                              "id": 0,
                                                               "kind": {
                                                                 "Call": [
                                                                   {
-                                                                    "id": 0,
                                                                     "kind": {
                                                                       "Reference": {
-                                                                        "name": {
+                                                                        "symbol": {
                                                                           "unstable_source": "Text"
                                                                         },
                                                                         "span": {
@@ -677,30 +657,34 @@ expression: parse_module(input)
                                                                     "span": {
                                                                       "start": 348,
                                                                       "end": 352
-                                                                    },
-                                                                    "ty": null
+                                                                    }
                                                                   },
                                                                   [
                                                                     {
-                                                                      "id": 0,
-                                                                      "kind": {
-                                                                        "Lit": {
-                                                                          "span": {
-                                                                            "start": 353,
-                                                                            "end": 362
-                                                                          },
-                                                                          "kind": {
-                                                                            "Str": {
-                                                                              "unstable_source": "\"Goodbye\""
-                                                                            }
-                                                                          }
-                                                                        }
-                                                                      },
                                                                       "span": {
                                                                         "start": 353,
                                                                         "end": 362
                                                                       },
-                                                                      "ty": null
+                                                                      "name": null,
+                                                                      "value": {
+                                                                        "kind": {
+                                                                          "Lit": {
+                                                                            "span": {
+                                                                              "start": 353,
+                                                                              "end": 362
+                                                                            },
+                                                                            "kind": {
+                                                                              "Str": {
+                                                                                "unstable_source": "\"Goodbye\""
+                                                                              }
+                                                                            }
+                                                                          }
+                                                                        },
+                                                                        "span": {
+                                                                          "start": 353,
+                                                                          "end": 362
+                                                                        }
+                                                                      }
                                                                     }
                                                                   ]
                                                                 ]
@@ -708,8 +692,7 @@ expression: parse_module(input)
                                                               "span": {
                                                                 "start": 348,
                                                                 "end": 363
-                                                              },
-                                                              "ty": null
+                                                              }
                                                             }
                                                           },
                                                           "span": {
@@ -727,7 +710,6 @@ expression: parse_module(input)
                                                                 "end": 440
                                                               },
                                                               "condition": {
-                                                                "id": 0,
                                                                 "kind": {
                                                                   "Lit": {
                                                                     "span": {
@@ -744,8 +726,7 @@ expression: parse_module(input)
                                                                 "span": {
                                                                   "start": 383,
                                                                   "end": 388
-                                                                },
-                                                                "ty": null
+                                                                }
                                                               },
                                                               "block": {
                                                                 "stmts": [
@@ -753,14 +734,12 @@ expression: parse_module(input)
                                                                     "id": 0,
                                                                     "kind": {
                                                                       "Expr": {
-                                                                        "id": 0,
                                                                         "kind": {
                                                                           "Call": [
                                                                             {
-                                                                              "id": 0,
                                                                               "kind": {
                                                                                 "Reference": {
-                                                                                  "name": {
+                                                                                  "symbol": {
                                                                                     "unstable_source": "Text"
                                                                                   },
                                                                                   "span": {
@@ -772,30 +751,34 @@ expression: parse_module(input)
                                                                               "span": {
                                                                                 "start": 411,
                                                                                 "end": 415
-                                                                              },
-                                                                              "ty": null
+                                                                              }
                                                                             },
                                                                             [
                                                                               {
-                                                                                "id": 0,
-                                                                                "kind": {
-                                                                                  "Lit": {
-                                                                                    "span": {
-                                                                                      "start": 416,
-                                                                                      "end": 421
-                                                                                    },
-                                                                                    "kind": {
-                                                                                      "Str": {
-                                                                                        "unstable_source": "\"Foo\""
-                                                                                      }
-                                                                                    }
-                                                                                  }
-                                                                                },
                                                                                 "span": {
                                                                                   "start": 416,
                                                                                   "end": 421
                                                                                 },
-                                                                                "ty": null
+                                                                                "name": null,
+                                                                                "value": {
+                                                                                  "kind": {
+                                                                                    "Lit": {
+                                                                                      "span": {
+                                                                                        "start": 416,
+                                                                                        "end": 421
+                                                                                      },
+                                                                                      "kind": {
+                                                                                        "Str": {
+                                                                                          "unstable_source": "\"Foo\""
+                                                                                        }
+                                                                                      }
+                                                                                    }
+                                                                                  },
+                                                                                  "span": {
+                                                                                    "start": 416,
+                                                                                    "end": 421
+                                                                                  }
+                                                                                }
                                                                               }
                                                                             ]
                                                                           ]
@@ -803,8 +786,7 @@ expression: parse_module(input)
                                                                         "span": {
                                                                           "start": 411,
                                                                           "end": 422
-                                                                        },
-                                                                        "ty": null
+                                                                        }
                                                                       }
                                                                     },
                                                                     "span": {
@@ -838,7 +820,6 @@ expression: parse_module(input)
                                                                 "end": 952
                                                               },
                                                               "condition": {
-                                                                "id": 0,
                                                                 "kind": {
                                                                   "Lit": {
                                                                     "span": {
@@ -855,8 +836,7 @@ expression: parse_module(input)
                                                                 "span": {
                                                                   "start": 460,
                                                                   "end": 464
-                                                                },
-                                                                "ty": null
+                                                                }
                                                               },
                                                               "block": {
                                                                 "stmts": [
@@ -864,14 +844,12 @@ expression: parse_module(input)
                                                                     "id": 0,
                                                                     "kind": {
                                                                       "Expr": {
-                                                                        "id": 0,
                                                                         "kind": {
                                                                           "Call": [
                                                                             {
-                                                                              "id": 0,
                                                                               "kind": {
                                                                                 "Reference": {
-                                                                                  "name": {
+                                                                                  "symbol": {
                                                                                     "unstable_source": "Text"
                                                                                   },
                                                                                   "span": {
@@ -883,30 +861,34 @@ expression: parse_module(input)
                                                                               "span": {
                                                                                 "start": 487,
                                                                                 "end": 491
-                                                                              },
-                                                                              "ty": null
+                                                                              }
                                                                             },
                                                                             [
                                                                               {
-                                                                                "id": 0,
-                                                                                "kind": {
-                                                                                  "Lit": {
-                                                                                    "span": {
-                                                                                      "start": 492,
-                                                                                      "end": 497
-                                                                                    },
-                                                                                    "kind": {
-                                                                                      "Str": {
-                                                                                        "unstable_source": "\"bar\""
-                                                                                      }
-                                                                                    }
-                                                                                  }
-                                                                                },
                                                                                 "span": {
                                                                                   "start": 492,
                                                                                   "end": 497
                                                                                 },
-                                                                                "ty": null
+                                                                                "name": null,
+                                                                                "value": {
+                                                                                  "kind": {
+                                                                                    "Lit": {
+                                                                                      "span": {
+                                                                                        "start": 492,
+                                                                                        "end": 497
+                                                                                      },
+                                                                                      "kind": {
+                                                                                        "Str": {
+                                                                                          "unstable_source": "\"bar\""
+                                                                                        }
+                                                                                      }
+                                                                                    }
+                                                                                  },
+                                                                                  "span": {
+                                                                                    "start": 492,
+                                                                                    "end": 497
+                                                                                  }
+                                                                                }
                                                                               }
                                                                             ]
                                                                           ]
@@ -914,8 +896,7 @@ expression: parse_module(input)
                                                                         "span": {
                                                                           "start": 487,
                                                                           "end": 498
-                                                                        },
-                                                                        "ty": null
+                                                                        }
                                                                       }
                                                                     },
                                                                     "span": {
@@ -938,14 +919,12 @@ expression: parse_module(input)
                                                                       "id": 0,
                                                                       "kind": {
                                                                         "Expr": {
-                                                                          "id": 0,
                                                                           "kind": {
                                                                             "Match": [
                                                                               {
-                                                                                "id": 0,
                                                                                 "kind": {
                                                                                   "Reference": {
-                                                                                    "name": {
+                                                                                    "symbol": {
                                                                                       "unstable_source": "user"
                                                                                     },
                                                                                     "span": {
@@ -957,13 +936,11 @@ expression: parse_module(input)
                                                                                 "span": {
                                                                                   "start": 550,
                                                                                   "end": 554
-                                                                                },
-                                                                                "ty": null
+                                                                                }
                                                                               },
                                                                               [
                                                                                 {
                                                                                   "test": {
-                                                                                    "id": 0,
                                                                                     "kind": {
                                                                                       "Lit": {
                                                                                         "span": {
@@ -980,18 +957,15 @@ expression: parse_module(input)
                                                                                     "span": {
                                                                                       "start": 581,
                                                                                       "end": 586
-                                                                                    },
-                                                                                    "ty": null
+                                                                                    }
                                                                                   },
                                                                                   "consequent": {
-                                                                                    "id": 0,
                                                                                     "kind": {
                                                                                       "TrailingClosure": [
                                                                                         {
-                                                                                          "id": 0,
                                                                                           "kind": {
                                                                                             "Reference": {
-                                                                                              "name": {
+                                                                                              "symbol": {
                                                                                                 "unstable_source": "View"
                                                                                               },
                                                                                               "span": {
@@ -1003,8 +977,7 @@ expression: parse_module(input)
                                                                                           "span": {
                                                                                             "start": 590,
                                                                                             "end": 594
-                                                                                          },
-                                                                                          "ty": null
+                                                                                          }
                                                                                         },
                                                                                         {
                                                                                           "stmts": [
@@ -1012,14 +985,12 @@ expression: parse_module(input)
                                                                                               "id": 0,
                                                                                               "kind": {
                                                                                                 "Expr": {
-                                                                                                  "id": 0,
                                                                                                   "kind": {
                                                                                                     "Call": [
                                                                                                       {
-                                                                                                        "id": 0,
                                                                                                         "kind": {
                                                                                                           "Reference": {
-                                                                                                            "name": {
+                                                                                                            "symbol": {
                                                                                                               "unstable_source": "Text"
                                                                                                             },
                                                                                                             "span": {
@@ -1031,30 +1002,34 @@ expression: parse_module(input)
                                                                                                         "span": {
                                                                                                           "start": 625,
                                                                                                           "end": 629
-                                                                                                        },
-                                                                                                        "ty": null
+                                                                                                        }
                                                                                                       },
                                                                                                       [
                                                                                                         {
-                                                                                                          "id": 0,
-                                                                                                          "kind": {
-                                                                                                            "Lit": {
-                                                                                                              "span": {
-                                                                                                                "start": 630,
-                                                                                                                "end": 635
-                                                                                                              },
-                                                                                                              "kind": {
-                                                                                                                "Str": {
-                                                                                                                  "unstable_source": "\"Bar\""
-                                                                                                                }
-                                                                                                              }
-                                                                                                            }
-                                                                                                          },
                                                                                                           "span": {
                                                                                                             "start": 630,
                                                                                                             "end": 635
                                                                                                           },
-                                                                                                          "ty": null
+                                                                                                          "name": null,
+                                                                                                          "value": {
+                                                                                                            "kind": {
+                                                                                                              "Lit": {
+                                                                                                                "span": {
+                                                                                                                  "start": 630,
+                                                                                                                  "end": 635
+                                                                                                                },
+                                                                                                                "kind": {
+                                                                                                                  "Str": {
+                                                                                                                    "unstable_source": "\"Bar\""
+                                                                                                                  }
+                                                                                                                }
+                                                                                                              }
+                                                                                                            },
+                                                                                                            "span": {
+                                                                                                              "start": 630,
+                                                                                                              "end": 635
+                                                                                                            }
+                                                                                                          }
                                                                                                         }
                                                                                                       ]
                                                                                                     ]
@@ -1062,8 +1037,7 @@ expression: parse_module(input)
                                                                                                   "span": {
                                                                                                     "start": 625,
                                                                                                     "end": 636
-                                                                                                  },
-                                                                                                  "ty": null
+                                                                                                  }
                                                                                                 }
                                                                                               },
                                                                                               "span": {
@@ -1084,8 +1058,7 @@ expression: parse_module(input)
                                                                                     "span": {
                                                                                       "start": 590,
                                                                                       "end": 662
-                                                                                    },
-                                                                                    "ty": null
+                                                                                    }
                                                                                   },
                                                                                   "span": {
                                                                                     "start": 581,
@@ -1094,10 +1067,9 @@ expression: parse_module(input)
                                                                                 },
                                                                                 {
                                                                                   "test": {
-                                                                                    "id": 0,
                                                                                     "kind": {
                                                                                       "Reference": {
-                                                                                        "name": {
+                                                                                        "symbol": {
                                                                                           "unstable_source": "_"
                                                                                         },
                                                                                         "span": {
@@ -1109,18 +1081,15 @@ expression: parse_module(input)
                                                                                     "span": {
                                                                                       "start": 687,
                                                                                       "end": 688
-                                                                                    },
-                                                                                    "ty": null
+                                                                                    }
                                                                                   },
                                                                                   "consequent": {
-                                                                                    "id": 0,
                                                                                     "kind": {
                                                                                       "TrailingClosure": [
                                                                                         {
-                                                                                          "id": 0,
                                                                                           "kind": {
                                                                                             "Reference": {
-                                                                                              "name": {
+                                                                                              "symbol": {
                                                                                                 "unstable_source": "View"
                                                                                               },
                                                                                               "span": {
@@ -1132,8 +1101,7 @@ expression: parse_module(input)
                                                                                           "span": {
                                                                                             "start": 692,
                                                                                             "end": 696
-                                                                                          },
-                                                                                          "ty": null
+                                                                                          }
                                                                                         },
                                                                                         {
                                                                                           "stmts": [
@@ -1141,14 +1109,12 @@ expression: parse_module(input)
                                                                                               "id": 0,
                                                                                               "kind": {
                                                                                                 "Expr": {
-                                                                                                  "id": 0,
                                                                                                   "kind": {
                                                                                                     "Call": [
                                                                                                       {
-                                                                                                        "id": 0,
                                                                                                         "kind": {
                                                                                                           "Reference": {
-                                                                                                            "name": {
+                                                                                                            "symbol": {
                                                                                                               "unstable_source": "Text"
                                                                                                             },
                                                                                                             "span": {
@@ -1160,30 +1126,34 @@ expression: parse_module(input)
                                                                                                         "span": {
                                                                                                           "start": 727,
                                                                                                           "end": 731
-                                                                                                        },
-                                                                                                        "ty": null
+                                                                                                        }
                                                                                                       },
                                                                                                       [
                                                                                                         {
-                                                                                                          "id": 0,
-                                                                                                          "kind": {
-                                                                                                            "Lit": {
-                                                                                                              "span": {
-                                                                                                                "start": 732,
-                                                                                                                "end": 737
-                                                                                                              },
-                                                                                                              "kind": {
-                                                                                                                "Str": {
-                                                                                                                  "unstable_source": "\"Baz\""
-                                                                                                                }
-                                                                                                              }
-                                                                                                            }
-                                                                                                          },
                                                                                                           "span": {
                                                                                                             "start": 732,
                                                                                                             "end": 737
                                                                                                           },
-                                                                                                          "ty": null
+                                                                                                          "name": null,
+                                                                                                          "value": {
+                                                                                                            "kind": {
+                                                                                                              "Lit": {
+                                                                                                                "span": {
+                                                                                                                  "start": 732,
+                                                                                                                  "end": 737
+                                                                                                                },
+                                                                                                                "kind": {
+                                                                                                                  "Str": {
+                                                                                                                    "unstable_source": "\"Baz\""
+                                                                                                                  }
+                                                                                                                }
+                                                                                                              }
+                                                                                                            },
+                                                                                                            "span": {
+                                                                                                              "start": 732,
+                                                                                                              "end": 737
+                                                                                                            }
+                                                                                                          }
                                                                                                         }
                                                                                                       ]
                                                                                                     ]
@@ -1191,8 +1161,7 @@ expression: parse_module(input)
                                                                                                   "span": {
                                                                                                     "start": 727,
                                                                                                     "end": 738
-                                                                                                  },
-                                                                                                  "ty": null
+                                                                                                  }
                                                                                                 }
                                                                                               },
                                                                                               "span": {
@@ -1213,8 +1182,7 @@ expression: parse_module(input)
                                                                                     "span": {
                                                                                       "start": 692,
                                                                                       "end": 764
-                                                                                    },
-                                                                                    "ty": null
+                                                                                    }
                                                                                   },
                                                                                   "span": {
                                                                                     "start": 687,
@@ -1227,8 +1195,7 @@ expression: parse_module(input)
                                                                           "span": {
                                                                             "start": 544,
                                                                             "end": 786
-                                                                          },
-                                                                          "ty": null
+                                                                          }
                                                                         }
                                                                       },
                                                                       "span": {
@@ -1241,14 +1208,12 @@ expression: parse_module(input)
                                                                       "id": 0,
                                                                       "kind": {
                                                                         "Expr": {
-                                                                          "id": 0,
                                                                           "kind": {
                                                                             "TrailingClosure": [
                                                                               {
-                                                                                "id": 0,
                                                                                 "kind": {
                                                                                   "Reference": {
-                                                                                    "name": {
+                                                                                    "symbol": {
                                                                                       "unstable_source": "View"
                                                                                     },
                                                                                     "span": {
@@ -1260,8 +1225,7 @@ expression: parse_module(input)
                                                                                 "span": {
                                                                                   "start": 807,
                                                                                   "end": 811
-                                                                                },
-                                                                                "ty": null
+                                                                                }
                                                                               },
                                                                               {
                                                                                 "stmts": [
@@ -1269,14 +1233,12 @@ expression: parse_module(input)
                                                                                     "id": 0,
                                                                                     "kind": {
                                                                                       "Expr": {
-                                                                                        "id": 0,
                                                                                         "kind": {
                                                                                           "TrailingClosure": [
                                                                                             {
-                                                                                              "id": 0,
                                                                                               "kind": {
                                                                                                 "Reference": {
-                                                                                                  "name": {
+                                                                                                  "symbol": {
                                                                                                     "unstable_source": "HStack"
                                                                                                   },
                                                                                                   "span": {
@@ -1288,8 +1250,7 @@ expression: parse_module(input)
                                                                                               "span": {
                                                                                                 "start": 838,
                                                                                                 "end": 844
-                                                                                              },
-                                                                                              "ty": null
+                                                                                              }
                                                                                             },
                                                                                             {
                                                                                               "stmts": [
@@ -1297,14 +1258,12 @@ expression: parse_module(input)
                                                                                                   "id": 0,
                                                                                                   "kind": {
                                                                                                     "Expr": {
-                                                                                                      "id": 0,
                                                                                                       "kind": {
                                                                                                         "Call": [
                                                                                                           {
-                                                                                                            "id": 0,
                                                                                                             "kind": {
                                                                                                               "Reference": {
-                                                                                                                "name": {
+                                                                                                                "symbol": {
                                                                                                                   "unstable_source": "Text"
                                                                                                                 },
                                                                                                                 "span": {
@@ -1316,30 +1275,34 @@ expression: parse_module(input)
                                                                                                             "span": {
                                                                                                               "start": 875,
                                                                                                               "end": 879
-                                                                                                            },
-                                                                                                            "ty": null
+                                                                                                            }
                                                                                                           },
                                                                                                           [
                                                                                                             {
-                                                                                                              "id": 0,
-                                                                                                              "kind": {
-                                                                                                                "Lit": {
-                                                                                                                  "span": {
-                                                                                                                    "start": 880,
-                                                                                                                    "end": 885
-                                                                                                                  },
-                                                                                                                  "kind": {
-                                                                                                                    "Str": {
-                                                                                                                      "unstable_source": "\"Qux\""
-                                                                                                                    }
-                                                                                                                  }
-                                                                                                                }
-                                                                                                              },
                                                                                                               "span": {
                                                                                                                 "start": 880,
                                                                                                                 "end": 885
                                                                                                               },
-                                                                                                              "ty": null
+                                                                                                              "name": null,
+                                                                                                              "value": {
+                                                                                                                "kind": {
+                                                                                                                  "Lit": {
+                                                                                                                    "span": {
+                                                                                                                      "start": 880,
+                                                                                                                      "end": 885
+                                                                                                                    },
+                                                                                                                    "kind": {
+                                                                                                                      "Str": {
+                                                                                                                        "unstable_source": "\"Qux\""
+                                                                                                                      }
+                                                                                                                    }
+                                                                                                                  }
+                                                                                                                },
+                                                                                                                "span": {
+                                                                                                                  "start": 880,
+                                                                                                                  "end": 885
+                                                                                                                }
+                                                                                                              }
                                                                                                             }
                                                                                                           ]
                                                                                                         ]
@@ -1347,8 +1310,7 @@ expression: parse_module(input)
                                                                                                       "span": {
                                                                                                         "start": 875,
                                                                                                         "end": 886
-                                                                                                      },
-                                                                                                      "ty": null
+                                                                                                      }
                                                                                                     }
                                                                                                   },
                                                                                                   "span": {
@@ -1369,8 +1331,7 @@ expression: parse_module(input)
                                                                                         "span": {
                                                                                           "start": 838,
                                                                                           "end": 912
-                                                                                        },
-                                                                                        "ty": null
+                                                                                        }
                                                                                       }
                                                                                     },
                                                                                     "span": {
@@ -1391,8 +1352,7 @@ expression: parse_module(input)
                                                                           "span": {
                                                                             "start": 807,
                                                                             "end": 934
-                                                                          },
-                                                                          "ty": null
+                                                                          }
                                                                         }
                                                                       },
                                                                       "span": {
@@ -1429,8 +1389,7 @@ expression: parse_module(input)
                                                 "span": {
                                                   "start": 287,
                                                   "end": 966
-                                                },
-                                                "ty": null
+                                                }
                                               }
                                             },
                                             "span": {
@@ -1451,8 +1410,7 @@ expression: parse_module(input)
                                   "span": {
                                     "start": 266,
                                     "end": 976
-                                  },
-                                  "ty": null
+                                  }
                                 }
                               },
                               "span": {
@@ -1473,8 +1431,7 @@ expression: parse_module(input)
                     "span": {
                       "start": 251,
                       "end": 982
-                    },
-                    "ty": null
+                    }
                   }
                 },
                 "span": {
@@ -1490,7 +1447,7 @@ expression: parse_module(input)
               "end": 985
             }
           },
-          "return_ty": "Unit",
+          "return_ty": null,
           "generics": null,
           "span": {
             "start": 0,

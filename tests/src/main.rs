@@ -1,0 +1,3 @@
+mod parser;
+
+fn main() {}
