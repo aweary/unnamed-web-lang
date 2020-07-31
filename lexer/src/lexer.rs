@@ -119,7 +119,7 @@ impl<'a> Lexer<'a> {
     }
 
     fn skip_whitespace(&mut self) {
-        self.skip_while(char::is_whitespace);
+        self.skip_while(|char| char !='\n' && char.is_whitespace());
     }
 
     // Read a token containing a single character
@@ -230,6 +230,8 @@ impl<'a> Lexer<'a> {
             "catch" => Reserved(Catch),
             "const" => Reserved(Const),
             "throw" => Reserved(Throw),
+            "async" => Reserved(Async),
+            "await" => Reserved(Await),
             // "number" => Reserved(Number),
             // "string" => Reserved(String),
             // "bool" => Reserved(Bool),
@@ -334,11 +336,7 @@ impl<'a> Lexer<'a> {
     }
 
     pub fn next_token(&mut self) -> Result<Token> {
-        use TokenKind::{
-            And, Caret, Colon, Comma, Dot, Exclaim, GreaterThan, LBrace,
-            LCurlyBrace, LParen, LessThan, Minus, Mod, Mul, RBrace,
-            RCurlyBrace, RParen, Semi,
-        };
+        use TokenKind::*;
         // Read from the lookahead if its populated.
         if let Some(token) = self.lookahead.pop_front() {
             return Ok(token);
@@ -351,6 +349,7 @@ impl<'a> Lexer<'a> {
         match self.peek_char() {
             Some(&ch) if ch.is_digit(10) => self.number(),
             Some(&ch) if ch.is_id_start() => self.ident(),
+            Some('\n') => self.punc(Newline, '\n'),
             Some('"') => self.string(),
             Some('=') => self.equals(),
             Some('+') => self.plus(),

@@ -251,6 +251,7 @@ pub struct Component {
     pub body: Block,
     pub return_ty: Option<Type>,
     pub generics: Option<Generics>,
+    pub is_async: bool,
     pub span: Span,
 }
 
@@ -475,6 +476,7 @@ pub enum ExprKind {
     Lambda(Lambda),
     /// Trailing closure function call
     TrailingClosure(Box<Expr>, Block),
+    Await(Box<Expr>),
     // ...
 }
 

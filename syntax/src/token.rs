@@ -24,12 +24,9 @@ impl Token {
         use Precedence::{
             ASSIGNMENT, COMPARE, CONDITIONAL, NONE, PREFIX, PRODUCT, SUM,
         };
-        use TokenKind::{
-            And, BinOr, DblEquals, Div, Dot, Equals, GreaterThan, LCurlyBrace,
-            LParen, LessThan, Minus, Mul, Or, Pipeline, Plus, PlusEquals,
-            Question, QuestionDot,
-        };
+        use TokenKind::*;
         match self.kind {
+            LBrace => PREFIX,
             LCurlyBrace | LParen => PREFIX,
             Equals => ASSIGNMENT,
             PlusEquals => ASSIGNMENT,
@@ -158,6 +155,7 @@ pub enum TokenKind {
     Minus,
     Mul,
     Div,
+    Newline,
 }
 
 impl fmt::Display for TokenKind {
@@ -179,6 +177,8 @@ impl fmt::Display for TokenKind {
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub enum Keyword {
+    Async,
+    Await,
     Try,
     Catch,
     Throw,

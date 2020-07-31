@@ -681,6 +681,9 @@ impl LoweringContext {
     fn lower_expr(&mut self, expr: ast::Expr) -> Result<hir::Expr> {
         use ast::ExprKind;
         let kind = match expr.kind {
+            ExprKind::Await(_) => {
+                todo!("Lower AwaitExpression")
+            }
             ExprKind::TrailingClosure(expr, block) => {
                 let expr = self.lower_expr(*expr)?;
                 let block = self.lower_block(block)?;

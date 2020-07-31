@@ -23,6 +23,10 @@ pub struct Parser<'s> {
     span: Span,
     /// Whether parsing a trailing closure is allowed
     allow_trailing_closure: bool,
+    /// Whether newline characters are semantically meaningful
+    is_newline_significant: bool,
+    /// The character we know delimits expressions
+    expr_terminator: Option<TokenKind>,
 }
 
 /// TODO move to diagnostics crate
@@ -55,15 +59,36 @@ impl Parser<'_> {
             tokenizer,
             span,
             allow_trailing_closure: true,
+            is_newline_significant: false,
+            expr_terminator: None,
         }
     }
 
     /// Returns the next token from the tokenizer.
     fn next_token(&mut self) -> Result<Token> {
         let token = self.tokenizer.next_token()?;
-        debug!("next_token: {:?}", token.kind);
-        self.span = token.span;
-        Ok(token)
+        if token.kind == TokenKind::Newline && !self.is_newline_significant {
+            // Skip insignificant newlines
+            self.next_token()
+        } else {
+            debug!("next_token: {:?}", token.kind);
+            self.span = token.span;
+            Ok(token)
+        }
+    }
+
+    fn peek(&mut self) -> Result<&Token> {
+        let peek_kind = &self.tokenizer.peek_token()?.kind;
+        debug!(
+            "peek_token: {:#?}, {}",
+            peek_kind, self.is_newline_significant
+        );
+        if peek_kind == &TokenKind::Newline && !self.is_newline_significant {
+            self.tokenizer.next_token()?;
+            self.peek()
+        } else {
+            self.tokenizer.peek_token()
+        }
     }
 
     fn eat(&mut self, kind: TokenKind) -> Result<bool> {
@@ -99,10 +124,6 @@ impl Parser<'_> {
         } else {
             Ok(token)
         }
-    }
-
-    fn peek(&mut self) -> Result<&Token> {
-        self.tokenizer.peek_token()
     }
 
     fn peek_precedence(&mut self) -> Result<Precedence> {
@@ -161,11 +182,16 @@ impl Parser<'_> {
 
     /// A single item in a list of items
     fn parse_item(&mut self) -> Result<ast::Item> {
-        match self.peek()?.kind {
+        let token = self.peek()?;
+        debug!("parse_item: {:#?}", token.kind);
+        match token.kind {
             // Function definition
-            TokenKind::Reserved(Keyword::Func) => self.parse_fn(),
+            TokenKind::Reserved(Keyword::Func) => self.parse_fn(false),
+            TokenKind::Reserved(Keyword::Async) => self.async_def(),
             // Component definition
-            TokenKind::Reserved(Keyword::Component) => self.parse_component(),
+            TokenKind::Reserved(Keyword::Component) => {
+                self.parse_component(false)
+            }
             // Enum definition
             TokenKind::Reserved(Keyword::Enum) => self.parse_enum(),
             // Type definition
@@ -673,6 +699,7 @@ impl Parser<'_> {
             body,
             return_ty,
             generics,
+            is_async: false,
             span,
         })
     }
@@ -693,9 +720,25 @@ impl Parser<'_> {
         Ok(ast::Struct { name, span })
     }
 
+    fn async_def(&mut self) -> Result<ast::Item> {
+        let async_token = self.expect(TokenKind::Reserved(Keyword::Async))?;
+        match self.peek()?.kind {
+            TokenKind::Reserved(Keyword::Func) => self.parse_fn(true),
+            TokenKind::Reserved(Keyword::Component) => {
+                self.parse_component(true)
+            }
+            _ => Err(Diagnostic::error()
+                .with_message(
+                    "Only functions and components can de declared as async",
+                )
+                .with_labels(vec![Label::primary(async_token.span)])),
+        }
+    }
+
     /// Parse a function definition
-    fn parse_fn(&mut self) -> Result<ast::Item> {
-        let fn_def = self.fn_def()?;
+    fn parse_fn(&mut self, is_async: bool) -> Result<ast::Item> {
+        let mut fn_def = self.fn_def()?;
+        fn_def.is_async = is_async;
         let span = fn_def.span;
         let kind = ast::ItemKind::Fn(fn_def);
         Ok(ast::Item {
@@ -705,8 +748,9 @@ impl Parser<'_> {
         })
     }
 
-    fn parse_component(&mut self) -> Result<ast::Item> {
-        let component_def = self.component_def()?;
+    fn parse_component(&mut self, is_async: bool) -> Result<ast::Item> {
+        let mut component_def = self.component_def()?;
+        component_def.is_async = is_async;
         let span = component_def.span;
         let kind = ast::ItemKind::Component(component_def);
         Ok(ast::Item { kind, span })
@@ -798,6 +842,7 @@ impl Parser<'_> {
     }
 
     pub(crate) fn stmt_list(&mut self) -> Result<Vec<ast::Stmt>> {
+        // let was_newline_significant = self.is_newline_significant;
         let mut stmts = vec![];
         // let mut terminated = false;
         while !self.peek()?.follows_item_list() {
@@ -808,33 +853,27 @@ impl Parser<'_> {
             //         self.span,
             //     ));
             // }
-            let mut stmt = self.stmt()?;
-            // Right now semicolons are REQUIRED after each statement. We
-            // might go back to optional semicolons in some cases, but
-            // we don't have a strict enough heurstic to do it now without
-            // getting us in trouble.
-            // self.expect(TokenKind::Semi)?;
+            let stmt = self.stmt()?;
 
-            if self.eat(TokenKind::Semi)? {
-                // If there was a semicolon, extend the statement's
-                // span to include it.
-                stmt.span = stmt.span.merge(self.span);
-                // Whether a statement has a semicolon is important
-                // for implicit function return and evaluating block expressions
-                stmt.has_semi = true;
-            } else {
-                // Only the last item in a statement list can omit the
-                // semicolon. If this loop runs again, we need to throw
-                // terminated = true;
-            }
+            // Newlines are delimeters
+            self.eat(TokenKind::Newline)?;
+
             stmts.push(stmt);
         }
+        // self.is_newline_significant = was_newline_significant;
         Ok(stmts)
     }
 
     pub fn stmt(&mut self) -> Result<ast::Stmt> {
+        let was_newline_signfificant = self.is_newline_significant;
+        // self.is_newline_significant = false;
         let token = self.peek()?;
-        match token.kind {
+        let stmt = match token.kind {
+            TokenKind::Newline => {
+                // Ignore
+                self.skip()?;
+                self.stmt()
+            }
             TokenKind::Reserved(Keyword::Let) => {
                 self.skip()?;
                 let local = self.local()?;
@@ -925,7 +964,9 @@ impl Parser<'_> {
               //     self.skip()?;
               //     Err(self.fatal("Unsupported statement", "here", self.span))
               // }
-        }
+        };
+        self.is_newline_significant = was_newline_signfificant;
+        stmt
     }
 
     fn array_pattern(&mut self) -> Result<ast::LocalPattern> {
@@ -1049,6 +1090,7 @@ impl Parser<'_> {
         } else {
             None
         };
+
         self.expect(TokenKind::Equals)?;
         // TODO init is optional?
         let init = self.expr(Precedence::NONE)?;
@@ -1067,6 +1109,17 @@ impl Parser<'_> {
         debug!("expr (precedence: {:?})", precedence);
         let mut expr = self.prefix_expr()?;
         debug!("prefix expr: {:?}", expr);
+
+        // Newlines are significant after prefix expressions.
+        // Except in the case where we *know* there is going to be
+        // a line terminator.
+        self.is_newline_significant = true;
+        if self.peek()?.kind == TokenKind::Newline && self.expr_terminator.is_none() {
+            self.is_newline_significant = false;
+            return Ok(expr)
+        }
+        self.is_newline_significant = false;
+
         while precedence < self.peek_precedence()? {
             expr = self.infix_expr(expr)?;
         }
@@ -1140,8 +1193,9 @@ impl Parser<'_> {
     }
 
     fn prefix_expr(&mut self) -> Result<ast::Expr> {
+        let is_sig = self.is_newline_significant;
         let token = self.peek()?;
-        debug!("prefix_expr: {:?}", token);
+        debug!("prefix_expr: {:?}, {}", token, is_sig);
         match token.kind {
             // Literal values such as numbers, strings, booleans
             TokenKind::Literal(_) => {
@@ -1561,12 +1615,38 @@ impl Parser<'_> {
             LParen => self.call_expr(left),
             // Trailing closure
             LCurlyBrace => self.trailing_closure(left),
-            // Member
-            Dot => self.member_expr(left),
+            // Member or await expressions
+            Dot => self.dot_expr(left),
+            // Dot => self.member_expr(left),
             QuestionDot => self.optional_member_expr(left),
             _ => {
                 self.skip()?;
                 Err(self.fatal("Unknown infix expression", "Here", self.span))
+            }
+        }
+    }
+
+    fn dot_expr(&mut self, left: ast::Expr) -> Result<ast::Expr> {
+        use Keyword::Await;
+        use TokenKind::{Dot, Ident, Reserved};
+        self.expect(Dot)?;
+        match self.peek()?.kind {
+            Reserved(Await) => {
+                self.skip()?;
+                let span = left.span.merge(self.span);
+                Ok(ast::Expr {
+                    span,
+                    kind: ast::ExprKind::Await(left.into()),
+                })
+                // AwaitExpression
+            }
+            Ident(_) => {
+                // CallExpression or FieldExpression
+                todo!("CallExpression / FieldExpression")
+            }
+            _ => {
+                panic!("oops dot")
+                // Invalid
             }
         }
     }
@@ -1634,7 +1714,7 @@ impl Parser<'_> {
                                     self.skip()?;
                                     break;
                                 }
-                                _ => break
+                                _ => break,
                             }
 
                             if self.eat(TokenKind::Comma)? {
@@ -1645,14 +1725,19 @@ impl Parser<'_> {
                             }
                         }
                         self.expect(TokenKind::RParen)?;
-                        ast::PatternKind::MemberTuple { type_name: enum_name, name, values: idents }
+                        ast::PatternKind::MemberTuple {
+                            type_name: enum_name,
+                            name,
+                            values: idents,
+                        }
                     }
-                    _ => ast::PatternKind::MemberFiedless { type_name: enum_name, name }
+                    _ => ast::PatternKind::MemberFiedless {
+                        type_name: enum_name,
+                        name,
+                    },
                 }
             }
-            TokenKind::Arrow => {
-                ast::PatternKind::Fiedless { name }
-            }
+            TokenKind::Arrow => ast::PatternKind::Fiedless { name },
             TokenKind::LParen => {
                 todo!();
                 // Tuple
@@ -1667,7 +1752,7 @@ impl Parser<'_> {
 
         Ok(ast::Pattern {
             kind,
-            span: lo.merge(self.span)
+            span: lo.merge(self.span),
         })
     }
 
@@ -1688,6 +1773,7 @@ impl Parser<'_> {
     fn expr_list(&mut self, terminator: TokenKind) -> Result<Vec<ast::Expr>> {
         use TokenKind::Comma;
         let mut exprs = vec![];
+        self.expr_terminator = Some(terminator.clone());
         loop {
             if self.eat(terminator.clone())? {
                 break;
@@ -1702,6 +1788,7 @@ impl Parser<'_> {
                 break;
             }
         }
+        self.expr_terminator = None;
         Ok(exprs)
     }
 
@@ -1726,6 +1813,8 @@ impl Parser<'_> {
                 span,
             );
         }
+
+        self.expr_terminator = Some(TokenKind::Comma);
 
         loop {
             let expr = self.expr(Precedence::NONE)?;
@@ -1789,6 +1878,7 @@ impl Parser<'_> {
                 break;
             }
         }
+        self.expr_terminator = None;
         let span = lo.merge(self.span);
         ast::expr(ast::ExprKind::Call(Box::new(callee), arguments), span)
     }
