@@ -717,10 +717,35 @@ impl Parser<'_> {
     }
 
     fn struct_def(&mut self) -> Result<ast::Struct> {
-        self.expect(TokenKind::Reserved(Keyword::Struct))?;
+        use Keyword::Struct;
+        use TokenKind::{Colon, Ident, LCurlyBrace, RCurlyBrace, Reserved};
+        self.expect(Reserved(Struct))?;
+        let span = self.span;
         let name = self.ident()?;
-        let span = name.span;
-        Ok(ast::Struct { name, span })
+        let parameters = self.type_parameter_list()?;
+        self.expect(LCurlyBrace)?;
+
+        let mut fields: Vec<ast::StructField> = vec![];
+
+        loop {
+            match self.peek()?.kind {
+                Ident(_) => {
+                    let name = self.ident()?;
+                    self.expect(Colon)?;
+                    let ty = self.parse_type()?;
+                    let field = ast::StructField { name, ty };
+                    fields.push(field);
+                }
+                _ => break,
+            }
+        }
+        self.expect(RCurlyBrace)?;
+        Ok(ast::Struct {
+            name,
+            span,
+            parameters,
+            fields,
+        })
     }
 
     fn async_def(&mut self) -> Result<ast::Item> {
@@ -767,7 +792,7 @@ impl Parser<'_> {
         // Argument list is optional for functions
         // that take no arguments
         if !self.eat(TokenKind::LParen)? {
-            return Ok(ast::ParamType::Empty)
+            return Ok(ast::ParamType::Empty);
         }
         loop {
             match self.peek()?.kind {

@@ -94,8 +94,14 @@ impl LoweringContext {
 
     fn lower_item(&mut self, item: ast::Item) -> Result<hir::Definition> {
         match item.kind {
-            ast::ItemKind::Struct(_) => {
-                todo!("Cant lower structs right now");
+            ast::ItemKind::Struct(struct_) => {
+                let span = struct_.span;
+                let struct_ = self.lower_struct(struct_)?;
+                Ok(hir::Definition {
+                    kind: hir::DefinitionKind::Struct(struct_.into()),
+                    visibility: hir::DefinitionVisibility::Private,
+                    span,
+                })
             }
             ast::ItemKind::Fn(fndef) => {
                 let span = fndef.span;
@@ -465,6 +471,15 @@ impl LoweringContext {
                                     span,
                                 })
                             }
+                            hir::Binding::Struct(struct_) => {
+                                let arguments =
+                                    self.lower_type_arguments(arguments)?;
+                                Ok(hir::Type::Struct {
+                                    struct_,
+                                    arguments,
+                                    span
+                                })
+                            }
                             _ => {
                                 let descriptor = binding.type_description();
                                 let msg = format!("'{:?}' is {}, which cannot be used as a type.", name.symbol, descriptor);
@@ -572,6 +587,60 @@ impl LoweringContext {
         self.scope
             .define(name, hir::Binding::Component(compdef.clone()));
         Ok(compdef)
+    }
+
+    fn lower_struct(
+        &mut self,
+        struct_: ast::Struct,
+    ) -> Result<Arc<hir::Struct>> {
+        let ast::Struct {
+            name,
+            parameters,
+            fields,
+            span,
+        } = struct_;
+
+        let parameters = if let Some(parameters) = parameters {
+            let mut parameter_names = vec![];
+            for ident in parameters {
+                let unique_name = UniqueName::new();
+                self.scope.define(
+                    ident.symbol.clone(),
+                    hir::Binding::TypeParameter(unique_name),
+                );
+                let tvar = hir::TVar {
+                    name: ident,
+                    unique_name,
+                };
+                parameter_names.push(tvar);
+            }
+            Some(parameter_names)
+        } else {
+            None
+        };
+
+        let mut hir_fields = vec![];
+        for field in fields {
+            hir_fields.push(hir::StructField {
+                name: field.name,
+                ty: self.lower_type(field.ty)?,
+            });
+        }
+
+        let unique_name = UniqueName::new();
+        let symbol = name.symbol.clone();
+
+        let struct_ = Arc::new(hir::Struct {
+            name,
+            unique_name,
+            fields: hir_fields,
+            parameters,
+            span,
+        });
+
+        self.scope
+            .define(symbol, hir::Binding::Struct(struct_.clone()));
+        Ok(struct_)
     }
 
     fn lower_fn(&mut self, fndef: ast::Function) -> Result<Arc<hir::Function>> {

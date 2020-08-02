@@ -607,6 +607,9 @@ impl TypeChecker {
                             .with_message(msg)
                             .with_labels(vec![Label::primary(ident.span)]))
                     }
+                    Binding::Struct(struct_) => {
+                        todo!("Struct references")
+                    }
                     // Binding::Import(import) =>
                     Binding::Component(_)
                     | Binding::Import(_)
@@ -1640,6 +1643,9 @@ impl TypeChecker {
             HIRType::List(ty, _) => {
                 let ty = self.hir_type_to_type(&*ty)?;
                 Type::List(ty).into()
+            }
+            HIRType::Struct { .. } => {
+                todo!("types for structs")
             }
             HIRType::Enum {
                 enumdef,

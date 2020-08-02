@@ -177,6 +177,7 @@ impl fmt::Display for TokenKind {
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub enum Keyword {
+    Person,
     Async,
     Await,
     Try,

@@ -43,6 +43,11 @@ pub enum Type {
         arguments: Option<Vec<Type>>,
         span: Span,
     },
+    Struct {
+        struct_: Arc<Struct>,
+        arguments: Option<Vec<Type>>,
+        span: Span,
+    },
     Function {
         parameters: Vec<FunctionParameter>,
         out: Box<Type>,
@@ -75,6 +80,7 @@ impl Type {
             }
             Type::Var(ident, _) => ident.span,
             Type::Enum { span, .. } => *span,
+            Type::Struct { span, .. } => *span,
         }
     }
 }
@@ -126,6 +132,8 @@ pub enum Binding {
     Type(Arc<TypeAlias>),
     /// Enum definition
     Enum(Arc<EnumDef>),
+    /// Struct definition
+    Struct(Arc<Struct>),
     /// A special identifier, denoted by `_`, for unused values and catch-all case
     /// in pattern matching.
     Wildcard,
@@ -146,6 +154,7 @@ impl Binding {
             Binding::Constant(constant) => constant.span,
             Binding::Type(ty) => ty.name.span,
             Binding::Enum(enumdef) => enumdef.span,
+            Binding::Struct(struct_) => struct_.span,
             Binding::Wildcard => todo!(),
         }
     }
@@ -162,12 +171,28 @@ impl Binding {
             Binding::Constant(_) => "a constant",
             Binding::Type(_) => "a type",
             Binding::Enum(_) => "an enum definition",
+            Binding::Struct(_) => "a struct definition",
             Binding::Wildcard => "the special 'wildcard' type",
         }
     }
 }
 
 impl Referant for Binding {}
+
+#[derive(Clone, Debug)]
+pub struct StructField {
+    pub name: Ident,
+    pub ty: Type,
+}
+
+#[derive(Clone, Debug)]
+pub struct Struct {
+    pub name: Ident,
+    pub unique_name: UniqueName,
+    pub parameters: Option<Vec<TVar>>,
+    pub span: Span,
+    pub fields: Vec<StructField>
+}
 
 #[derive(Clone, Debug)]
 pub struct Local {
@@ -286,6 +311,7 @@ pub enum DefinitionKind {
     Constant(Arc<Constant>),
     Enum(Arc<EnumDef>),
     Type(Arc<TypeAlias>),
+    Struct(Arc<Struct>)
 }
 
 #[derive(Clone, Debug)]

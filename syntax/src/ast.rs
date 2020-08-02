@@ -214,9 +214,17 @@ impl IntoIterator for ParamType {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct StructField {
+    pub name: Ident,
+    pub ty: Type,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Struct {
     pub name: Ident,
+    pub parameters: Option<Vec<Ident>>,
     pub span: Span,
+    pub fields: Vec<StructField>
 }
 
 /// A function definition

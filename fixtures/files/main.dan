@@ -1,17 +1,12 @@
 // Random math stuff to show off the syntax
-
-struct Person {
-    clothes: string,
-    shoes: string,
+struct Person<T> {
+    clothes: string[]
+    shoes: T
 }
 
-fn random {
+fn random_person : Person<string> {
     let me = Person(
         clothes: "T-shirt",
         shoes: "sneakers"
     )
 }
-
-
-
-
