@@ -422,7 +422,7 @@ pub enum StatementKind {
     // Throw some arbitrary expression
     Throw(Expr),
     // If statement
-    If(IfExpr),
+    If(IfExpression),
 }
 
 #[derive(Clone, Debug)]
@@ -463,17 +463,18 @@ pub enum TemplateInstr {
 }
 
 #[derive(Clone, Debug)]
-pub enum Else {
-    Block(Box<Block>),
-    If(Box<IfExpr>),
-}
-
-#[derive(Clone, Debug)]
-pub struct IfExpr {
+pub struct IfExpression {
     pub span: Span,
     pub condition: Box<Expr>,
-    pub block: Box<Block>,
-    pub alt: Option<Else>,
+    // The body can be an expresion because blocks are expressions
+    pub body: Box<Expr>,
+    pub alternate: Option<Box<Else>>,
+} 
+
+#[derive(Clone, Debug)]
+pub enum Else {
+    Value(Expr),
+    IfExpression(IfExpression)
 }
 
 #[derive(Clone, Debug)]
@@ -534,7 +535,7 @@ pub enum ExprKind {
     /// A variable reference
     Reference(Ident, Binding),
     /// An `if` block with optional `else` block
-    If(IfExpr),
+    If(IfExpression),
     /// For expression
     For(LocalPattern, Box<Expr>, Box<Block>),
     /// An index operation

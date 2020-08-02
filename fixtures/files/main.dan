@@ -1,13 +1,17 @@
-// fetch_json is a function that comes from the standard library.
-// it is built-in and has an effect of `NetworkRequest`.
+// Random math stuff to show off the syntax
 
-fn random(a: number[]) : number {}
-
-fn test() {
-    let a = [1, 2, 3]
-    let b = random(
-        [1,
-        2,
-    3]
-    ) 
+struct Person {
+    clothes: string,
+    shoes: string,
 }
+
+fn random {
+    let me = Person(
+        clothes: "T-shirt",
+        shoes: "sneakers"
+    )
+}
+
+
+
+

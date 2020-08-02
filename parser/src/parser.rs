@@ -129,9 +129,10 @@ impl Parser<'_> {
     fn peek_precedence(&mut self) -> Result<Precedence> {
         let allow_trailing_closure = self.allow_trailing_closure;
         debug!("allow_trailing_closure: {}", allow_trailing_closure);
+        self.is_newline_significant = true;
         let token = self.peek()?;
         debug!("peek_precedence of {:#?}", token);
-        match token.kind {
+        let precedence = match token.kind {
             // Check if trailing closures are allowed
             TokenKind::LCurlyBrace => {
                 if allow_trailing_closure {
@@ -141,7 +142,9 @@ impl Parser<'_> {
                 }
             }
             _ => Ok(token.precedence()),
-        }
+        }?;
+        self.is_newline_significant = false;
+        Ok(precedence)
     }
 
     fn ident(&mut self) -> Result<ast::Ident> {
@@ -761,7 +764,11 @@ impl Parser<'_> {
         debug!("parse_fn_params");
         use TokenKind::{Comma, Ident, LBrace, LCurlyBrace, RParen};
         let mut params = vec![];
-        self.expect(TokenKind::LParen)?;
+        // Argument list is optional for functions
+        // that take no arguments
+        if !self.eat(TokenKind::LParen)? {
+            return Ok(ast::ParamType::Empty)
+        }
         loop {
             match self.peek()?.kind {
                 RParen => {
@@ -885,12 +892,6 @@ impl Parser<'_> {
                 let local = self.local()?;
                 let span = local.span;
                 stmt(ast::StmtKind::State(Box::new(local)), span)
-            }
-            // If statement
-            TokenKind::Reserved(Keyword::If) => {
-                let expr = self.if_expr()?;
-                let span = expr.span;
-                stmt(ast::StmtKind::If(expr), span)
             }
             // Return statement
             TokenKind::Reserved(Keyword::Return) => {
@@ -1114,9 +1115,11 @@ impl Parser<'_> {
         // Except in the case where we *know* there is going to be
         // a line terminator.
         self.is_newline_significant = true;
-        if self.peek()?.kind == TokenKind::Newline && self.expr_terminator.is_none() {
+        if self.peek()?.kind == TokenKind::Newline
+            && self.expr_terminator.is_none()
+        {
             self.is_newline_significant = false;
-            return Ok(expr)
+            return Ok(expr);
         }
         self.is_newline_significant = false;
 
@@ -1131,35 +1134,6 @@ impl Parser<'_> {
         let ident = self.ident()?;
         let span = ident.span;
         ast::expr(ast::ExprKind::Reference(ident), span)
-    }
-
-    fn obj_expr(&mut self) -> Result<ast::Expr> {
-        use TokenKind::{Colon, Comma, Ident, LCurlyBrace, RCurlyBrace};
-        self.expect(LCurlyBrace)?;
-        let lo = self.span;
-        let mut properties = vec![];
-        loop {
-            match self.peek()?.kind {
-                RCurlyBrace => break,
-                Ident(_) => {
-                    let key = self.ident()?;
-                    self.expect(Colon)?;
-                    let value = self.expr(Precedence::NONE)?;
-                    properties.push((key, value));
-                    self.eat(Comma)?;
-                }
-                _ => {
-                    return Err(self.fatal(
-                        "Unexpected",
-                        "Trying to parse object",
-                        self.span,
-                    ))
-                }
-            }
-        }
-        self.expect(RCurlyBrace)?;
-        let span = lo.merge(self.span);
-        ast::expr(ast::ExprKind::Object(properties), span)
     }
 
     fn assign_expr(&mut self, left: ast::Expr) -> Result<ast::Expr> {
@@ -1224,13 +1198,10 @@ impl Parser<'_> {
             }
             // Block expression OR object literal?
             TokenKind::LCurlyBrace => {
-                self.obj_expr()
-                // let block = self.block()?;
-                // let span = block.span;
-                // ast::expr(MY_NODE_
-                //     kind: ast::ExprKind::Block(Box::new(block)),
-                //     span,
-                // })
+                // self.obj_expr()
+                let block = self.block()?;
+                let span = block.span;
+                ast::expr(ast::ExprKind::Block(Box::new(block)), span)
             }
             // Group expression
             TokenKind::LParen => {
@@ -1527,41 +1498,54 @@ impl Parser<'_> {
         )
     }
 
-    fn if_expr(&mut self) -> Result<ast::IfExpr> {
+    fn if_expr(&mut self) -> Result<ast::IfExpression> {
+        use Keyword::{Else, If};
+        use TokenKind::{LParen, RParen, Reserved};
         debug!("if_expr");
-        self.expect(TokenKind::Reserved(Keyword::If))?;
+        self.expect(Reserved(If))?;
         let lo = self.span;
         // Disallow trailing closures in the condition
         let allow_trailing_closure = self.allow_trailing_closure;
-        debug!("allow_trailing_closure: {}", allow_trailing_closure);
         self.allow_trailing_closure = false;
+        self.expect(LParen)?;
         let condition = self.expr(Precedence::NONE)?;
+        self.expect(RParen)?;
         self.allow_trailing_closure = allow_trailing_closure;
-        let block = self.block()?;
-        let alt = if self.eat(TokenKind::Reserved(Keyword::Else))? {
-            // We have an alternative and it could either be a simple
-            // else block, or an else if. The model we use for this is
-            // that else statements can either be followed by a block,
-            // or another if expressions.
-            Some(match self.peek()?.kind {
-                TokenKind::Reserved(Keyword::If) => {
-                    let else_if = self.if_expr()?;
-                    ast::Else::If(Box::new(else_if))
-                }
-                _ => {
-                    let block = self.block()?;
-                    ast::Else::Block(Box::new(block))
-                }
-            })
+        let value = self.expr(Precedence::NONE)?;
+
+        let alternate = if self.eat(Reserved(Else))? {
+            let alternate = if Reserved(If) == self.peek()?.kind {
+                let if_expr = self.if_expr()?;
+                ast::Else::IfExpression(if_expr)
+            } else {
+                let expr = self.expr(Precedence::NONE)?;
+                ast::Else::Value(expr)
+            };
+            Box::new(alternate).into()
         } else {
             None
         };
-        Ok(ast::IfExpr {
-            span: lo.merge(self.span),
-            condition: Box::new(condition),
-            block: Box::new(block),
-            alt,
-        })
+
+        let span = lo.merge(self.span);
+
+        let if_expr = ast::IfExpression {
+            span,
+            condition: condition.into(),
+            body: value.into(),
+            alternate,
+        };
+
+        Ok(if_expr)
+
+        // if let TokenKind::Reserved(Keyword::Else) = self.peek()?.kind {
+        //     // We have an alternate block
+        // }
+        // Ok(ast::IfExpr {
+        //     span: lo.merge(self.span),
+        //     condition: Box::new(condition),
+        //     block: Box::new(block),
+        //     alt,
+        // })
     }
 
     fn expect_lit(&mut self) -> Result<token::Lit> {

@@ -5,9 +5,7 @@ use ::hir::{
     Type as HIRType, UnOp,
 };
 
-use ::hir::visit::{
-    walk_block, walk_component, walk_function, Visitor,
-};
+use ::hir::visit::{walk_block, walk_component, walk_function, Visitor};
 use data_structures::HashMap;
 use diagnostics::ParseResult as Result;
 use source::diagnostics::{Diagnostic, Label};
@@ -101,29 +99,6 @@ impl Visitor for TypeChecker {
                     debug!("synth local type: {:?}", ty);
                     let element = Element::new_typed_variable(*unique_name, ty);
                     self.context.add(element);
-                }
-            }
-            StatementKind::If(ifexpr) => {
-                let hir::IfExpr {
-                    condition,
-                    block,
-                    alt,
-                    ..
-                } = ifexpr;
-                // Check that the condition evaluates to a boolean
-                self.checks_against(&*condition, boolean!())?;
-                // TODO could we check if this condition will *always* evaluate
-                // to `true` or `false`? If we can statically exclude the easy cases
-                // maybe we can give better effect inference.
-                walk_block(self, block)?;
-
-                if let Some(alt) = alt {
-                    match alt {
-                        hir::Else::Block(block) => walk_block(self, block)?,
-                        hir::Else::If(_) => {
-                            todo!("if else");
-                        }
-                    }
                 }
             }
             StatementKind::State(local) => {
@@ -370,6 +345,14 @@ impl Visitor for TypeChecker {
         // Return type should be solved now
         let return_ty = self.apply_context(return_ty)?;
 
+        // Check for implicit return
+        if let Some(stmt) = function.body.statements.last() {
+            if let StatementKind::Expr(expr) = &stmt.kind {
+                let ty = self.synth(&expr)?;
+                self.subtype(ty, return_ty)?;
+            }
+        }
+
         // Effect row should be populated
 
         // if there were no return statements, check the value of the last statement
@@ -557,9 +540,16 @@ impl TypeChecker {
 
                         self.tracked_return_ty = Some(return_ty);
                         self.visit_block(&*block)?;
-                        let ty = self.apply_context(return_ty)?;
+                        let return_ty = self.apply_context(return_ty)?;
+                        // Check for implicit return
+                        if let Some(stmt) = block.statements.last() {
+                            if let StatementKind::Expr(expr) = &stmt.kind {
+                                let ty = self.synth(&expr)?;
+                                self.subtype(ty, return_ty)?;
+                            }
+                        }
                         self.tracked_return_ty = cached_tracked_return_ty;
-                        ty
+                        return_ty
                     }
                     hir::LambdaBody::Expr(expr) => self.synth(expr)?,
                 };
@@ -690,9 +680,25 @@ impl TypeChecker {
                 };
                 Ok(Type::List(ty).into())
             }
+            ExprKind::Block(block) => {
+                // The value of a block expression is
+                // the last statement in the block *if* it's an expression
+                // statement. If it's not, the value is Unit
+                self.visit_block(block)?;
+
+                let ty = if let Some(stmt) = block.statements.last() {
+                    if let StatementKind::Expr(expr) = &stmt.kind {
+                        self.synth(&expr)?
+                    } else {
+                        Type::Unit.into()
+                    }
+                } else {
+                    Type::Unit.into()
+                };
+                Ok(ty)
+            }
             ExprKind::Object(_) => todo!("cannot type check Object"),
             ExprKind::Tuple(_) => todo!("cannot type check Tuple"),
-            ExprKind::Block(_) => todo!("cannot type check Block"),
             ExprKind::Unary(unop, expr) => {
                 let ty = self.synth(&*expr)?;
                 let fn_ty = self.unary_op_ty(unop);
@@ -725,6 +731,7 @@ impl TypeChecker {
                     self.synthesize_application(ty, vec![])
                 }
             }
+            ExprKind::If(if_expr) => self.synthesize_if_expr(if_expr),
             ExprKind::Cond(_, _, _) => todo!("cannot type check Cond"),
             ExprKind::Assign(_, _, _) => todo!("cannot type check Assign"),
             ExprKind::StateUpdate(_, _, _) => {
@@ -733,7 +740,6 @@ impl TypeChecker {
             ExprKind::OptionalMember(_, _) => {
                 todo!("cannot type check OptionalMember")
             }
-            ExprKind::If(_) => todo!("cannot type check If"),
             ExprKind::For(_, _, _) => todo!("cannot type check For"),
             ExprKind::Index(_, _) => todo!("cannot type check Index"),
             ExprKind::Return(_) => todo!("cannot type check Return"),
@@ -742,6 +748,42 @@ impl TypeChecker {
             ExprKind::Func(_) => todo!("cannot type check Func"),
             ExprKind::Member(_, _) => todo!("cannot check member expressions"),
         }
+    }
+
+    fn synthesize_if_expr(
+        &mut self,
+        hir::IfExpression {
+            condition,
+            body,
+            alternate,
+            span,
+        }: &hir::IfExpression,
+    ) -> Result<InternType> {
+        // Check that the condition expression is a boolean
+        self.checks_against(&*condition, boolean!())?;
+
+        // The type of the body
+        let ty = self.synth(body)?;
+        // The type of any alternates, or just the body type
+        // if none exist.
+        if let Some(alternate) = &alternate {
+            match &**alternate {
+                hir::Else::Value(expr) => self.checks_against(expr, ty)?,
+                hir::Else::IfExpression(if_expr) => {
+                    // Construct a new expression so we can use checks_against
+                    let span = if_expr.span;
+                    let expr = hir::Expr {
+                        // TODO find a way to not clone?
+                        kind: hir::ExprKind::If(if_expr.clone()),
+                        span,
+                    };
+                    self.checks_against(&expr, ty)?
+                }
+            }
+        }
+        // self.subtype(ty, alt_ty)
+        //     .map_err(|d| d.with_labels(vec![Label::primary(*span)]))?;
+        self.apply_context(ty)
     }
 
     fn unary_op_ty(&mut self, op: &UnOp) -> InternType {
@@ -770,6 +812,7 @@ impl TypeChecker {
             | BinOp::Mul
             | BinOp::Div
             | BinOp::Mod
+            | BinOp::Add
             | BinOp::BinOr
             | BinOp::BinAdd => Type::new_function(
                 vec![
@@ -820,7 +863,6 @@ impl TypeChecker {
             }
             // Others
             BinOp::Equals
-            | BinOp::Add
             | BinOp::Sum
             | BinOp::And
             | BinOp::Or
@@ -1320,8 +1362,11 @@ impl TypeChecker {
                 // of this function, all arguments have checked, so now we extend the current
                 // tracked effect with the effect of this function.
 
-                let tracked_effet_ty = self.tracked_effect_ty.as_mut().unwrap();
-                tracked_effet_ty.extend(effect);
+                let tracked_effet_ty = self.tracked_effect_ty.as_mut();
+                // TODO handle this when we have functions without setting effects like +
+                if let Some(f) = tracked_effet_ty {
+                    f.extend(effect);
+                }
 
                 // If everything checks, return the output type
                 Ok(*out)

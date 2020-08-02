@@ -681,9 +681,7 @@ impl LoweringContext {
     fn lower_expr(&mut self, expr: ast::Expr) -> Result<hir::Expr> {
         use ast::ExprKind;
         let kind = match expr.kind {
-            ExprKind::Await(_) => {
-                todo!("Lower AwaitExpression")
-            }
+            ExprKind::Await(_) => todo!("Lower AwaitExpression"),
             ExprKind::TrailingClosure(expr, block) => {
                 let expr = self.lower_expr(*expr)?;
                 let block = self.lower_block(block)?;
@@ -733,8 +731,9 @@ impl LoweringContext {
                 unimplemented!("Tuple expression not implemented");
             }
             // Block expression
-            ExprKind::Block(_) => {
-                panic!("Block expressions are temporarily unsupported");
+            ExprKind::Block(block) => {
+                let block = self.lower_block(*block)?;
+                hir::ExprKind::Block(block.into())
             }
             // A binary operation
             ExprKind::Binary(op, left, right) => hir::ExprKind::Binary(
@@ -880,8 +879,9 @@ impl LoweringContext {
                 }
             }
             // An `if` block with optional `else` block
-            ExprKind::If(_) => {
-                unimplemented!("If expression not implemented");
+            ExprKind::If(ifexpr) => {
+                let ifexpr = self.lower_if_expr(ifexpr)?;
+                hir::ExprKind::If(ifexpr)
             }
             // For expression
             ExprKind::For(_, _, _) => {
@@ -916,6 +916,41 @@ impl LoweringContext {
             span: expr.span,
             kind,
         })
+    }
+
+    fn lower_if_expr(
+        &mut self,
+        ast::IfExpression {
+            condition,
+            body,
+            alternate,
+            span,
+        }: ast::IfExpression,
+    ) -> Result<hir::IfExpression> {
+        let condition = self.lower_expr(*condition)?;
+        let body = self.lower_expr(*body)?;
+        let alternate = if let Some(alternate) = alternate {
+            let alternate = match *alternate {
+                ast::Else::Value(expr) => {
+                    let expr = self.lower_expr(expr)?;
+                    hir::Else::Value(expr)
+                }
+                ast::Else::IfExpression(if_expr) => {
+                    let ifexpr = self.lower_if_expr(if_expr)?;
+                    hir::Else::IfExpression(ifexpr)
+                }
+            };
+            Some(alternate.into())
+        } else {
+            None
+        };
+        let if_expr = hir::IfExpression {
+            condition: condition.into(),
+            body: body.into(),
+            alternate,
+            span,
+        };
+        Ok(if_expr)
     }
 
     /// When we lower call arguments we transform named arguments into
@@ -1111,34 +1146,38 @@ impl LoweringContext {
         Ok(local)
     }
 
-    fn lower_if(&mut self, ifexpr: ast::IfExpr) -> Result<hir::IfExpr> {
-        let ast::IfExpr {
+    fn lower_if(
+        &mut self,
+        ifexpr: ast::IfExpression,
+    ) -> Result<hir::IfExpression> {
+        let ast::IfExpression {
             condition,
-            block,
-            alt,
+            body,
+            alternate,
             span,
         } = ifexpr;
         let condition = self.lower_expr(*condition)?;
-        let block = self.lower_block(*block)?;
-        let alt = if let Some(alt) = alt {
-            match alt {
-                ast::Else::Block(block) => {
-                    let block = self.lower_block(*block)?;
-                    Some(hir::Else::Block(Box::new(block)))
-                }
-                ast::Else::If(ifexpr) => {
-                    let ifexpr = self.lower_if(*ifexpr)?;
-                    Some(hir::Else::If(Box::new(ifexpr)))
-                }
-            }
-        } else {
-            None
-        };
-        Ok(hir::IfExpr {
-            condition: Box::new(condition),
-            block: Box::new(block),
+        let body = self.lower_expr(*body)?;
+        let alt = None;
+        // let alt = if let Some(alt) = alternate {
+        //     match alt {
+        //         ast::Else::Block(block) => {
+        //             let block = self.lower_block(*block)?;
+        //             Some(hir::Else::Block(Box::new(block)))
+        //         }
+        //         ast::Else::If(ifexpr) => {
+        //             let ifexpr = self.lower_if(*ifexpr)?;
+        //             Some(hir::Else::If(Box::new(ifexpr)))
+        //         }
+        //     }
+        // } else {
+        //     None
+        // };
+        Ok(hir::IfExpression {
+            condition: condition.into(),
+            body: body.into(),
+            alternate: alt,
             span,
-            alt,
         })
     }
 
@@ -1184,11 +1223,6 @@ impl LoweringContext {
             // A while loop
             StmtKind::While(_, _) => {
                 unimplemented!("While statement not implemented");
-            }
-            // If statement
-            StmtKind::If(ifexpr) => {
-                let ifexpr = self.lower_if(ifexpr)?;
-                hir::StatementKind::If(ifexpr)
             }
             // Return statement
             StmtKind::Return(expr) => {

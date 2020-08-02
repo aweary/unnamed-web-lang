@@ -308,12 +308,9 @@ pub enum StmtKind {
     // An item definition, local to some block
     Item(Box<Item>),
     // Expression statement
-    // TODO should we differentiate expressions with or without semicolons?
     Expr(Box<Expr>),
     // A while loop
     While(Box<Expr>, Box<Block>),
-    // If statement
-    If(IfExpr),
     // Return statement
     Return(Box<Expr>),
     // Try/catch statement
@@ -459,7 +456,7 @@ pub enum ExprKind {
     /// A variable reference
     Reference(Ident),
     /// An `if` block with optional `else` block
-    If(IfExpr),
+    If(IfExpression),
     /// For expression
     For(LocalPattern, Box<Expr>, Box<Block>),
     /// An index operation
@@ -481,19 +478,18 @@ pub enum ExprKind {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub enum Else {
-    Block(Box<Block>),
-    // TODO this should be IfExpr but our parser types don't
-    // work super well for this right now
-    If(Box<IfExpr>),
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct IfExpr {
+pub struct IfExpression {
     pub span: Span,
     pub condition: Box<Expr>,
-    pub block: Box<Block>,
-    pub alt: Option<Else>,
+    // The body can be an expresion because blocks are expressions
+    pub body: Box<Expr>,
+    pub alternate: Option<Box<Else>>,
+} 
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum Else {
+    Value(Expr),
+    IfExpression(IfExpression)
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
