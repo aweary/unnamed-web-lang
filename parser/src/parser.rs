@@ -563,7 +563,7 @@ impl Parser<'_> {
                     variants.push(variant);
                     // Commas are not optional, even trailing ones.
                     // TODO consider supporting optional trailing commas
-                    self.expect(Comma)?;
+                    // self.expect(Comma)?;
                 }
                 RCurlyBrace => {
                     break;
@@ -1650,8 +1650,13 @@ impl Parser<'_> {
                 // AwaitExpression
             }
             Ident(_) => {
+                let ident = self.ident()?;
+                let span = left.span.merge(self.span);
+                Ok(ast::Expr {
+                    span,
+                    kind: ast::ExprKind::Field(left.into(), ident),
+                })
                 // CallExpression or FieldExpression
-                todo!("CallExpression / FieldExpression")
             }
             _ => {
                 panic!("oops dot")

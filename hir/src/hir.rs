@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use data_structures::arena::Id;
-use data_structures::scope_map::{Referant, Reference};
+use data_structures::scope_map::Referant;
 use data_structures::{Blockable, ControlFlowGraph};
 use source::FileId;
 
@@ -552,6 +552,11 @@ pub enum ExprKind {
     StateUpdate(AssignOp, Arc<Local>, Box<Expr>),
     /// Object member access
     Member(Box<Expr>, Ident),
+    /// Field access
+    Field(Box<Expr>, Ident),
+
+    /// RecordFieldExpression
+    /// EnumVariantExpression
     /// Enum access
     EnumVariant(Arc<EnumDef>, Ident),
     /// Object optional member access,

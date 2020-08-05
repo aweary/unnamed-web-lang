@@ -37,6 +37,10 @@ pub trait Visitor: Sized {
         Ok(())
     }
 
+    fn visit_struct(&mut self, _struct: &Struct) -> Result<()> {
+        Ok(())
+    }
+
     fn visit_block(&mut self, block: &Block) -> Result<()> {
         walk_block(self, block)
     }
@@ -75,7 +79,7 @@ pub fn walk_lambda<V: Visitor>(visitor: &mut V, lambda: &Lambda) -> Result<()> {
     let Lambda { params, body, .. } = lambda;
     match body {
         LambdaBody::Block(block) => visitor.visit_block(block)?,
-        LambdaBody::Expr(expr) => visitor.visit_expr(expr)?
+        LambdaBody::Expr(expr) => visitor.visit_expr(expr)?,
     };
     Ok(())
 }
@@ -86,6 +90,7 @@ pub fn walk_expr<V: Visitor>(visitor: &mut V, expr: &Expr) -> Result<()> {
         crate::ExprKind::Lambda(lambda) => {
             visitor.visit_lambda(lambda)?;
         }
+        crate::ExprKind::Field(_, _) => {}
         crate::ExprKind::Array(_) => {}
         crate::ExprKind::Object(_) => {}
         crate::ExprKind::Tuple(_) => {}
@@ -135,7 +140,6 @@ pub fn walk_definition<V: Visitor>(
             visitor.visit_component(compdef)?;
         }
         DefinitionKind::Type(ty) => {
-            // TODO
             visitor.visit_type_alias(ty)?;
         }
         DefinitionKind::Enum(enumdef) => {
@@ -144,8 +148,9 @@ pub fn walk_definition<V: Visitor>(
         DefinitionKind::Constant(constant) => {
             visitor.visit_constant(&**constant)?;
         }
-        // DefinitionKind::Import(imports) => {
-        // }
+        DefinitionKind::Struct(struct_) => {
+            visitor.visit_struct(&**struct_)?;
+        }
         _ => {
             // ..
         }

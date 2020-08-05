@@ -2023,16 +2023,23 @@ dependencies = [
  "data_structures 0.1.0",
  "diagnostics 0.1.0",
  "hir 0.1.0",
+ "id-arena 2.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "internment 0.3.12 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "source 0.1.0",
  "syntax 0.1.0",
  "ty 0.1.0",
+ "typed-arena 2.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
 name = "typed-arena"
 version = "1.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "typed-arena"
+version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
@@ -2460,6 +2467,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum tokio 0.2.10 (registry+https://github.com/rust-lang/crates.io-index)" = "c1fc73332507b971a5010664991a441b5ee0de92017f5a0e8b00fd684573045b"
 "checksum tokio-macros 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)" = "50a61f268a3db2acee8dcab514efc813dc6dbe8a00e86076f935f94304b59a7a"
 "checksum typed-arena 1.6.1 (registry+https://github.com/rust-lang/crates.io-index)" = "9c0704a799d314795d3d847d519b284bae681ef9b1f3da99f7ebc7b47ba2e607"
+"checksum typed-arena 2.0.1 (registry+https://github.com/rust-lang/crates.io-index)" = "0685c84d5d54d1c26f7d3eb96cd41550adb97baed141a761cf335d3d33bcd0ae"
 "checksum typenum 1.11.2 (registry+https://github.com/rust-lang/crates.io-index)" = "6d2783fe2d6b8c1101136184eb41be8b1ad379e4657050b8aaff0c79ee7575f9"
 "checksum ucd 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)" = "fe4fa6e588762366f1eb4991ce59ad1b93651d0b769dfb4e4d1c5c4b943d1159"
 "checksum ucd-trie 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)" = "56dee185309b50d1f11bfedef0fe6d036842e3fb77413abef29f8f8d1c5d4c1c"

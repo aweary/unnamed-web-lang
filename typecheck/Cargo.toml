@@ -14,3 +14,5 @@ syntax = { path = "../syntax" }
 ty = { path = "../ty" }
 log = "0.4"
 internment = "0.3.12"
+id-arena = { version = "2", features = ["rayon"] }
+typed-arena = "2.0.1"

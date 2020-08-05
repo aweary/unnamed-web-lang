@@ -39,8 +39,8 @@ pub struct TypeChecker {
     tracked_effect_ty: Option<EffectType>,
     /// Maps unique names to type variables
     variable_map: HashMap<UniqueName, Variable>,
-    /// Maps variants and their parent enums
-    variant_map: HashMap<EnumVariantKey, InternType>,
+    /// Constructors for struct instances
+    struct_constructors: HashMap<UniqueName, InternType>,
 }
 
 impl Visitor for TypeChecker {
@@ -134,6 +134,92 @@ impl Visitor for TypeChecker {
             }
             _ => {}
         }
+        Ok(())
+    }
+
+    /// This is where we generate the types for structs. Structs are instantiated
+    /// using the same syntax as function calls, and we treat their types much the same.
+    /// The struct type itself is a potentially quantified function type which itself returns
+    /// a sealed record type.
+    fn visit_struct(&mut self, struct_: &hir::Struct) -> Result<()> {
+        let hir::Struct {
+            fields,
+            parameters,
+            name,
+            unique_name,
+            span,
+        } = struct_;
+        debug!("visit_struct");
+        // TODO dedupe this with visit_fn_def
+        // If there are generics, we need to treat this as a quantification type
+        let tvars = if let Some(tvars) = &parameters {
+            let mut variables = vec![];
+            for tvar in tvars {
+                let variable = self.fresh_variable();
+                self.variable_map
+                    .entry(tvar.unique_name)
+                    .or_insert(variable);
+                variables.push(variable)
+            }
+            Some(variables)
+        } else {
+            None
+        };
+
+        let fields = fields
+            .iter()
+            .map(|hir::StructField { name, ty }| {
+                let ty = self.hir_type_to_type(ty)?;
+                let unique_name = UniqueName::new();
+                Ok(ty::StructField { 
+                    name: name.symbol.clone(),
+                    unique_name,
+                    ty
+                })
+            })
+            .collect::<Result<Vec<ty::StructField>>>()?;
+
+        let struct_ty = Type::Struct {
+            name: name.symbol.clone(),
+            unique_name: *unique_name,
+            // TODO dedupe with visit_enum
+            tvars: tvars.clone().map(|tvars| {
+                tvars
+                    .iter()
+                    .map(|tvar| Type::Variable(*tvar).into())
+                    .collect()
+            }),
+            fields: fields.clone(),
+        };
+        let struct_ty = Intern::new(struct_ty);
+
+        let parameters = fields
+            .iter()
+            .map(|field| {
+                let parameter = ty::Parameter {
+                    ty: field.ty,
+                    name: Some(field.name.clone()),
+                };
+                Ok(parameter)
+            })
+            .collect::<Result<Vec<ty::Parameter>>>()?;
+
+        let struct_constructor =
+            Type::new_function(parameters, struct_ty.into());
+
+        let struct_constructor = if let Some(tvars) = tvars {
+            Type::new_quantification(tvars, struct_constructor).into()
+        } else {
+            struct_constructor
+        };
+
+        self.struct_constructors
+            .insert(*unique_name, struct_constructor);
+
+        let element = Element::new_typed_variable(*unique_name, struct_ty);
+        self.context.add(element);
+
+        // let hir::Struct { name }
         Ok(())
     }
 
@@ -289,11 +375,8 @@ impl Visitor for TypeChecker {
         Ok(())
     }
 
-    // fn visit_lambda(&mut self, lambda: &hir::Lambda) -> Result<()> {
-    //     return Ok(())
-    // }
-
     fn visit_function(&mut self, function: &hir::Function) -> Result<()> {
+        debug!("visit_function: {:?}", function.name);
         // If there are generics, we need to treat this as a quantification type
         let tvars = if let Some(tvars) = &function.generics {
             let mut variables = vec![];
@@ -309,7 +392,6 @@ impl Visitor for TypeChecker {
             None
         };
 
-        debug!("visit_function: {:?}", function.name);
         self.add_fn_params_to_context(&function.params)?;
         // Create a new unique name for the return type.
         let return_ty_name = UniqueName::new();
@@ -398,7 +480,7 @@ impl TypeChecker {
             tracked_return_ty: None,
             tracked_effect_ty: None,
             variable_map: HashMap::default(),
-            variant_map: HashMap::default(),
+            struct_constructors: HashMap::default(),
         };
     }
 
@@ -608,12 +690,13 @@ impl TypeChecker {
                             .with_labels(vec![Label::primary(ident.span)]))
                     }
                     Binding::Struct(struct_) => {
-                        todo!("Struct references")
+                        let name = struct_.unique_name;
+                        let ty = self.context.get_annotation(&name).unwrap();
+                        Ok(ty)
                     }
                     // Binding::Import(import) =>
                     Binding::Component(_)
                     | Binding::Import(_)
-                    | Binding::Constant(_)
                     | Binding::Type(_)
                     | Binding::Wildcard => Err(Diagnostic::error()
                         .with_message("Cant check these references yet")),
@@ -732,6 +815,34 @@ impl TypeChecker {
                     Ok(ty)
                 } else {
                     self.synthesize_application(ty, vec![])
+                }
+            }
+            ExprKind::Field(expr, ident) => {
+                debug!("FieldExpression");
+                let value = self.synth(&*expr)?;
+                debug!("ty: {:#?}", value);
+                debug!("ident: {:#?}", ident);
+                match &*value {
+                    Type::Struct {
+                        name,
+                        unique_name,
+                        tvars,
+                        fields,
+                    } => {
+                        let field = fields
+                            .iter()
+                            .find(|field| field.name == ident.symbol);
+                        if let Some(field) = field {
+                            Ok(field.ty)
+                        } else {
+                            let msg = format!(
+                                "Struct '{:?}' has no field '{:?}'",
+                                name, ident,
+                            );
+                            Err(Diagnostic::error().with_message(msg))
+                        }
+                    }
+                    _ => Ok(Type::Unit.into()),
                 }
             }
             ExprKind::If(if_expr) => self.synthesize_if_expr(if_expr),
@@ -891,18 +1002,6 @@ impl TypeChecker {
                         .with_labels(vec![Label::primary(expr.span)]))
                 }
             }
-            //->I, lambdas
-            // (ExprKind::Lambda(lambda), Type::Function { parameters, .. }) => {
-            //     let hir::Lambda {
-            //         params, span: _, ..
-            //     } = lambda;
-
-            //     let ty = self.synth(expr)?;
-
-            //     assert_eq!(params.len(), parameters.len());
-            //     debug!("->I");
-            //     Ok(())
-            // }
             //forallI
             (_, Type::Quantification(alphas, a)) => {
                 debug!("\u{2200}I");
@@ -913,8 +1012,6 @@ impl TypeChecker {
                     self.context.drop(&var);
                 }
                 Ok(())
-                // Err(Diagnostic::error()
-                //     .with_message("Cant check against quantification yet"))
             }
             // Subtyping
             (_, _) => {
@@ -1077,6 +1174,36 @@ impl TypeChecker {
                     )))
                 }
             }
+            (
+                Type::Struct {
+                    tvars: tys_a,
+                    unique_name: unique_name_a,
+                    ..
+                },
+                Type::Struct {
+                    tvars: tys_b,
+                    unique_name: unique_name_b,
+                    ..
+                },
+            ) => {
+                if unique_name_a == unique_name_b {
+                    match (tys_a, tys_b) {
+                        (None, None) => Ok(()),
+                        (Some(tys_a), Some(tys_b)) => {
+                            for (a, b) in tys_a.iter().zip(tys_b) {
+                                self.subtype(*a, *b)?;
+                            }
+                            Ok(())
+                        }
+                        _ => panic!("oops"),
+                    }
+                } else {
+                    Err(Diagnostic::error().with_message(format!(
+                        "Type '{}' is not assignable to type '{}'",
+                        a, b
+                    )))
+                }
+            }
             // Error cases
             // Type variables subtyped with anything but another type variable
             (_, Type::Variable(_)) | (Type::Variable(_), _) => {
@@ -1148,6 +1275,42 @@ impl TypeChecker {
                 } else {
                     Ok(in_ty)
                 }
+            }
+            Type::Struct {
+                fields,
+                name,
+                unique_name,
+                tvars,
+            } => {
+                let fields = fields
+                    .iter()
+                    .map(|field| {
+                        let ty =
+                            self.type_application(var, field.ty, with_ty)?;
+                        Ok(ty::StructField {
+                            name: field.name.clone(),
+                            unique_name: field.unique_name,
+                            ty,
+                        })
+                    })
+                    .collect::<Result<Vec<ty::StructField>>>()?;
+                // TODO dedupe with enum
+                let tvars = if let Some(tys) = tvars {
+                    let tys = tys
+                        .iter()
+                        .map(|ty| self.type_application(var, *ty, with_ty))
+                        .collect::<Result<Vec<InternType>>>()?;
+                    Some(tys)
+                } else {
+                    None
+                };
+                Ok(Type::Struct {
+                    name: name.clone(),
+                    fields,
+                    unique_name: *unique_name,
+                    tvars,
+                }
+                .into())
             }
             Type::Function {
                 parameters, out, ..
@@ -1234,6 +1397,46 @@ impl TypeChecker {
                     tys,
                     unique_name: *unique_name,
                     name: name.clone(),
+                }
+                .into())
+            }
+            Type::Struct {
+                tvars,
+                unique_name,
+                name,
+                fields,
+            } => {
+                let tvars = if let Some(tvars) = tvars {
+                    Some(
+                        tvars
+                            .iter()
+                            .map(|ty| self.apply_context(*ty))
+                            .collect::<Result<Vec<InternType>>>()?,
+                    )
+                } else {
+                    None
+                };
+                let fields = fields
+                    .iter()
+                    .map(
+                        |ty::StructField {
+                             name,
+                             unique_name,
+                             ty,
+                         }| {
+                            Ok(ty::StructField {
+                                name: name.clone(),
+                                unique_name: *unique_name,
+                                ty: self.apply_context(*ty)?,
+                            })
+                        },
+                    )
+                    .collect::<Result<Vec<ty::StructField>>>()?;
+                Ok(Type::Struct {
+                    tvars,
+                    unique_name: *unique_name,
+                    name: name.clone(),
+                    fields,
                 }
                 .into())
             }
@@ -1446,6 +1649,12 @@ impl TypeChecker {
                 }
                 Ok(Type::Existential(alpha).into())
             }
+            Type::Struct { unique_name, .. } => {
+                // Find the type constructor for this struct
+                let constructor =
+                    *self.struct_constructors.get(unique_name).unwrap();
+                self.synthesize_application(constructor, args)
+            }
             Type::Literal(_)
             | Type::SolvableExistential(_, _)
             | Type::Unit
@@ -1548,6 +1757,41 @@ impl TypeChecker {
                 }
                 .into())
             }
+            Type::Struct {
+                tvars,
+                fields,
+                unique_name,
+                name,
+            } => {
+                let tvars = if let Some(tvars) = tvars {
+                    Some(
+                        tvars
+                            .iter()
+                            .map(|ty| self.substitution(alpha, *ty, b))
+                            .collect::<Result<Vec<InternType>>>()?,
+                    )
+                } else {
+                    None
+                };
+                let fields = fields
+                    .iter()
+                    .map(|field| {
+                        let ty = self.substitution(alpha, field.ty, b)?;
+                        Ok(ty::StructField {
+                            unique_name: field.unique_name,
+                            name: field.name.clone(),
+                            ty,
+                        })
+                    })
+                    .collect::<Result<Vec<ty::StructField>>>()?;
+                Ok(Type::Struct {
+                    tvars,
+                    fields,
+                    unique_name: *unique_name,
+                    name: name.clone(),
+                }
+                .into())
+            }
             Type::Constructor(input, output) => {
                 let input = if let Some(tys) = input {
                     Some(
@@ -1620,23 +1864,6 @@ impl TypeChecker {
         };
     }
 
-    fn map_types_to_input_type(
-        &mut self,
-        types: &Vec<hir::Type>,
-    ) -> Result<InternType> {
-        if types.len() == 1 {
-            let ty = types.first().unwrap();
-            let ty = self.hir_type_to_type(ty)?;
-            Ok(ty)
-        } else {
-            let tys = types
-                .iter()
-                .map(|ty| self.hir_type_to_type(ty))
-                .collect::<Result<Vec<InternType>>>()?;
-            Ok(Type::Tuple(tys).into())
-        }
-    }
-
     fn hir_type_to_type(&mut self, hir_type: &hir::Type) -> Result<InternType> {
         debug!("hir_type_to_type {:#?}", hir_type);
         let ty = match hir_type {
@@ -1644,8 +1871,25 @@ impl TypeChecker {
                 let ty = self.hir_type_to_type(&*ty)?;
                 Type::List(ty).into()
             }
-            HIRType::Struct { .. } => {
-                todo!("types for structs")
+            HIRType::Struct {
+                arguments,
+                struct_,
+                span,
+            } => {
+                let hir::Struct {
+                    name,
+                    unique_name,
+                    fields,
+                    span,
+                    parameters,
+                } = &**struct_;
+                let ty = self.context.get_annotation(&unique_name).unwrap();
+                self.apply_type_arguments(
+                    ty,
+                    &name.symbol,
+                    parameters,
+                    arguments,
+                )?
             }
             HIRType::Enum {
                 enumdef,
@@ -1713,9 +1957,6 @@ impl TypeChecker {
                         ty,
                     })
                 }
-                // let parameters = self.hir_type_to_type(input)?;
-                // let out = self.hir_type_to_type(output)?;
-                // This is where type application is done.
                 Type::new_function(ty_parameters, out)
             }
             HIRType::Var(_, unique_name) => {
@@ -1727,72 +1968,6 @@ impl TypeChecker {
             }
         };
         Ok(ty)
-        // let ty = match &hir_type.kind {
-        //     // Types that we can't resolve. These should be built-ins
-        //     // that the HIR doesn't know about
-        //     TypeKind::UnresolvedReference(typename) => {
-        //         match typename.symbol.as_str() {
-        //             "number" => Type::Literal(LiteralType::Number),
-        //             "boolean" => Type::Literal(LiteralType::Boolean),
-        //             "string" => Type::Literal(LiteralType::String),
-        //             "Array" => {
-        //                 let variable = self.fresh_variable();
-        //                 Type::Quantification(
-        //                     vec![variable],
-        //                     Type::List(Type::Variable(variable).into()).into(),
-        //                 )
-        //             }
-        //             _ => {
-        //                 panic!("Cant resolve");
-        //             }
-        //         }
-        //         .into()
-        //     }
-        //     TypeKind::Reference(typedef) => {
-        //         let name = typedef.unique_name;
-        //         self.context.get_annotation(&name).unwrap()
-        //     }
-        //     TypeKind::Tuple(hir_tys) => {
-        //         let mut tys = vec![];
-        //         for ty in hir_tys {
-        //             tys.push(self.hir_type_to_type(ty)?);
-        //         }
-        //         Type::Tuple(tys).into()
-        //     }
-        //     TypeKind::Function(input, output) => {
-        //         let input = match &input.kind {
-        //             TypeKind::Tuple(hir_tys) => {
-        //                 let mut parameters = vec![];
-        //                 for ty in hir_tys {
-        //                     parameters.push(self.hir_type_to_type(ty)?);
-        //                 }
-        //                 parameters
-        //             }
-        //             TypeKind::Reference(_)
-        //             | TypeKind::Function(_, _)
-        //             | TypeKind::UnresolvedReference(_)
-        //             | TypeKind::TypeParameter(_) => {
-        //                 let ty = self.hir_type_to_type(input)?;
-        //                 vec![ty]
-        //             }
-        //         };
-        //         let output = self.hir_type_to_type(output)?;
-        //         let params: Vec<ty::Parameter> = input
-        //             .iter()
-        //             .map(|ty| ty::Parameter {
-        //                 ty: *ty,
-        //                 name: None,
-        //             })
-        //             .collect();
-        //         Type::new_function(params, output)
-        //         // Type::Function { parameters: input, out: output, effect: }.into()
-        //     }
-        //     TypeKind::TypeParameter(name) => {
-        //         let variable = self.variable_map.get(name).unwrap();
-        //         Type::Variable(*variable).into()
-        //     }
-        // };
-        // Ok(ty)
     }
 }
 
@@ -1807,6 +1982,10 @@ fn occurs_in(alpha: &Existential, ty: InternType) -> bool {
             occurs_in(alpha, *output) || if let Some(input) = input {
                 input.iter().any(|ty| occurs_in(alpha, *ty))
             } else { false }
+        }
+        Type::Struct { fields, .. }  => {
+            // TODO
+            false
         }
         // TODO
         Type::Enum { tys, .. } => tys

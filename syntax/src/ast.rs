@@ -457,6 +457,8 @@ pub enum ExprKind {
     Assign(AssignOp, Box<Expr>, Box<Expr>),
     /// Object member access
     Member(Box<Expr>, Ident),
+    /// Field acecss
+    Field(Box<Expr>, Ident),
     /// Object optional member access,
     OptionalMember(Box<Expr>, Ident),
     /// A literal

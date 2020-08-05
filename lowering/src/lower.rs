@@ -477,7 +477,7 @@ impl LoweringContext {
                                 Ok(hir::Type::Struct {
                                     struct_,
                                     arguments,
-                                    span
+                                    span,
                                 })
                             }
                             _ => {
@@ -751,6 +751,18 @@ impl LoweringContext {
         use ast::ExprKind;
         let kind = match expr.kind {
             ExprKind::Await(_) => todo!("Lower AwaitExpression"),
+            ExprKind::Field(expr, ident) => {
+                let expr = self.lower_expr(*expr)?;
+                if let hir::ExprKind::Reference(_, binding) = &expr.kind {
+                    if let hir::Binding::Enum(enumdef) = binding {
+                        hir::ExprKind::EnumVariant(enumdef.clone(), ident)
+                    } else {
+                        hir::ExprKind::Field(expr.into(), ident)
+                    }
+                } else {
+                    hir::ExprKind::Field(expr.into(), ident)
+                }
+            }
             ExprKind::TrailingClosure(expr, block) => {
                 let expr = self.lower_expr(*expr)?;
                 let block = self.lower_block(block)?;

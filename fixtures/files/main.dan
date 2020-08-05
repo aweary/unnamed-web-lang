@@ -1,12 +1,33 @@
-// Random math stuff to show off the syntax
-struct Person<T> {
-    clothes: string[]
-    shoes: T
+struct Header {
+    name: string
+    value: string
 }
 
-fn random_person : Person<string> {
-    let me = Person(
-        clothes: "T-shirt",
-        shoes: "sneakers"
+enum Method {
+    GET
+    HEAD
+    POST
+    PUT
+    DELETE
+    CONNECT
+    OPTIONS
+    TRACE
+    PATCH
+}
+
+struct Request {
+    url: string
+    method: Method
+    headers: Header[]
+}
+
+fn capitalize(input: string) : string {}
+
+fn fetch(url) {
+    let headers = [Header("Content-Type", "application/json")]
+    let request = Request(
+        url: url,
+        method: Method.GET,
+        headers: headers
     )
 }

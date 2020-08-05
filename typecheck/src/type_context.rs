@@ -58,31 +58,6 @@ impl Element {
     }
 }
 
-/// Ordering for elements is determined by their insertion id(s). This gives us
-/// a way to insert elements into the middle of the
-// impl PartialOrd for Element {
-//     fn partial_cmp(&self, other: &Element) -> Option<std::cmp::Ordering> {
-//         // If the alpha ordering is not equal, use that
-//         if self.alpha != other.alpha {
-//             Some(self.alpha.cmp(&other.alpha))
-//         } else {
-//             Some(self.beta.cmp(&other.beta))
-//         }
-//     }
-// }
-
-// impl Ord for Element {
-//     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-//         self.partial_cmp(other).unwrap()
-//      }
-// }
-
-// impl Element {
-//     pub fn fresh(alpha: u32, kind: ElementKind) -> Self {
-//         Element { alpha, beta: 0, kind }
-//     }
-// }
-
 /// An ordered list of type elements, as described in [this paper](https://arxiv.org/pdf/1306.6032.pdf).
 /// We also track scope markers and solved existentials on the side.
 ///

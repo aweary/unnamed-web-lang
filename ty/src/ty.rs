@@ -79,6 +79,13 @@ pub struct Data {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DataField {}
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct StructField {
+    pub name: Symbol,
+    pub unique_name: UniqueName,
+    pub ty: InternType,
+}
+
 // Set of possible types that the user can define or reference
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Type {
@@ -125,6 +132,12 @@ pub enum Type {
         unique_name: UniqueName,
         tys: Option<Vec<InternType>>,
     },
+    Struct {
+        name: Symbol,
+        unique_name: UniqueName,
+        tvars: Option<Vec<InternType>>,
+        fields: Vec<StructField>
+    }
 }
 
 impl Display for Type {
@@ -161,6 +174,7 @@ impl Display for Type {
             Type::Variable(var) => write!(f, "tvar '{}'", var),
             Type::Component { .. } => write!(f, "Component (TODO)"),
             Type::Enum { name, .. } => write!(f, "{:?}", name),
+            Type::Struct { name, .. } => write!(f, "{:?}", name),
         }
     }
 }
@@ -181,6 +195,7 @@ impl Type {
             Type::Variable(_) => "a type variable",
             Type::Component { .. } => "a component",
             Type::Enum { .. } => "an enum",
+            Type::Struct { .. } => "a struct",
         }
     }
     pub fn new_function(
