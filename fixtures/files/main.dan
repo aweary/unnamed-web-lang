@@ -1,33 +1,15 @@
-struct Header {
-    name: string
-    value: string
+struct ButtonState {
+    isPressed: bool
+    isHovered: bool
+    isFocused: string
 }
 
-enum Method {
-    GET
-    HEAD
-    POST
-    PUT
-    DELETE
-    CONNECT
-    OPTIONS
-    TRACE
-    PATCH
-}
-
-struct Request {
-    url: string
-    method: Method
-    headers: Header[]
-}
-
-fn capitalize(input: string) : string {}
-
-fn fetch(url) {
-    let headers = [Header("Content-Type", "application/json")]
-    let request = Request(
-        url: url,
-        method: Method.GET,
-        headers: headers
+fn main() {
+    let buttonState = ButtonState(
+        isPressed: false,
+        isHovered: false,
+        isFocused: "false" 
     )
+
+    let isActive = buttonState.isHovered || buttonState.isFocused
 }

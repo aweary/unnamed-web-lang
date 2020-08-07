@@ -171,10 +171,10 @@ impl Visitor for TypeChecker {
             .map(|hir::StructField { name, ty }| {
                 let ty = self.hir_type_to_type(ty)?;
                 let unique_name = UniqueName::new();
-                Ok(ty::StructField { 
+                Ok(ty::StructField {
                     name: name.symbol.clone(),
                     unique_name,
-                    ty
+                    ty,
                 })
             })
             .collect::<Result<Vec<ty::StructField>>>()?;
@@ -975,12 +975,21 @@ impl TypeChecker {
                 )
                 .into()
             }
+            BinOp::And | BinOp::Or => Type::new_function(
+                vec![
+                    ty::Parameter {
+                        ty: boolean!(),
+                        name: None,
+                    },
+                    ty::Parameter {
+                        ty: boolean!(),
+                        name: None,
+                    },
+                ],
+                number!(),
+            ),
             // Others
-            BinOp::Equals
-            | BinOp::Sum
-            | BinOp::And
-            | BinOp::Or
-            | BinOp::Pipeline => unimplemented!(),
+            BinOp::Equals | BinOp::Sum | BinOp::Pipeline => unimplemented!(),
         }
     }
 

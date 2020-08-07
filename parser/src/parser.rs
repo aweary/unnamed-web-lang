@@ -129,9 +129,9 @@ impl Parser<'_> {
     fn peek_precedence(&mut self) -> Result<Precedence> {
         let allow_trailing_closure = self.allow_trailing_closure;
         debug!("allow_trailing_closure: {}", allow_trailing_closure);
-        self.is_newline_significant = true;
+        // self.is_newline_significant = true;
         let token = self.peek()?;
-        debug!("peek_precedence of {:#?}", token);
+        debug!("peek_precedence of {:#?}", token.kind);
         let precedence = match token.kind {
             // Check if trailing closures are allowed
             TokenKind::LCurlyBrace => {
@@ -143,7 +143,8 @@ impl Parser<'_> {
             }
             _ => Ok(token.precedence()),
         }?;
-        self.is_newline_significant = false;
+        debug!("precedence: {:?}", precedence);
+        // self.is_newline_significant = false;
         Ok(precedence)
     }
 
@@ -1898,6 +1899,7 @@ impl Parser<'_> {
     }
 
     fn binary_expr(&mut self, left: ast::Expr) -> Result<ast::Expr> {
+        debug!("binary_expr");
         let lo = left.span;
         let (op, precedence) = {
             let token = self.next_token()?;
@@ -1905,7 +1907,9 @@ impl Parser<'_> {
             let op = token.to_bin_op().unwrap();
             (op, precedence)
         };
+        debug!("op: {:#?}, precedence: {:#?}", op, precedence);
         let right = self.expr(precedence)?;
+        debug!("right: {:#?}", right.kind);
         let kind = ast::ExprKind::Binary(op, Box::new(left), Box::new(right));
         let span = lo.merge(self.span);
         ast::expr(kind, span)

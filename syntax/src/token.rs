@@ -28,9 +28,9 @@ impl Token {
         match self.kind {
             LBrace => PREFIX,
             LCurlyBrace | LParen => PREFIX,
+            Dot => PREFIX,
             Equals => ASSIGNMENT,
             PlusEquals => ASSIGNMENT,
-            Dot => ASSIGNMENT,
             QuestionDot => ASSIGNMENT,
             Question => CONDITIONAL,
             Plus => SUM,
@@ -156,6 +156,7 @@ pub enum TokenKind {
     Mul,
     Div,
     Newline,
+    Range,
 }
 
 impl fmt::Display for TokenKind {

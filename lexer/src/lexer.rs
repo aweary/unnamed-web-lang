@@ -119,7 +119,7 @@ impl<'a> Lexer<'a> {
     }
 
     fn skip_whitespace(&mut self) {
-        self.skip_while(|char| char !='\n' && char.is_whitespace());
+        self.skip_while(|char| char != '\n' && char.is_whitespace());
     }
 
     // Read a token containing a single character
@@ -160,6 +160,8 @@ impl<'a> Lexer<'a> {
         loop {
             match self.peek_char() {
                 Some('.') => {
+                    // Check if this might be a range operator.
+                    // If it is, bail out.
                     if seen_decimal {
                         break;
                     }
@@ -232,10 +234,6 @@ impl<'a> Lexer<'a> {
             "throw" => Reserved(Throw),
             "async" => Reserved(Async),
             "await" => Reserved(Await),
-            // "number" => Reserved(Number),
-            // "string" => Reserved(String),
-            // "bool" => Reserved(Bool),
-            // Allow `export` for now, not sure what keyword to use
             "pub" | "export" => Reserved(Pub),
             "as" => Reserved(As),
             _ => Ident(Symbol::intern(ident)),
@@ -256,6 +254,19 @@ impl<'a> Lexer<'a> {
                 TokenKind::Arrow
             }
             _ => TokenKind::Equals,
+        };
+        let span = self.reader.end(span_start);
+        Ok(token(kind, span))
+    }
+
+    fn dot(&mut self) -> Result<Token> {
+        let span_start = self.start_span();
+        self.eat('.');
+        let kind = if let Some('.') = self.peek_char() {
+            self.eat('.');
+            TokenKind::Range
+        } else {
+            TokenKind::Dot
         };
         let span = self.reader.end(span_start);
         Ok(token(kind, span))
@@ -356,6 +367,7 @@ impl<'a> Lexer<'a> {
             Some('?') => self.question(),
             Some('/') => self.forward_slash(),
             Some('|') => self.pipe(),
+            Some('.') => self.dot(),
             Some('&') => self.punc2(And, '&'),
             Some('!') => self.punc(Exclaim, '!'),
             Some('(') => self.punc(LParen, '('),
@@ -368,7 +380,6 @@ impl<'a> Lexer<'a> {
             Some('>') => self.punc(GreaterThan, '>'),
             Some(':') => self.punc(Colon, ':'),
             Some(';') => self.punc(Semi, ';'),
-            Some('.') => self.punc(Dot, '.'),
             Some('%') => self.punc(Mod, '%'),
             Some('^') => self.punc(Caret, '^'),
             Some(',') => self.punc(Comma, ','),
