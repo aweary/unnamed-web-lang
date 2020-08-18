@@ -145,7 +145,7 @@ impl Binding {
             Binding::Local(local) | Binding::State(local) => local.span,
             Binding::Function(fndef) => fndef.span,
             Binding::Parameter(param) => param.span,
-            Binding::TypeParameter(t) => todo!(),
+            Binding::TypeParameter(_) => todo!(),
             Binding::Component(component) => component.span,
             Binding::Import(import) => {
                 let import = import.lock().unwrap();
@@ -458,37 +458,6 @@ pub struct Expr {
 }
 
 #[derive(Clone, Debug)]
-pub struct Template {
-    pub instrs: Vec<TemplateInstr>,
-    pub kind: TemplateKind,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum TemplateKind {
-    Static,
-    Dynamic,
-}
-
-#[derive(Clone, Debug)]
-pub enum TemplateInstr {
-    // Create a new primitive element
-    OpenElement(Symbol),
-    // Create a new custom element
-    OpenCustomElement(Arc<Component>),
-    // Set an attribute on the last open element
-    SetAttribute(Symbol, Expr),
-    // Set an attribute, except we know the value
-    // of the attribute at compile time
-    SetStaticAttribute(Symbol, Lit),
-    // Embed an expression as a child of an element
-    EmbedExpression(Expr),
-    // Embed text as a child of an element
-    EmbedText(Symbol),
-    // Close the last opened element
-    CloseElement,
-}
-
-#[derive(Clone, Debug)]
 pub struct IfExpression {
     pub span: Span,
     pub condition: Box<Expr>,
@@ -573,8 +542,6 @@ pub enum ExprKind {
     Index(Box<Expr>, Box<Expr>),
     /// A `return` with an optional return expression
     Return(Option<Box<Expr>>),
-    /// Template
-    Template(Template),
     /// Match
     Match(Box<Expr>, Vec<MatchArm>),
     // Function expression

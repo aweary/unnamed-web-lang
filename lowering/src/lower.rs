@@ -1,4 +1,4 @@
-use data_structures::control_flow_graph::{Blockable, ControlFlowGraph};
+use data_structures::control_flow_graph::{ControlFlowGraph};
 use data_structures::module_graph::ModuleGraphIndex;
 use data_structures::scope_map::ScopeMap;
 
@@ -18,15 +18,6 @@ use source::filesystem::FileSystem;
 use std::path::PathBuf;
 
 type ImportDescriptorList = Vec<(PathBuf, hir::Ident, ast::ImportPath)>;
-
-#[derive(Debug, Clone)]
-struct CFGStatement(pub Arc<Mutex<hir::Statement>>);
-
-impl Blockable for CFGStatement {
-    fn has_early_exit(&self) -> bool {
-        self.0.lock().unwrap().has_early_exit()
-    }
-}
 
 pub struct LoweringContext {
     vfs: Arc<FileSystem>,
@@ -190,17 +181,6 @@ impl LoweringContext {
         } else {
             None
         };
-        // if let Some(parameters) = &parameters {
-        //     for parameter in parameters {
-        //         self.scope.define(
-        //             parameter.name.clone(),
-        //             // TODO track the parameter name
-        //             // hir::Binding::Type(hir::Type::Parameter(parameter.clone()
-        //             // TODO I DONT THINK THIS IS RIGHT
-        //             hir::Binding::Type(hir::Type::Variable(parameter.name.clone())),
-        //         );
-        //     }
-        // }
         let mut hir_variants = vec![];
         for variant in variants {
             hir_variants.push(self.lower_enum_variant(variant)?);
@@ -271,7 +251,7 @@ impl LoweringContext {
             name,
             ty,
             parameters,
-            span,
+            ..
         } = type_alias;
 
         // New scope for the type parameters
@@ -600,6 +580,8 @@ impl LoweringContext {
             span,
         } = struct_;
 
+        self.scope.enter_scope();
+
         let parameters = if let Some(parameters) = parameters {
             let mut parameter_names = vec![];
             for ident in parameters {
@@ -638,6 +620,8 @@ impl LoweringContext {
             span,
         });
 
+        self.scope.exit_scope();
+
         self.scope
             .define(symbol, hir::Binding::Struct(struct_.clone()));
         Ok(struct_)
@@ -671,24 +655,6 @@ impl LoweringContext {
             None
         };
 
-        // Need to revisit generics
-        // if fndef.generics.is_some() {
-        //     return Err(Diagnostic::error()
-        // .with_message("Can't lower generics right now"));
-        // }
-        // let generics = fndef.generics.map(|generics| {
-        //     for ty in &generics.params {
-        //         self.scope.define(
-        //             ty.name.clone(),
-        //             // TODO THIS ISNT RIGHT
-        //             // hir::Binding::Type),
-        //             // TODO track param
-        //             // hir::Binding::Type(hir::Type::Parameter(ty.clone())),
-        //         );
-        //     }
-        //     generics
-        // });
-
         // Parameters
         let params = self.lower_fn_params(fndef.params)?;
         // Function body
@@ -715,22 +681,6 @@ impl LoweringContext {
             .define(name, hir::Binding::Function(fndef.clone()));
         Ok(fndef)
     }
-
-    // fn lower_fn_cfg(&mut self, fn_def: ast::FnDef) {
-    //     // The control flow graph for this function
-    //     let mut cfg = ControlFlowGraph::default();
-    //     // Initial function definition
-    //     let fn_body_graph = self.lower_block_cfg(*fn_def.body, &mut cfg);
-    //     // Add an edge from the last item to the exit node
-    //     if let Some(fn_body_graph_exit_node) = fn_body_graph.last() {
-    //         if !cfg.block_has_early_exit(*fn_body_graph_exit_node) {
-    //             cfg.add_edge_to_exit(*fn_body_graph_exit_node, ControlFlowEdge::Normal);
-    //         }
-    //     }
-    //     // Any queued edges will point to the exit node, as we're done with the graph
-    //     cfg.flush_edge_queue_to_exit_block();
-    //     cfg.print();
-    // }
 
     fn lower_block(&mut self, block: ast::Block) -> Result<hir::Block> {
         if !self.ignore_next_scope {
@@ -976,11 +926,6 @@ impl LoweringContext {
             ExprKind::Return(_) => {
                 unimplemented!("Return expression not implemented");
             }
-            // Template
-            ExprKind::Template(template) => {
-                let template = self.lower_template(template)?;
-                hir::ExprKind::Template(template)
-            }
             // Match
             ExprKind::Match(expr, arms) => {
                 let expr = self.lower_expr(*expr)?;
@@ -1055,150 +1000,29 @@ impl LoweringContext {
     ) -> Result<Vec<hir::MatchArm>> {
         debug!("lower_match_arms {:#?}", arms);
 
-        for ast::MatchArm { pattern, body } in arms {
-            match pattern.kind {
-                ast::PatternKind::Fiedless { name } => {
-                    if let Some((binding, _)) = self.scope.resolve(&name.symbol)
-                    {
-                        debug!(
-                            "Resolved enum for fiedless variant: {:#?}",
-                            binding
-                        );
-                        // ...
-                    }
-                }
-                ast::PatternKind::MemberFiedless { type_name, name } => {}
-                ast::PatternKind::Tuple { name, values } => {}
-                ast::PatternKind::MemberTuple {
-                    type_name,
-                    name,
-                    values,
-                } => {}
-            }
-        }
+        // for ast::MatchArm { pattern, body } in arms {
+        //     match pattern.kind {
+        //         ast::PatternKind::Fiedless { name } => {
+        //             if let Some((binding, _)) = self.scope.resolve(&name.symbol)
+        //             {
+        //                 debug!(
+        //                     "Resolved enum for fiedless variant: {:#?}",
+        //                     binding
+        //                 );
+        //                 // ...
+        //             }
+        //         }
+        //         ast::PatternKind::MemberFiedless { type_name, name } => {}
+        //         ast::PatternKind::Tuple { name, values } => {}
+        //         ast::PatternKind::MemberTuple {
+        //             type_name,
+        //             name,
+        //             values,
+        //         } => {}
+        //     }
+        // }
 
         todo!("lower_match_arms");
-    }
-
-    fn lower_template(
-        &mut self,
-        template: ast::Template,
-    ) -> Result<hir::Template> {
-        let mut instrs = vec![];
-        // Assume the template is static, until we hit some dynamic content
-        let mut kind = hir::TemplateKind::Static;
-        let open = template.open;
-        let ident = open.name;
-
-        // We currently use the same JSX herustic of uppercase denoting components
-        // but that will probably change soon
-        match &ident.symbol.as_str().chars().next().unwrap() {
-            'A'..='Z' => {
-                match self.scope.resolve(&ident.symbol) {
-                    Some((binding, _unique_name)) => {
-                        match binding {
-                            hir::Binding::Component(component) => instrs.push(
-                                hir::TemplateInstr::OpenCustomElement(
-                                    component,
-                                ),
-                            ),
-                            // hir::Binding::Import(import) => {
-                            //     match def.kind {
-                            //         hir::DefinitionKind::Component(component) => instrs
-                            //             .push(hir::TemplateInstr::OpenCustomElement(component)),
-                            //         _ => {
-                            //             // This is where we handle reference errors.
-                            //             // TODO move this logic out into some unified error reporting interface
-                            //             let message = "Cannot use this value as a component";
-                            //             let label = "Functions and components are not the same";
-                            //             return Err(Diagnostic::new_error(
-                            //                 message,
-                            //                 Label::new(ident.span, label),
-                            //             ));
-                            //         }
-                            //     }
-                            // }
-                            _ => {
-                                // This is where we handle reference errors.
-                                // TODO move this logic out into some unified error reporting interface
-                                let message =
-                                    "Cannot use this value as a component";
-                                let label = Label::primary(ident.span)
-                                    .with_message(
-                                    "Functions and components are not the same",
-                                );
-                                let diagnostic = Diagnostic::error()
-                                    .with_message(message)
-                                    .with_labels(vec![label]);
-                                return Err(diagnostic);
-                            }
-                        }
-                    }
-                    None => {
-                        // This is where we handle reference errors.
-                        // TODO move this logic out into some unified error reporting interface
-                        let message = "Unknown reference";
-                        let label = Label::primary(ident.span).with_message(
-                            "Cannot find any value with this name",
-                        );
-                        let diagnostic = Diagnostic::error()
-                            .with_message(message)
-                            .with_labels(vec![label]);
-                        return Err(diagnostic);
-                    }
-                }
-            }
-            _ => {
-                // Open the element
-                instrs.push(hir::TemplateInstr::OpenElement(ident.symbol));
-            }
-        };
-        // Add any attributes
-        for attr in open.attrs {
-            let value = self.lower_expr(attr.value)?;
-            match value.kind {
-                hir::ExprKind::Lit(lit) => {
-                    instrs.push(hir::TemplateInstr::SetStaticAttribute(
-                        attr.name.symbol,
-                        lit,
-                    ));
-                    // ...
-                }
-                _ => {
-                    kind = hir::TemplateKind::Dynamic;
-                    instrs.push(hir::TemplateInstr::SetAttribute(
-                        attr.name.symbol,
-                        value,
-                    ))
-                }
-            }
-        }
-
-        if let Some(children) = template.children {
-            use ast::TemplateChild;
-            for child in children {
-                match child {
-                    TemplateChild::Expr(expr) => {
-                        kind = hir::TemplateKind::Dynamic;
-                        let expr = self.lower_expr(*expr)?;
-                        instrs.push(hir::TemplateInstr::EmbedExpression(expr));
-                    }
-                    TemplateChild::Text(text) => {
-                        instrs.push(hir::TemplateInstr::EmbedText(text));
-                    }
-                    TemplateChild::Template(template) => {
-                        let template = self.lower_template(*template)?;
-                        if template.kind == hir::TemplateKind::Dynamic {
-                            kind = template.kind;
-                        }
-                        instrs.extend(template.instrs);
-                        // ...
-                    }
-                }
-            }
-        }
-        instrs.push(hir::TemplateInstr::CloseElement);
-        Ok(hir::Template { instrs, kind })
     }
 
     fn lower_local(&mut self, local: ast::Local) -> Result<Arc<hir::Local>> {
@@ -1234,26 +1058,12 @@ impl LoweringContext {
         let ast::IfExpression {
             condition,
             body,
-            alternate,
             span,
+            ..
         } = ifexpr;
         let condition = self.lower_expr(*condition)?;
         let body = self.lower_expr(*body)?;
         let alt = None;
-        // let alt = if let Some(alt) = alternate {
-        //     match alt {
-        //         ast::Else::Block(block) => {
-        //             let block = self.lower_block(*block)?;
-        //             Some(hir::Else::Block(Box::new(block)))
-        //         }
-        //         ast::Else::If(ifexpr) => {
-        //             let ifexpr = self.lower_if(*ifexpr)?;
-        //             Some(hir::Else::If(Box::new(ifexpr)))
-        //         }
-        //     }
-        // } else {
-        //     None
-        // };
         Ok(hir::IfExpression {
             condition: condition.into(),
             body: body.into(),
@@ -1265,6 +1075,14 @@ impl LoweringContext {
     fn lower_stmt(&mut self, stmt: ast::Stmt) -> Result<hir::Statement> {
         use ast::StmtKind;
         let kind = match stmt.kind {
+            ast::StmtKind::CompilerDirective(_) => todo!("Compiler directive"),
+            ast::StmtKind::ForIn(forin) => {
+                let ast::ForIn { right, body, .. } = forin;
+                // TODO add left to scope of block
+                let _right = self.lower_expr(right)?;
+                let _body = self.lower_block(body)?;
+                todo!("Lower for-in stmt");
+            }
             StmtKind::Throw(expr) => {
                 let expr = self.lower_expr(expr)?;
                 hir::StatementKind::Throw(expr)

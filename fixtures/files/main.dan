@@ -1,15 +1,6 @@
-struct ButtonState {
-    isPressed: bool
-    isHovered: bool
-    isFocused: string
-}
+pub fn foo {
+    let a = ["foo"]
+    for (x in a) {
 
-fn main() {
-    let buttonState = ButtonState(
-        isPressed: false,
-        isHovered: false,
-        isFocused: "false" 
-    )
-
-    let isActive = buttonState.isHovered || buttonState.isFocused
+    }
 }

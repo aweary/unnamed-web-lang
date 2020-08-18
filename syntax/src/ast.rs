@@ -325,6 +325,17 @@ pub enum StmtKind {
     TryCatch(Box<Block>, Option<LocalPattern>, Box<Block>),
     // Throw
     Throw(Expr),
+    // For-in statement
+    ForIn(ForIn),
+    // Compiler directive
+    CompilerDirective(Symbol)
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct ForIn {
+    pub left: Ident,
+    pub right: Expr,
+    pub body: Block,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -473,8 +484,6 @@ pub enum ExprKind {
     Index(Box<Expr>, Box<Expr>),
     /// A `return` with an optional return expression
     Return(Option<Box<Expr>>),
-    /// Template
-    Template(Template),
     /// Match
     Match(Box<Expr>, Vec<MatchArm>),
     /// Function expression

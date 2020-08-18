@@ -104,6 +104,7 @@ pub fn token(kind: TokenKind, span: Span) -> Token {
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub enum TokenKind {
+    CompilerDirective(Symbol),
     LexError,
     /* Literals */
     Literal(Lit),

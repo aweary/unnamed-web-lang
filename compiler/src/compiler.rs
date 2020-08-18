@@ -164,7 +164,7 @@ fn parse_and_lower_module_from_file(
     let ast = vfs.with_source(&file, |source| -> ParseResult<ast::Module> {
         let mut parser = Parser::new(source);
         let ast = parser.parse_module().map_err(|err| err.for_file(file))?;
-        println!("ast: {:#?}", ast);
+        // println!("ast: {:#?}", ast);
         Ok(ast)
     })?;
     let hir = LoweringContext::new(vfs, file).lower_module(ast)?;

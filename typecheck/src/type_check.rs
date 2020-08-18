@@ -5,10 +5,10 @@ use ::hir::{
     Type as HIRType, UnOp,
 };
 
-use ::hir::visit::{walk_block, walk_component, walk_function, Visitor};
+use ::hir::visit::{walk_component, walk_function, Visitor};
 use data_structures::HashMap;
 use diagnostics::ParseResult as Result;
-use source::diagnostics::{Diagnostic, Label};
+use source::diagnostics::{Diagnostic, Label, Span};
 use ty::effects::{EffectConstant, EffectType};
 use ty::{boolean, number, Existential, LiteralType, Type, Variable};
 
@@ -51,7 +51,7 @@ impl Visitor for TypeChecker {
             name,
             value,
             ty,
-            span,
+            ..
         } = constant;
 
         let infer_ty = self.synth(value)?;
@@ -147,15 +147,17 @@ impl Visitor for TypeChecker {
             parameters,
             name,
             unique_name,
-            span,
+            ..
         } = struct_;
         debug!("visit_struct");
+        self.context.enter_scope();
         // TODO dedupe this with visit_fn_def
         // If there are generics, we need to treat this as a quantification type
         let tvars = if let Some(tvars) = &parameters {
             let mut variables = vec![];
             for tvar in tvars {
                 let variable = self.fresh_variable();
+                // TODO this is wrong, we shouldn't be reusing variables right?
                 self.variable_map
                     .entry(tvar.unique_name)
                     .or_insert(variable);
@@ -216,8 +218,14 @@ impl Visitor for TypeChecker {
         self.struct_constructors
             .insert(*unique_name, struct_constructor);
 
+        self.context.leave_scope();
+
         let element = Element::new_typed_variable(*unique_name, struct_ty);
         self.context.add(element);
+
+        debug!("done visting struct");
+
+
 
         // let hir::Struct { name }
         Ok(())
@@ -377,6 +385,9 @@ impl Visitor for TypeChecker {
 
     fn visit_function(&mut self, function: &hir::Function) -> Result<()> {
         debug!("visit_function: {:?}", function.name);
+
+        self.context.enter_scope();
+
         // If there are generics, we need to treat this as a quantification type
         let tvars = if let Some(tvars) = &function.generics {
             let mut variables = vec![];
@@ -424,6 +435,7 @@ impl Visitor for TypeChecker {
 
         walk_function(self, function)?;
 
+
         // Return type should be solved now
         let return_ty = self.apply_context(return_ty)?;
 
@@ -456,6 +468,8 @@ impl Visitor for TypeChecker {
             function_ty
         };
 
+        self.context.leave_scope();
+
         debug!(
             "inferred function {:?} as {:#?}",
             function.name, function_ty
@@ -486,9 +500,14 @@ impl TypeChecker {
 
     /// Run the type checker from a root HIR module.
     pub fn run(&mut self, module: &hir::Module) -> Result<()> {
+        debug!("running type check on module");
         let start = Instant::now();
+        // New scope for the module
+        self.context.enter_scope();
         match self.visit_module(module) {
             Ok(_) => {
+                debug!("done type checking module");
+                self.context.leave_scope();
                 let end = Instant::now();
                 let duration = end.duration_since(start);
                 info!(
@@ -560,6 +579,22 @@ impl TypeChecker {
         Ok(())
     }
 
+    fn resolve_type(
+        &self,
+        unique_name: &UniqueName,
+        name: &Symbol,
+        span: Span,
+    ) -> Result<InternType> {
+        // panic!("resolve type");
+        self.context.get_annotation(unique_name).ok_or_else(|| {
+            let msg =
+                format!("Can't resolve a type with the name '{:?}'", name);
+            Diagnostic::error()
+                .with_message(msg)
+                .with_labels(vec![Label::primary(span)])
+        })
+    }
+
     fn synth_fn_params(
         &mut self,
         params: &Vec<Arc<hir::Param>>,
@@ -569,7 +604,7 @@ impl TypeChecker {
         for param in params {
             let symbol: syntax::symbol::Symbol = param.local.clone().into();
             let name = param.unique_name;
-            let ty = self.context.get_annotation(&name).unwrap();
+            let ty = self.resolve_type(&name, &symbol, param.span)?;
             let ty = self.apply_context(ty)?;
             let param_ty = ty::Parameter {
                 name: Some(symbol),
@@ -729,7 +764,7 @@ impl TypeChecker {
                 let ty = self.synthesize_application(ty, args)?;
                 Ok(ty)
             }
-            ExprKind::TrailingClosure(a, b) => {
+            ExprKind::TrailingClosure(_a, _b) => {
                 todo!("cant synth type for trailing closure expressions");
             }
             ExprKind::Array(exprs) => {
@@ -758,7 +793,7 @@ impl TypeChecker {
 
                 let ty = match tys[..] {
                     [ty] => ty,
-                    [a, b, ..] => {
+                    [_a, _b, ..] => {
                         return Err(Diagnostic::error()
                             .with_message("Arrays require a single type"))
                     }
@@ -786,7 +821,6 @@ impl TypeChecker {
             ExprKind::Object(_) => todo!("cannot type check Object"),
             ExprKind::Tuple(_) => todo!("cannot type check Tuple"),
             ExprKind::Unary(unop, expr) => {
-                let ty = self.synth(&*expr)?;
                 let fn_ty = self.unary_op_ty(unop);
                 let argument = hir::Argument {
                     span: expr.span,
@@ -825,9 +859,8 @@ impl TypeChecker {
                 match &*value {
                     Type::Struct {
                         name,
-                        unique_name,
-                        tvars,
                         fields,
+                        ..
                     } => {
                         let field = fields
                             .iter()
@@ -857,7 +890,6 @@ impl TypeChecker {
             ExprKind::For(_, _, _) => todo!("cannot type check For"),
             ExprKind::Index(_, _) => todo!("cannot type check Index"),
             ExprKind::Return(_) => todo!("cannot type check Return"),
-            ExprKind::Template(_) => todo!("cannot type check Template"),
             ExprKind::Match(_, _) => todo!("cannot type check Match"),
             ExprKind::Func(_) => todo!("cannot type check Func"),
             ExprKind::Member(_, _) => todo!("cannot check member expressions"),
@@ -870,7 +902,7 @@ impl TypeChecker {
             condition,
             body,
             alternate,
-            span,
+            ..
         }: &hir::IfExpression,
     ) -> Result<InternType> {
         // Check that the condition expression is a boolean
@@ -986,7 +1018,7 @@ impl TypeChecker {
                         name: None,
                     },
                 ],
-                number!(),
+                boolean!(),
             ),
             // Others
             BinOp::Equals | BinOp::Sum | BinOp::Pipeline => unimplemented!(),
@@ -1838,7 +1870,7 @@ impl TypeChecker {
 
                 let mut ty = ty;
 
-                for (hir::TVar { unique_name, name }, arg) in
+                for (hir::TVar { unique_name, ..}, arg) in
                     parameters.iter().zip(arguments.iter())
                 {
                     debug!("substituting arguments, ty is {:#?}", ty);
@@ -1883,14 +1915,13 @@ impl TypeChecker {
             HIRType::Struct {
                 arguments,
                 struct_,
-                span,
+                ..
             } => {
                 let hir::Struct {
                     name,
                     unique_name,
-                    fields,
-                    span,
                     parameters,
+                    ..
                 } = &**struct_;
                 let ty = self.context.get_annotation(&unique_name).unwrap();
                 self.apply_type_arguments(
@@ -1902,15 +1933,14 @@ impl TypeChecker {
             }
             HIRType::Enum {
                 enumdef,
-                span,
                 arguments,
+                ..
             } => {
                 let hir::EnumDef {
                     unique_name,
                     parameters,
                     name,
-                    variants,
-                    span,
+                    ..
                 } = &**enumdef;
                 let ty = self.context.get_annotation(&unique_name).unwrap();
                 self.apply_type_arguments(
@@ -1992,7 +2022,7 @@ fn occurs_in(alpha: &Existential, ty: InternType) -> bool {
                 input.iter().any(|ty| occurs_in(alpha, *ty))
             } else { false }
         }
-        Type::Struct { fields, .. }  => {
+        Type::Struct { .. }  => {
             // TODO
             false
         }

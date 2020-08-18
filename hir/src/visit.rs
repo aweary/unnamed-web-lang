@@ -33,7 +33,7 @@ pub trait Visitor: Sized {
         // ...
     }
 
-    fn visit_enum_def(&mut self, enum_def: &EnumDef) -> Result<()> {
+    fn visit_enum_def(&mut self, _enum_def: &EnumDef) -> Result<()> {
         Ok(())
     }
 
@@ -70,13 +70,13 @@ pub trait Visitor: Sized {
         Ok(())
     }
 
-    fn visit_expr(&mut self, expr: &Expr) -> Result<()> {
+    fn visit_expr(&mut self, _expr: &Expr) -> Result<()> {
         Ok(())
     }
 }
 
 pub fn walk_lambda<V: Visitor>(visitor: &mut V, lambda: &Lambda) -> Result<()> {
-    let Lambda { params, body, .. } = lambda;
+    let Lambda { body, .. } = lambda;
     match body {
         LambdaBody::Block(block) => visitor.visit_block(block)?,
         LambdaBody::Expr(expr) => visitor.visit_expr(expr)?,
@@ -109,7 +109,6 @@ pub fn walk_expr<V: Visitor>(visitor: &mut V, expr: &Expr) -> Result<()> {
         crate::ExprKind::For(_, _, _) => {}
         crate::ExprKind::Index(_, _) => {}
         crate::ExprKind::Return(_) => {}
-        crate::ExprKind::Template(_) => {}
         crate::ExprKind::Match(_, _) => {}
         crate::ExprKind::Func(_) => {}
         crate::ExprKind::TrailingClosure(_, _) => {}
@@ -150,9 +149,6 @@ pub fn walk_definition<V: Visitor>(
         }
         DefinitionKind::Struct(struct_) => {
             visitor.visit_struct(&**struct_)?;
-        }
-        _ => {
-            // ..
         }
     };
     Ok(())

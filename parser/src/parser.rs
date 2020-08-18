@@ -1,5 +1,4 @@
 // renaming this Tokenizer for now because I'm tired of the word Lexer...
-use lexer::LexMode;
 use lexer::Lexer as Tokenizer;
 use syntax::ast;
 use syntax::precedence::Precedence;
@@ -901,7 +900,7 @@ impl Parser<'_> {
         let was_newline_signfificant = self.is_newline_significant;
         // self.is_newline_significant = false;
         let token = self.peek()?;
-        let stmt = match token.kind {
+        let stmt = match &token.kind {
             TokenKind::Newline => {
                 // Ignore
                 self.skip()?;
@@ -947,6 +946,25 @@ impl Parser<'_> {
                     span,
                 )
             }
+            // For-in statement
+            TokenKind::Reserved(Keyword::For) => {
+                debug!("for-in statement");
+                self.expect(TokenKind::Reserved(Keyword::For))?;
+                let lo = self.span;
+                self.expect(TokenKind::LParen)?;
+                let ident = self.ident()?;
+                self.expect(TokenKind::Reserved(Keyword::In))?;
+                let expr = self.expr(Precedence::NONE)?;
+                self.expect(TokenKind::RParen)?;
+                let body = self.block()?;
+                let forin = ast::ForIn {
+                    left: ident,
+                    right: expr,
+                    body,
+                };
+                let span = lo.merge(self.span);
+                stmt(ast::StmtKind::ForIn(forin), span)
+            }
             // Try/catch statement
             TokenKind::Reserved(Keyword::Try) => {
                 use TokenKind::{Ident, LCurlyBrace, LParen, RParen};
@@ -979,6 +997,11 @@ impl Parser<'_> {
                     span,
                 )
                 // ...
+            }
+            TokenKind::CompilerDirective(name) => {
+                let kind = ast::StmtKind::CompilerDirective(name.clone());
+                self.skip()?;
+                stmt(kind, self.span)
             }
             // Assume other tokens are meant to be parsed as expressions.
             // This might not be the best for error reporting, so we might
@@ -1084,7 +1107,7 @@ impl Parser<'_> {
     }
 
     fn local_pattern(&mut self) -> Result<ast::LocalPattern> {
-        use TokenKind::{Ident, LBrace, LCurlyBrace, Reserved};
+        use TokenKind::{Ident, LBrace, LCurlyBrace};
         match self.peek()?.kind {
             // Simple, single identifer
             Ident(_) => {
@@ -1249,12 +1272,6 @@ impl Parser<'_> {
             }
             // For expression
             TokenKind::Reserved(Keyword::For) => self.for_expr(),
-            // Tempalte expression
-            TokenKind::LessThan => {
-                let template = self.template()?;
-                let span = template.span;
-                ast::expr(ast::ExprKind::Template(template), span)
-            }
             // Function expression
             TokenKind::Reserved(Keyword::Func) => {
                 let fn_def = self.fn_def()?;
@@ -1267,6 +1284,7 @@ impl Parser<'_> {
                 let span = lambda.span;
                 ast::expr(ast::ExprKind::Lambda(lambda), span)
             }
+
             // Match expression
             TokenKind::Reserved(Keyword::Match) => self.match_expr(),
             _ => {
@@ -1345,177 +1363,15 @@ impl Parser<'_> {
         Ok(ast::Lambda { body, params, span })
     }
 
-    fn template(&mut self) -> Result<ast::Template> {
-        use TokenKind::LessThan;
-        self.expect(LessThan)?;
-        let lo = self.span;
-        self.tokenizer.set_mode(LexMode::JSX);
-        self.finish_template(lo)
-    }
-
-    fn finish_template(&mut self, lo: Span) -> Result<ast::Template> {
-        use TokenKind::{Div, GreaterThan};
-        let name = self.ident()?;
-        let attrs = self.template_attrs()?;
-        let open = ast::TemplateOpenTag {
-            name,
-            attrs,
-            span: lo.merge(self.span),
-        };
-        let template = if self.peek()?.kind == Div {
-            self.expect(Div)?;
-            self.expect(GreaterThan)?;
-            let span = open.span.merge(self.span);
-            ast::Template {
-                id: DUMMY_NODE_ID,
-                open,
-                close: None,
-                children: None,
-                span,
-            }
-        } else {
-            self.expect(GreaterThan)?;
-            let children = self.template_children()?;
-            let close = {
-                let lo = self.span;
-                // template_children will eat the token for < here,
-                // which is kind of weird but whatever...
-                self.expect(Div)?;
-                let close_name = self.ident()?;
-                self.expect(GreaterThan)?;
-                let span = lo.merge(self.span);
-                ast::TemplateCloseTag {
-                    name: close_name,
-                    span,
-                }
-            };
-            let span = lo.merge(self.span);
-            ast::Template {
-                id: DUMMY_NODE_ID,
-                open,
-                close: Some(close),
-                children,
-                span,
-            }
-        };
-        Ok(template)
-    }
-
-    fn template_attrs(&mut self) -> Result<Vec<ast::TemplateAttr>> {
-        use TokenKind::{Div, GreaterThan, Ident};
-        let mut attrs = vec![];
-        loop {
-            match self.peek()?.kind {
-                GreaterThan | Div => return Ok(attrs),
-                Ident(_) => {
-                    let attr = self.template_attr()?;
-                    attrs.push(attr);
-                }
-                _ => {
-                    self.skip()?;
-                    return Err(self.fatal(
-                        "Unexpected token",
-                        "Expected <, /, or an identifier",
-                        self.span,
-                    ));
-                }
-            }
-        }
-    }
-
-    fn template_attr(&mut self) -> Result<ast::TemplateAttr> {
-        use TokenKind::{Equals, LCurlyBrace, Literal, RCurlyBrace};
-        let name = self.ident()?;
-        let lo = name.span;
-        self.expect(Equals)?;
-        let value = match self.peek()?.kind {
-            // We support parsing strings, numbers, and booleans without
-            // wrapping curly braces.
-            Literal(_) => {
-                let lit = self.parse_lit()?;
-                let span = lit.span;
-
-                ast::expr(ast::ExprKind::Lit(lit), span)?
-            }
-            LCurlyBrace => {
-                self.expect(LCurlyBrace)?;
-                self.tokenizer.set_mode(LexMode::Normal);
-                let expr = self.expr(Precedence::NONE)?;
-                self.tokenizer.set_mode(LexMode::JSX);
-                self.expect(RCurlyBrace)?;
-                expr
-            }
-            _ => {
-                self.skip()?;
-                return Err(self.fatal(
-                    "Unexpected token",
-                    "trying to parse template attributes",
-                    self.span,
-                ));
-            }
-        };
-        let span = lo.merge(self.span);
-        Ok(ast::TemplateAttr { name, value, span })
-    }
-
-    fn template_children(&mut self) -> Result<Option<Vec<ast::TemplateChild>>> {
-        use TokenKind::{
-            Div, LCurlyBrace, LessThan, RCurlyBrace, TemplateText,
-        };
-        let mut children = vec![];
-        loop {
-            self.tokenizer.set_mode(LexMode::TemplateText);
-            match &self.peek()?.kind {
-                LessThan => {
-                    self.expect(LessThan)?;
-                    let lo = self.span;
-                    // Move out of TemplateText mode, this might be a closing element
-                    self.tokenizer.set_mode(LexMode::Normal);
-                    if self.peek()?.kind == Div {
-                        return Ok(Some(children));
-                    }
-                    let template = self.finish_template(lo)?;
-                    let child =
-                        ast::TemplateChild::Template(Box::new(template));
-                    children.push(child);
-                }
-                LCurlyBrace => {
-                    self.expect(LCurlyBrace)?;
-                    let lo = self.span;
-                    self.tokenizer.set_mode(LexMode::Normal);
-                    let mut expr = self.expr(Precedence::NONE)?;
-                    self.tokenizer.set_mode(LexMode::JSX);
-                    self.expect(RCurlyBrace)?;
-                    let span = lo.merge(self.span);
-                    // Include the wrapping curly braces in the span for this expression
-                    expr.span = span;
-                    let child = ast::TemplateChild::Expr(Box::new(expr));
-                    children.push(child);
-                }
-                TemplateText(text) => {
-                    let text = text.clone();
-                    // TODO self.expect_template_text()? maybe
-                    self.skip()?;
-                    let child = ast::TemplateChild::Text(text);
-                    children.push(child);
-                }
-                _ => {
-                    if children.is_empty() {
-                        return Ok(None);
-                    } else {
-                        return Ok(Some(children));
-                    }
-                }
-            }
-        }
-    }
 
     fn for_expr(&mut self) -> Result<ast::Expr> {
         self.expect(TokenKind::Reserved(Keyword::For))?;
+        self.expect(TokenKind::LParen)?;
         let lo = self.span;
         let pattern = self.local_pattern()?;
         self.expect(TokenKind::Reserved(Keyword::In))?;
         let expr = self.expr(Precedence::NONE)?;
+        self.expect(TokenKind::RParen)?;
         let block = self.block()?;
         let span = lo.merge(self.span);
         ast::expr(
@@ -1629,11 +1485,24 @@ impl Parser<'_> {
             Dot => self.dot_expr(left),
             // Dot => self.member_expr(left),
             QuestionDot => self.optional_member_expr(left),
+            // IndexExpression
+            TokenKind::LBrace => self.index_expr(left),
             _ => {
                 self.skip()?;
                 Err(self.fatal("Unknown infix expression", "Here", self.span))
             }
         }
+    }
+
+    fn index_expr(&mut self, left: ast::Expr) -> Result<ast::Expr> {
+        use TokenKind::{LBrace, RBrace};
+        self.expect(LBrace)?;
+        let lo = self.span;
+        let index = self.expr(Precedence::NONE)?;
+        self.expect(RBrace)?;
+        let span = lo.merge(self.span);
+        let kind = ast::ExprKind::Index(left.into(), index.into());
+        Ok(ast::Expr { kind, span })
     }
 
     fn dot_expr(&mut self, left: ast::Expr) -> Result<ast::Expr> {
@@ -1694,7 +1563,6 @@ impl Parser<'_> {
     }
 
     fn match_arm_expr(&mut self) -> Result<ast::MatchArm> {
-        use ast::ExprKind;
         debug!("match_arm_expr");
         let pattern = self.pattern()?;
         //  TODO pattern
@@ -1769,13 +1637,6 @@ impl Parser<'_> {
             kind,
             span: lo.merge(self.span),
         })
-    }
-
-    fn member_expr(&mut self, obj: ast::Expr) -> Result<ast::Expr> {
-        self.expect(TokenKind::Dot)?;
-        let property = self.ident()?;
-        let span = obj.span.merge(self.span);
-        ast::expr(ast::ExprKind::Member(Box::new(obj), property), span)
     }
 
     fn optional_member_expr(&mut self, obj: ast::Expr) -> Result<ast::Expr> {

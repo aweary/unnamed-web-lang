@@ -1,7 +1,6 @@
 pub type Heap = u32;
 
 use crate::ty::InternType;
-use internment::Intern;
 
 use data_structures::MultiSet;
 

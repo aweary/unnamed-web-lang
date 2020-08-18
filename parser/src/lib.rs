@@ -3,7 +3,6 @@
 
 mod parser;
 
-pub mod test_utils;
 pub use crate::parser::*;
 
 #[cfg(test)]

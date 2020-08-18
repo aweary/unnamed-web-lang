@@ -48,17 +48,10 @@ impl IdentChar for char {
     }
 }
 
-#[derive(PartialEq, Debug, Clone, Copy)]
-pub enum LexMode {
-    Normal,
-    JSX,
-    TemplateText,
-}
 
 pub struct Lexer<'a> {
     pub reader: Reader<'a>,
     pub source: &'a str,
-    pub mode: LexMode,
     pub lookahead: VecDeque<Token>,
 }
 
@@ -74,17 +67,12 @@ impl<'a> Lexer<'a> {
         Lexer {
             reader,
             source,
-            mode: LexMode::Normal,
             lookahead: VecDeque::with_capacity(4),
         }
     }
 
     pub fn next_char(&mut self) -> Option<char> {
         self.reader.next()
-    }
-
-    pub fn set_mode(&mut self, mode: LexMode) {
-        self.mode = mode;
     }
 
     fn peek_char(&mut self) -> Option<&char> {
@@ -272,6 +260,22 @@ impl<'a> Lexer<'a> {
         Ok(token(kind, span))
     }
 
+    fn directive(&mut self) -> Result<Token> {
+        let span_start = self.reader.start();
+        self.eat('%');
+        self.eat('%');
+        let start = self.reader.offset();
+        self.skip_while(|ch| ch.is_id_char());
+        let end = self.reader.offset();
+        self.eat('%');
+        self.eat('%');
+        let span = self.reader.end(span_start);
+        let kind = TokenKind::CompilerDirective(
+            symbol!(self, start, end)
+        );
+        Ok(token(kind, span))
+    }
+
     fn string(&mut self) -> Result<Token> {
         let span_start = self.reader.start();
         let start = self.reader.offset();
@@ -354,13 +358,11 @@ impl<'a> Lexer<'a> {
         }
         // Ignore all whitespace.
         self.skip_whitespace();
-        if self.mode == LexMode::TemplateText {
-            return self.next_jsx_token();
-        }
         match self.peek_char() {
             Some(&ch) if ch.is_digit(10) => self.number(),
             Some(&ch) if ch.is_id_start() => self.ident(),
             Some('\n') => self.punc(Newline, '\n'),
+            Some('%') => self.directive(),
             Some('"') => self.string(),
             Some('=') => self.equals(),
             Some('+') => self.plus(),
@@ -380,7 +382,6 @@ impl<'a> Lexer<'a> {
             Some('>') => self.punc(GreaterThan, '>'),
             Some(':') => self.punc(Colon, ':'),
             Some(';') => self.punc(Semi, ';'),
-            Some('%') => self.punc(Mod, '%'),
             Some('^') => self.punc(Caret, '^'),
             Some(',') => self.punc(Comma, ','),
             Some('-') => self.punc(Minus, '-'),
@@ -410,40 +411,6 @@ impl<'a> Lexer<'a> {
             self.lookahead.push_front(token);
         }
         Ok(self.lookahead.front().unwrap())
-    }
-}
-
-// Seperate code path for lexing tokens in TemplateText mode. This is an easy way
-// to handle the different lexing semantics for unknown characters inside JSX elements.
-
-impl Lexer<'_> {
-    fn next_jsx_token(&mut self) -> Result<Token> {
-        use TokenKind::{GreaterThan, LCurlyBrace, LessThan, RCurlyBrace};
-        match self.peek_char() {
-            Some('<') => self.punc(LessThan, '<'),
-            Some('>') => self.punc(GreaterThan, '>'),
-            Some('{') => self.punc(LCurlyBrace, '{'),
-            Some('}') => self.punc(RCurlyBrace, '}'),
-            _ => self.jsx_text(),
-        }
-    }
-
-    fn jsx_text(&mut self) -> Result<Token> {
-        let span_start = self.start_span();
-        let start = self.reader.offset();
-        self.skip_while(|ch| match ch {
-            '}' | '{' | '<' | '>' => false,
-            _ => true,
-        });
-        let end = self.reader.offset();
-        if start == end {
-            self.next_token()
-        } else {
-            let span = self.end_span(span_start);
-            let symbol = symbol!(self, start, end);
-            let kind = TokenKind::TemplateText(symbol);
-            Ok(token(kind, span))
-        }
     }
 }
 

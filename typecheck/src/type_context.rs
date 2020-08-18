@@ -70,9 +70,6 @@ impl Element {
 ///
 /// We currently just use a vector for this. It makes it simple to insert and iterate, but is
 /// slower for most things.
-///
-/// Maybe we want a BTreeMap where the order is determined by an `Ord` implementation that can
-/// handle inserts.
 #[derive(Default)]
 pub struct TypeContext {
     pub(crate) elements: Vec<Element>,
@@ -83,7 +80,7 @@ pub struct TypeContext {
 impl TypeContext {
     /// Adds a new element to the ordered type context
     pub(crate) fn add(&mut self, element: Element) {
-        // debug!("adding context element: {:?}", element);
+        debug!("adding context element: {:#?}", element);
         self.elements.push(element)
     }
     /// Create a new scope, which will be contain
@@ -91,14 +88,18 @@ impl TypeContext {
     /// this scope ends
     pub(crate) fn enter_scope(&mut self) {
         let index = self.elements.len();
+        debug!("scope marker at index {}", index);
+        debug!("{:#?}", self.elements);
         self.scope_markers.push(index);
     }
 
     pub(crate) fn leave_scope(&mut self) {
         let index =
             self.scope_markers.pop().expect("Cant pop the global scope");
+        debug!("exiting scope to {}", index);
         // Clear out items from this scope
-        self.elements.truncate(index)
+        self.elements.truncate(index);
+        debug!("{:#?}", self.elements);
     }
 
     pub(crate) fn get_annotation(
@@ -159,7 +160,8 @@ impl TypeContext {
         None
     }
 
-    pub(crate) fn is_well_formed(&self, _ty: &Type) -> bool {
+    // TODO this is important
+    pub(crate) fn _is_well_formed(&self, _ty: &Type) -> bool {
         true
     }
 
@@ -185,10 +187,11 @@ impl TypeContext {
         )
     }
 
+    // Future API explorations...
+
     /// Split a context at and an index. This is used to split
     /// the type context into a left and right context, though
     /// the right context seems unused in the reference implementation
-    fn split_at(&self, _index: usize) {}
-
-    fn iterate_to_the_left_of(&self, _index: usize) {}
+    fn _split_at(&self, _index: usize) {}
+    fn _iterate_to_the_left_of(&self, _index: usize) {}
 }
